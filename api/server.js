@@ -13,6 +13,8 @@ const produitRoutes = require("./routes/produit");
 const bonLivraisonRoutes = require("./routes/bonLivr");
 const devisRoutes = require("./routes/devis");
 const factureRoutes = require("./routes/facture");
+const bonAvoirRoutes = require("./routes/bonAvoir");
+const bonAchatRoutes = require("./routes/bonAchat");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -74,6 +76,8 @@ app.use("/api/produits", produitRoutes);
 app.use("/api/bon-livraisons", bonLivraisonRoutes);
 app.use("/api/factures", factureRoutes);
 app.use("/api/devis", devisRoutes);
+app.use("/api/bon-avoirs", bonAvoirRoutes);
+app.use("/api/bon-achats", bonAchatRoutes);
 
 // Health check
 app.get("/", (req, res) => res.json({ message: "API running" }));
@@ -102,13 +106,12 @@ app.use((req, res) => {
 });
 
 // Database connection and server startup
-// Database connection and server startup
 (async () => {
   try {
     await db.sequelize.authenticate();
     console.log("DB connected");
 
-    await db.sequelize.sync({ alter: false });
+    await db.sequelize.sync({ alter: true });
     console.log("Database models synchronized");
 
     // 🔥 SEED ADMIN USER HERE

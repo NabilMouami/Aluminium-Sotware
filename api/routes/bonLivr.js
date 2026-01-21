@@ -10,6 +10,7 @@ const {
   updateBon,
   updateStatus,
   deleteBon,
+  getBonsByClient,
 } = require("../controllers/blController");
 
 // const authMiddleware = require("../middleware/authMiddleware");
@@ -21,8 +22,10 @@ const {
 router.get("/", getAllBons);
 router.get("/stats", getStats);
 router.get("/:id", getBonById);
+router.get("/client/:clientId", getBonsByClient);
 router.post("/", createBon);
 router.put("/:id", updateBon);
+
 router.patch("/:id/status", updateStatus);
 router.delete("/:id", deleteBon);
 

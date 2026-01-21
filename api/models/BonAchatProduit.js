@@ -1,10 +1,14 @@
-// models/BonLivraisonProduit.js
 const { DataTypes } = require("sequelize");
 const sequelize = require("../config/db");
 
-const BonLivraisonProduit = sequelize.define(
-  "BonLivraisonProduit",
+const BonAchatProduit = sequelize.define(
+  "BonAchatProduit",
   {
+    id: {
+      type: DataTypes.INTEGER.UNSIGNED,
+      autoIncrement: true,
+      primaryKey: true,
+    },
     quantite: {
       type: DataTypes.INTEGER,
       allowNull: false,
@@ -22,17 +26,15 @@ const BonLivraisonProduit = sequelize.define(
       type: DataTypes.DECIMAL(10, 2),
       allowNull: false,
     },
-    bon_livraison_id: {
-      // Add this if not present
+    bon_achat_id: {
       type: DataTypes.INTEGER.UNSIGNED,
       allowNull: false,
       references: {
-        model: "bon_livraisons",
+        model: "bons_achat",
         key: "id",
       },
     },
     produit_id: {
-      // Add this if not present
       type: DataTypes.INTEGER.UNSIGNED,
       allowNull: false,
       references: {
@@ -42,8 +44,9 @@ const BonLivraisonProduit = sequelize.define(
     },
   },
   {
-    tableName: "bon_livraison_produits",
+    tableName: "bon_achat_produits",
+    timestamps: true,
   },
 );
 
-module.exports = BonLivraisonProduit;
+module.exports = BonAchatProduit;

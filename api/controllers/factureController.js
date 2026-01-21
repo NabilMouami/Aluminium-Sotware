@@ -10,13 +10,12 @@ const { Client } = require("../models");
 // Générer un numéro unique de facture
 const generateNumeroFacture = async () => {
   const prefix = "FAC";
-  const currentYear = new Date().getFullYear().toString().slice(-2);
 
-  // Trouver la dernière facture
+  // Trouver le dernier BL
   const lastFacture = await Facture.findOne({
     where: {
       num_facture: {
-        [Op.like]: `${prefix}${currentYear}%`,
+        [Op.like]: `${prefix}%`,
       },
     },
     order: [["createdAt", "DESC"]],
@@ -24,14 +23,13 @@ const generateNumeroFacture = async () => {
 
   let sequence = 1;
   if (lastFacture) {
+    // Extraire seulement les 4 derniers chiffres
     const lastNum = lastFacture.num_facture;
-    const match = lastNum.match(/\d+$/);
-    if (match) {
-      sequence = parseInt(match[0]) + 1;
-    }
+    const lastSeq = parseInt(lastNum.slice(-4)) || 0; // <-- ici slice(-4)
+    sequence = lastSeq + 1;
   }
 
-  return `${prefix}${currentYear}${sequence.toString().padStart(4, "0")}`;
+  return `${prefix}${sequence.toString().padStart(4, "0")}`;
 };
 
 // Récupérer toutes les factures
@@ -318,10 +316,8 @@ const createFacture = async (req, res) => {
         prix_unitaire * quantite -
         remise_ligne
       ).toFixed(2);
-      const montant_tva_ligne = +((montant_ht_ligne * tauxTVA) / 100).toFixed(
-        2,
-      );
-      const total_ligne = +(montant_ht_ligne + montant_tva_ligne).toFixed(2);
+
+      const total_ligne = montant_ht_ligne;
 
       montant_ht += montant_ht_ligne;
 
@@ -331,14 +327,21 @@ const createFacture = async (req, res) => {
         prix_unitaire,
         remise_ligne,
         montant_ht_ligne,
-        montant_tva_ligne,
+        montant_tva_ligne: +((montant_ht_ligne * tauxTVA) / 100).toFixed(2),
         total_ligne,
       });
     }
 
-    // ---------------- TOTALS ----------------
+    // ---------------- CALCULS DÉTAILLÉS ----------------
     const remiseValue = parseFloat(remise_total) || 0;
-    const montant_ht_after_remise = Math.max(montant_ht - remiseValue, 0);
+
+    const total_ht_initial = montant_ht;
+    const remise_totale = Math.min(remiseValue, total_ht_initial);
+    const montant_ht_after_remise = Math.max(
+      total_ht_initial - remise_totale,
+      0,
+    );
+
     const montant_tva = +((montant_ht_after_remise * tauxTVA) / 100).toFixed(2);
     const montant_ttc = +(montant_ht_after_remise + montant_tva).toFixed(2);
 
@@ -349,8 +352,9 @@ const createFacture = async (req, res) => {
         client_id,
         bon_livraison_id,
         mode_reglement: mode_reglement || "espèces",
-        remise_total: remiseValue,
+        remise_total: remise_totale,
         montant_ht: montant_ht_after_remise,
+        montant_ht_initial: total_ht_initial,
         tva: tauxTVA,
         montant_tva,
         montant_ttc,
@@ -367,10 +371,11 @@ const createFacture = async (req, res) => {
 
     // ---------------- PRODUITS + STOCK DECREASE ----------------
     for (const p of produitsVerifies) {
+      // CORRECTION: Use correct field names with underscores
       await FactureProduit.create(
         {
-          factureId: facture.id,
-          produitId: p.item.produitId,
+          facture_id: facture.id, // Changed from factureId
+          produit_id: p.item.produitId, // Changed from produitId
           quantite: p.item.quantite,
           prix_unitaire: p.prix_unitaire,
           remise_ligne: p.remise_ligne,
@@ -399,8 +404,8 @@ const createFacture = async (req, res) => {
           paymentMethod: advance.paymentMethod,
           reference: advance.reference || null,
           notes: advance.notes || null,
-          factureId: facture.id,
-          bonLivraisonId: bon_livraison_id,
+          facture_id: facture.id, // Changed from factureId
+          bon_livraison_id: bon_livraison_id, // Changed from bonLivraisonId
         },
         { transaction },
       );
@@ -422,7 +427,19 @@ const createFacture = async (req, res) => {
     return res.status(201).json({
       success: true,
       message: "Facture créée avec succès",
-      facture,
+      facture: {
+        ...facture.toJSON(),
+        calculs_details: {
+          total_ht_initial: parseFloat(total_ht_initial.toFixed(2)),
+          remise_totale: parseFloat(remise_totale.toFixed(2)),
+          montant_ht_after_remise: parseFloat(
+            montant_ht_after_remise.toFixed(2),
+          ),
+          taux_tva: parseFloat(tauxTVA.toFixed(2)),
+          montant_tva: parseFloat(montant_tva.toFixed(2)),
+          montant_ttc: parseFloat(montant_ttc.toFixed(2)),
+        },
+      },
     });
   } catch (error) {
     if (transaction && !transaction.finished) {
@@ -656,27 +673,138 @@ const updateFacture = async (req, res) => {
       date_facturation,
       date_echeance,
       status,
+      advancements,
     } = req.body;
 
-    const facture = await Facture.findByPk(id, { transaction });
+    const facture = await Facture.findByPk(id, {
+      include: [
+        {
+          model: Produit,
+          as: "produits",
+          through: {
+            attributes: ["quantite"],
+          },
+        },
+      ],
+      transaction,
+    });
 
     if (!facture) {
+      await transaction.rollback();
       return res.status(404).json({
         success: false,
         message: "Facture non trouvée",
       });
     }
 
+    // Store old status for stock management
+    const oldStatus = facture.status;
+
     // Vérifier si la facture peut être modifiée
-    if (facture.status === "payée" || facture.status === "annulée") {
-      throw new Error(`Impossible de modifier une facture ${facture.status}`);
+    if (oldStatus === "payée" || oldStatus === "annulée") {
+      throw new Error(`Impossible de modifier une facture ${oldStatus}`);
+    }
+
+    // Mettre à jour les advancements si fournis
+    if (advancements && Array.isArray(advancements)) {
+      console.log("Processing advancements:", advancements);
+
+      let totalAdvancements = 0;
+      const existingAdvancements = await Advancement.findAll({
+        where: { facture_id: id }, // Changed from factureId
+        transaction,
+      });
+
+      // Map des advancements existants par leur ID
+      const existingAdvancementsMap = {};
+      existingAdvancements.forEach((adv) => {
+        existingAdvancementsMap[adv.id] = adv;
+      });
+
+      // Traiter chaque advancement
+      for (const advancementData of advancements) {
+        const {
+          id: advancementId,
+          amount,
+          paymentDate,
+          paymentMethod,
+          type,
+          reference,
+          notes: advancementNotes,
+        } = advancementData;
+
+        // Valider le montant
+        if (!amount || amount <= 0) {
+          throw new Error(`Le montant de l'avancement doit être positif`);
+        }
+
+        // Si l'avancement a un ID, c'est une mise à jour
+        if (advancementId && existingAdvancementsMap[advancementId]) {
+          const existingAdvancement = existingAdvancementsMap[advancementId];
+
+          // Mettre à jour l'avancement existant
+          await existingAdvancement.update(
+            {
+              amount,
+              paymentDate: new Date(paymentDate),
+              paymentMethod,
+              type,
+              reference: reference || null,
+              notes: advancementNotes || null,
+            },
+            { transaction },
+          );
+
+          // Marquer comme traité
+          delete existingAdvancementsMap[advancementId];
+        } else {
+          // C'est un nouvel advancement
+          await Advancement.create(
+            {
+              facture_id: id, // Changed from factureId
+              amount,
+              paymentDate: new Date(paymentDate),
+              paymentMethod,
+              type,
+              reference: reference || null,
+              notes: advancementNotes || null,
+            },
+            { transaction },
+          );
+        }
+
+        totalAdvancements += parseFloat(amount);
+      }
+
+      // Supprimer les advancements qui ne sont plus dans la liste
+      const advancementsToDelete = Object.values(existingAdvancementsMap);
+      for (const advancementToDelete of advancementsToDelete) {
+        await advancementToDelete.destroy({ transaction });
+      }
+
+      // Mettre à jour le montant payé et le montant restant
+      const montantTotal = parseFloat(facture.montant_ttc) || 0;
+      facture.montant_paye = totalAdvancements;
+      facture.montant_restant = Math.max(0, montantTotal - totalAdvancements);
+
+      // Mettre à jour le statut de paiement automatiquement
+      if (totalAdvancements >= montantTotal) {
+        facture.status = "payée";
+        facture.is_fully_paid = true;
+      } else if (totalAdvancements > 0) {
+        facture.status = "partiellement_payée";
+        facture.is_fully_paid = false;
+      } else {
+        facture.status = status || facture.status;
+        facture.is_fully_paid = false;
+      }
     }
 
     // Si des produits sont fournis, recalculer
     if (produits && produits.length > 0) {
       // Supprimer les anciennes associations
       await FactureProduit.destroy({
-        where: { factureId: id },
+        where: { facture_id: id }, // Changed from factureId
         transaction,
       });
 
@@ -704,8 +832,8 @@ const updateFacture = async (req, res) => {
         // Créer la nouvelle association
         await FactureProduit.create(
           {
-            factureId: id,
-            produitId: item.produitId,
+            facture_id: id, // Changed from factureId
+            produit_id: item.produitId, // Changed from produitId
             quantite: item.quantite,
             prix_unitaire,
             remise_ligne,
@@ -730,7 +858,10 @@ const updateFacture = async (req, res) => {
       facture.tva = montant_tva;
       facture.montant_tva = montant_tva;
       facture.montant_ttc = montant_ttc;
-      facture.montant_restant = montant_ttc - facture.montant_paye;
+
+      // Recalculer le montant restant en fonction des advancements existants
+      const totalAdvancements = parseFloat(facture.montant_paye) || 0;
+      facture.montant_restant = Math.max(0, montant_ttc - totalAdvancements);
     }
 
     // Mettre à jour les autres champs
@@ -739,11 +870,103 @@ const updateFacture = async (req, res) => {
     if (notes !== undefined) facture.notes = notes;
     if (date_facturation) facture.date_facturation = new Date(date_facturation);
     if (date_echeance) facture.date_echeance = new Date(date_echeance);
-    if (status) facture.status = status;
+
+    // Ne pas écraser le statut si il a été mis à jour automatiquement par les advancements
+    if (status && !advancements) {
+      facture.status = status;
+    }
+
+    // 🔴 STOCK MANAGEMENT: Handle status change to "annulée"
+    if (status === "annulée" && oldStatus !== "annulée") {
+      // Restore stock only if:
+      // 1. Facture was not created from a BonLivraison (bon_livraison_id is null)
+      // 2. AND the old status was not "annulée"
+
+      if (!facture.bon_livraison_id) {
+        // Get all products with their quantities from the facture
+        const factureProduits = await FactureProduit.findAll({
+          where: { facture_id: id },
+          include: [
+            {
+              model: Produit,
+              as: "produit",
+            },
+          ],
+          transaction,
+        });
+
+        // Restore stock for each product
+        for (const fp of factureProduits) {
+          if (fp.produit) {
+            fp.produit.qty += parseFloat(fp.quantite);
+            await fp.produit.save({ transaction });
+            console.log(
+              `Stock restored for product ${fp.produit.id}: +${fp.quantite} units`,
+            );
+          }
+        }
+      } else {
+        console.log(
+          "Facture created from BonLivraison, no stock restoration needed",
+        );
+      }
+    }
+
+    // 🔴 STOCK MANAGEMENT: Handle un-cancellation (changing from "annulée" to another status)
+    if (
+      oldStatus === "annulée" &&
+      status !== "annulée" &&
+      status !== oldStatus
+    ) {
+      // Decrease stock again only if:
+      // 1. Facture was not created from a BonLivraison
+      // 2. AND we're changing FROM "annulée" TO another status
+
+      if (!facture.bon_livraison_id) {
+        // Get all products with their quantities from the facture
+        const factureProduits = await FactureProduit.findAll({
+          where: { facture_id: id },
+          include: [
+            {
+              model: Produit,
+              as: "produit",
+            },
+          ],
+          transaction,
+        });
+
+        // Check stock availability before decreasing
+        for (const fp of factureProduits) {
+          if (fp.produit) {
+            if (fp.produit.qty < parseFloat(fp.quantite)) {
+              throw new Error(
+                `Stock insuffisant pour ${fp.produit.designation}. Stock disponible: ${fp.produit.qty}, Quantité nécessaire: ${fp.quantite}`,
+              );
+            }
+          }
+        }
+
+        // Decrease stock for each product
+        for (const fp of factureProduits) {
+          if (fp.produit) {
+            fp.produit.qty -= parseFloat(fp.quantite);
+            await fp.produit.save({ transaction });
+            console.log(
+              `Stock decreased for product ${fp.produit.id}: -${fp.quantite} units`,
+            );
+          }
+        }
+      } else {
+        console.log(
+          "Facture created from BonLivraison, no stock decrease needed",
+        );
+      }
+    }
 
     await facture.save({ transaction });
     await transaction.commit();
 
+    // Récupérer la facture mise à jour avec toutes les relations
     const updatedFacture = await Facture.findByPk(id, {
       include: [
         {
@@ -768,14 +991,23 @@ const updateFacture = async (req, res) => {
         {
           model: Advancement,
           as: "advancements",
+          order: [["paymentDate", "ASC"]],
         },
       ],
     });
 
+    // Formater les données pour le frontend
+    const formattedFacture = {
+      ...updatedFacture.toJSON(),
+      isFullyPaid: updatedFacture.montant_restant <= 0,
+      paidAmount: parseFloat(updatedFacture.montant_paye) || 0,
+      remainingAmount: parseFloat(updatedFacture.montant_restant) || 0,
+    };
+
     res.json({
       success: true,
       message: "Facture mise à jour avec succès",
-      facture: updatedFacture,
+      facture: formattedFacture,
     });
   } catch (error) {
     await transaction.rollback();
@@ -786,7 +1018,6 @@ const updateFacture = async (req, res) => {
     });
   }
 };
-
 // Ajouter un paiement à une facture
 const addPaymentToFacture = async (req, res) => {
   const transaction = await sequelize.transaction();

@@ -46,20 +46,13 @@ const Devis = sequelize.define(
         "refusé",
 
         "transformé_en_commande",
+        "transformé_en_facture",
+        "transformé_en_bl",
       ),
       defaultValue: "brouillon",
     },
 
     notes: DataTypes.TEXT,
-
-    objet: {
-      type: DataTypes.STRING,
-      allowNull: true,
-    },
-
-    conditions_generales: {
-      type: DataTypes.TEXT,
-    },
 
     // References to other entities
     client_id: {

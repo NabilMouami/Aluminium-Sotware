@@ -65,6 +65,149 @@ const paymentTypeOptions = [
   { value: "avoir", label: "Avoir" },
 ];
 
+// Move totalToFrenchText outside and make it synchronous
+const totalToFrenchText = (amount) => {
+  if (amount === 0) return "Zéro dirham";
+
+  const units = [
+    "",
+    "un",
+    "deux",
+    "trois",
+    "quatre",
+    "cinq",
+    "six",
+    "sept",
+    "huit",
+    "neuf",
+  ];
+  const teens = [
+    "dix",
+    "onze",
+    "douze",
+    "treize",
+    "quatorze",
+    "quinze",
+    "seize",
+    "dix-sept",
+    "dix-huit",
+    "dix-neuf",
+  ];
+  const tens = [
+    "",
+    "",
+    "vingt",
+    "trente",
+    "quarante",
+    "cinquante",
+    "soixante",
+    "soixante",
+    "quatre-vingt",
+    "quatre-vingt",
+  ];
+
+  const convertLessThanOneThousand = (num) => {
+    if (num === 0) return "";
+
+    let result = "";
+
+    // Hundreds
+    if (num >= 100) {
+      const h = Math.floor(num / 100);
+      result += h === 1 ? "cent" : units[h] + " cent";
+      num %= 100;
+      if (num === 0 && h > 1) result += "s"; // deux cents
+      if (num > 0) result += " ";
+    }
+
+    // Tens & units
+    if (num < 10) {
+      result += units[num];
+    } else if (num < 20) {
+      result += teens[num - 10];
+    } else {
+      const t = Math.floor(num / 10);
+      const u = num % 10;
+
+      if (t === 7) {
+        result += "soixante";
+        result += u === 1 ? " et onze" : "-" + teens[u];
+      } else if (t === 9) {
+        result += "quatre-vingt";
+        result += "-" + teens[u];
+      } else {
+        result += tens[t];
+        if (u === 1 && t !== 8) {
+          result += " et un";
+        } else if (u > 0) {
+          result += "-" + units[u];
+        }
+        if (t === 8 && u === 0) result += "s"; // quatre-vingts
+      }
+    }
+
+    return result;
+  };
+  const convertNumberToWords = (num) => {
+    if (num === 0) return "zéro";
+
+    let result = "";
+
+    // Billions (not needed for our use case, but kept for completeness)
+    if (num >= 1000000000) {
+      const billions = Math.floor(num / 1000000000);
+      result += convertLessThanOneThousand(billions) + " milliard";
+      if (billions > 1) result += "s";
+      num %= 1000000000;
+      if (num > 0) result += " ";
+    }
+
+    // Millions
+    if (num >= 1000000) {
+      const millions = Math.floor(num / 1000000);
+      result += convertLessThanOneThousand(millions) + " million";
+      if (millions > 1) result += "s";
+      num %= 1000000;
+      if (num > 0) result += " ";
+    }
+
+    // Thousands
+    if (num >= 1000) {
+      const thousands = Math.floor(num / 1000);
+      if (thousands === 1) {
+        result += "mille";
+      } else {
+        result += convertLessThanOneThousand(thousands) + " mille";
+      }
+      num %= 1000;
+      if (num > 0) {
+        if (num < 100) result += " ";
+        else result += " ";
+      }
+    }
+
+    // Hundreds, tens and units
+    if (num > 0) {
+      result += convertLessThanOneThousand(num);
+    }
+
+    return result.trim();
+  };
+
+  const dirhams = Math.floor(amount);
+  const centimes = Math.round((amount - dirhams) * 100);
+
+  let text = convertNumberToWords(dirhams) + " dirham";
+  if (dirhams > 1) text += "s";
+
+  if (centimes > 0) {
+    text += " et " + convertNumberToWords(centimes) + " centime";
+    if (centimes > 1) text += "s";
+  }
+
+  return text.charAt(0).toUpperCase() + text.slice(1);
+};
+
 const FactureDetailsModal = ({
   isOpen,
   toggle,
@@ -79,6 +222,8 @@ const FactureDetailsModal = ({
     advancements: [],
     mode_reglement: "espèces",
   });
+  const [totalText, setTotalText] = useState("");
+  const [isCalculatingTotal, setIsCalculatingTotal] = useState(false);
 
   // Initialize form data when facture changes
   useEffect(() => {
@@ -113,6 +258,33 @@ const FactureDetailsModal = ({
     }
   }, [facture]);
 
+  // Calculate total in French text
+  useEffect(() => {
+    const calculateTotalText = () => {
+      if (facture) {
+        const total = parseFloat(facture.montant_ttc || facture.totalTTC) || 0;
+        if (total > 0) {
+          setIsCalculatingTotal(true);
+          try {
+            const text = totalToFrenchText(total);
+            setTotalText(text);
+          } catch (error) {
+            console.error("Error converting total to French text:", error);
+            setTotalText(`${total.toFixed(2)} dirhams`);
+          } finally {
+            setIsCalculatingTotal(false);
+          }
+        } else {
+          setTotalText("Zéro dirham");
+        }
+      }
+    };
+
+    if (facture) {
+      calculateTotalText();
+    }
+  }, [facture]);
+
   if (!facture) return null;
 
   const getStatusBadge = (status) => {
@@ -130,20 +302,28 @@ const FactureDetailsModal = ({
     }
   };
 
-  const getPaymentStatusBadge = () => {
-    if (formData.isOverdue) return "danger";
-    if (facture.isFullyPaid) return "success";
-    if (facture.paidAmount > 0) return "warning";
-    return "danger";
-  };
-
-  // Calculate total payments
+  // Calculate total payments from form data
   const totalPayments = formData.advancements.reduce(
     (sum, adv) => sum + parseFloat(adv.amount || 0),
     0,
   );
 
-  const totalTTC = parseFloat(facture.totalTTC) || 0;
+  // Calculate HT before global discount from products for display
+  const calculateHTBeforeDiscount = () => {
+    if (facture.products && facture.products.length > 0) {
+      return facture.products.reduce((sum, prod) => {
+        const totalLigne = parseFloat(prod.FactureProduit?.total_ligne || 0);
+        return sum + totalLigne;
+      }, 0);
+    }
+    return facture.totalHT || 0;
+  };
+
+  const totalHTBeforeDiscount = calculateHTBeforeDiscount();
+  const globalDiscount = parseFloat(facture.globalDiscount || 0);
+  const montantHTAfterRemise = totalHTBeforeDiscount - globalDiscount;
+  const montantTVA = parseFloat(facture.montantTVA || 0);
+  const totalTTC = parseFloat(facture.totalTTC || facture.montant_ttc || 0);
   const remainingAmount = Math.max(0, totalTTC - totalPayments);
 
   const handleInputChange = (field, value) => {
@@ -337,19 +517,23 @@ const FactureDetailsModal = ({
     const formatDate = (dateStr) => {
       if (!dateStr) return "";
       const d = new Date(dateStr);
-      return format(d, "dd/MM/yyyy", { locale: fr });
+      return d.toLocaleDateString("fr-FR");
     };
 
-    const issueDate = facture.invoiceDate
-      ? new Date(facture.invoiceDate)
+    const issueDate = facture.date_facturation
+      ? new Date(facture.date_facturation)
       : facture.createdAt || new Date();
 
+    // Get the total text for printing
+    const printTotalText = totalText || totalToFrenchText(totalTTC);
+
     const printWindow = window.open("", "_blank");
+
     const printContent = `
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Facture ${facture.invoiceNumber}</title>
+  <title>Facture ${facture.invoiceNumber || facture.num_facture}</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -437,15 +621,11 @@ const FactureDetailsModal = ({
 
   <div class="invoice-info">
     <div class="info-block">
-      <p><strong>Nom Client:</strong> ${facture.clientName}</p>
-      <p><strong>Téléphone:</strong> ${facture.clientPhone || "Non spécifié"}</p>
+      <p><strong>Nom Client:</strong> ${facture.clientName || facture.client?.nom_complete}</p>
     </div>
     <div class="info-block" style="text-align:right;">
-      <p><strong>N° Facture:</strong> ${facture.invoiceNumber} 
-        <span class="status-badge status-${facture.status}">${facture.status}</span>
-      </p>
+      <p><strong>N° Facture:</strong> ${facture.invoiceNumber || facture.num_facture}</p>
       <p><strong>Date facturation:</strong> ${formatDate(issueDate)}</p>
-      <p><strong>Date échéance:</strong> ${formatDate(facture.dueDateRaw)}</p>
     </div>
   </div>
 
@@ -456,8 +636,7 @@ const FactureDetailsModal = ({
         <th>Désignation</th>
         <th>Qté</th>
         <th>Prix U.</th>
-        <th>Remise Ligne</th>
-        <th>Total Ligne</th>
+        <th>Total Ligne HT</th>
       </tr>
     </thead>
     <tbody>
@@ -469,7 +648,6 @@ const FactureDetailsModal = ({
           <td>${prod.designation || "Produit"}</td>
           <td>${prod.FactureProduit?.quantite || 0}</td>
           <td>${parseFloat(prod.FactureProduit?.prix_unitaire || 0).toFixed(2)} Dh</td>
-          <td>${parseFloat(prod.FactureProduit?.remise_ligne || 0).toFixed(2)} Dh</td>
           <td>${parseFloat(prod.FactureProduit?.total_ligne || 0).toFixed(2)} Dh</td>
         </tr>
       `,
@@ -479,20 +657,22 @@ const FactureDetailsModal = ({
   </table>
 
   <div class="totals">
-    <p><strong>Total HT:</strong> ${facture.totalHT.toFixed(2)} Dh</p>
-    ${
-      facture.globalDiscount > 0
-        ? `<p><strong>Remise globale:</strong> -${facture.globalDiscount.toFixed(2)} Dh</p>`
-        : ""
-    }
-    <p><strong>HT après remise:</strong> ${(facture.totalHT - facture.globalDiscount).toFixed(2)} Dh</p>
-    <p><strong>TVA (${facture.tva}%):</strong> ${facture.montantTVA.toFixed(2)} Dh</p>
-    <p><strong>Total TTC:</strong> ${facture.totalTTC.toFixed(2)} Dh</p>
+    <p><strong>Total HT:</strong> ${totalHTBeforeDiscount.toFixed(2)} Dh</p>
+    <p><strong>TVA (${facture.tva || 0}%):</strong> ${montantTVA.toFixed(2)} Dh</p>
+    <p><strong>Total TTC:</strong> ${totalTTC.toFixed(2)} Dh</p>
+
+    <p style="font-size:10px; font-style:italic;">
+      Arrêté le présent Facture à la somme de :
+      <strong>${printTotalText}</strong>
+    </p>
+
     ${
       totalPayments > 0
         ? `
-      <p><strong>Total payé:</strong> -${totalPayments.toFixed(2)} Dh</p>
-      <p style="font-weight:bold; font-size:11px; color:${remainingAmount > 0 ? "#dc3545" : "#28a745"}">
+      <p><strong>Total payé:</strong> ${totalPayments.toFixed(2)} Dh</p>
+      <p style="font-weight:bold; font-size:11px; color:${
+        remainingAmount > 0 ? "#dc3545" : "#28a745"
+      }">
         <strong>Reste à payer:</strong> ${remainingAmount.toFixed(2)} Dh
       </p>
     `
@@ -500,30 +680,6 @@ const FactureDetailsModal = ({
     }
   </div>
 
-  ${
-    facture.isLinkedToBL && facture.bon_livraison
-      ? `
-    <div class="notes">
-      <p><strong>Note:</strong> Cette facture est basée sur le Bon de Livraison ${facture.bon_livraison.num_bon_livraison}</p>
-    </div>
-  `
-      : ""
-  }
-
-  ${
-    facture.notes
-      ? `
-    <div class="notes">
-      <p><strong>Notes:</strong> ${facture.notes}</p>
-    </div>
-  `
-      : ""
-  }
-
-  <div class="footer">
-    <p>Mode de règlement: ${facture.mode_reglement || "Espèces"}</p>
-    <p>Merci de votre confiance!</p>
-  </div>
 </body>
 </html>
 `;
@@ -555,12 +711,15 @@ const FactureDetailsModal = ({
 
       const formatDate = (date) => {
         if (!date) return "";
-        return format(new Date(date), "dd/MM/yyyy", { locale: fr });
+        return new Date(date).toLocaleDateString("fr-FR");
       };
 
-      const issueDate = facture.invoiceDate
-        ? new Date(facture.invoiceDate)
+      const issueDate = facture.date_facturation
+        ? new Date(facture.date_facturation)
         : facture.createdAt || new Date();
+
+      // Get the total text for PDF
+      const pdfTotalText = totalText || totalToFrenchText(totalTTC);
 
       pdfContainer.innerHTML = `
       <div style="text-align:center; border-bottom:2px solid #333; padding-bottom:10px; margin-bottom:15px;">
@@ -572,15 +731,12 @@ const FactureDetailsModal = ({
       <div style="display:flex; justify-content:space-between; margin-bottom:20px;">
         <div>
           <h4 style="margin-bottom:5px;">Client</h4>
-          <p><strong>Nom:</strong> ${facture.clientName}</p>
-          ${facture.clientPhone ? `<p><strong>Téléphone:</strong> ${facture.clientPhone}</p>` : ""}
+          <p><strong>Nom:</strong> ${facture.clientName || facture.client?.nom_complete}</p>
         </div>
         <div style="text-align:right;">
           <h4 style="margin-bottom:5px;">Informations de la Facture</h4>
-          <p><strong>N°:</strong> ${facture.invoiceNumber}</p>
+          <p><strong>N°:</strong> ${facture.invoiceNumber || facture.num_facture}</p>
           <p><strong>Date facturation:</strong> ${formatDate(issueDate)}</p>
-          <p><strong>Date échéance:</strong> ${formatDate(facture.dueDateRaw)}</p>
-          <p><strong>Mode règlement:</strong> ${facture.mode_reglement || "Espèces"}</p>
         </div>
       </div>
 
@@ -588,11 +744,10 @@ const FactureDetailsModal = ({
         <thead>
           <tr style="background-color:#2c5aa0; color:#fff;">
             <th style="padding:6px; border:1px solid #2c5aa0;">Code</th>
-            <th style="padding:6px; border:1px solid #2c5aa0;">Désignation</th>
+            <th style="padding:6px; border:1px solid #2c5aa0;">Produit</th>
             <th style="padding:6px; border:1px solid #2c5aa0;">Qté</th>
             <th style="padding:6px; border:1px solid #2c5aa0;">Prix U.</th>
-            <th style="padding:6px; border:1px solid #2c5aa0;">Remise Ligne</th>
-            <th style="padding:6px; border:1px solid #2c5aa0;">Total Ligne</th>
+            <th style="padding:6px; border:1px solid #2c5aa0;">Total Ligne HT</th>
           </tr>
         </thead>
         <tbody>
@@ -604,7 +759,6 @@ const FactureDetailsModal = ({
               <td style="border:1px solid #ddd; padding:5px;">${prod.designation || "Produit"}</td>
               <td style="border:1px solid #ddd; padding:5px; text-align:center;">${prod.FactureProduit?.quantite || 0}</td>
               <td style="border:1px solid #ddd; padding:5px; text-align:right;">${parseFloat(prod.FactureProduit?.prix_unitaire || 0).toFixed(2)} Dh</td>
-              <td style="border:1px solid #ddd; padding:5px; text-align:right;">${parseFloat(prod.FactureProduit?.remise_ligne || 0).toFixed(2)} Dh</td>
               <td style="border:1px solid #ddd; padding:5px; text-align:right;">${parseFloat(prod.FactureProduit?.total_ligne || 0).toFixed(2)} Dh</td>
             </tr>
           `,
@@ -614,48 +768,31 @@ const FactureDetailsModal = ({
       </table>
 
       <div style="text-align:right; margin-top:20px;">
-        <p><strong>Total HT:</strong> ${facture.totalHT.toFixed(2)} Dh</p>
-        ${
-          facture.globalDiscount > 0
-            ? `<p><strong>Remise globale:</strong> -${facture.globalDiscount.toFixed(2)} Dh</p>`
-            : ""
-        }
-        <p><strong>HT après remise:</strong> ${(facture.totalHT - facture.globalDiscount).toFixed(2)} Dh</p>
-        <p><strong>TVA (${facture.tva}%):</strong> ${facture.montantTVA.toFixed(2)} Dh</p>
+        <p><strong>Total HT:</strong> ${totalHTBeforeDiscount.toFixed(2)} Dh</p>
+        <p><strong>TVA (${facture.tva || 0}%):</strong> ${montantTVA.toFixed(2)} Dh</p>
         <p style="font-size:13px; font-weight:bold; color:#2c5aa0;">
-          <strong>Total TTC:</strong> ${facture.totalTTC.toFixed(2)} Dh
+          <strong>Total TTC:</strong> ${totalTTC.toFixed(2)} Dh
         </p>
+        <p style="font-size:10px; font-style:italic;">
+          Arrêté le présent Facture à la somme de :
+          <strong>${pdfTotalText}</strong>
+        </p>
+        
         ${
           totalPayments > 0
             ? `
-          <p><strong>Total payé:</strong> -${totalPayments.toFixed(2)} Dh</p>
-          <p style="font-size:13px; font-weight:bold; color:${remainingAmount > 0 ? "#dc3545" : "#28a745"};">
-            <strong>Reste à payer:</strong> ${remainingAmount.toFixed(2)} Dh
-          </p>
+          <div style="border-top:1px solid #ddd; margin-top:10px; padding-top:10px;">
+            <p><strong>Total payé:</strong> ${totalPayments.toFixed(2)} Dh</p>
+            <p style="font-weight:bold; color:${
+              remainingAmount > 0 ? "#dc3545" : "#28a745"
+            }">
+              <strong>Reste à payer:</strong> ${remainingAmount.toFixed(2)} Dh
+            </p>
+          </div>
         `
             : ""
         }
       </div>
-
-      ${
-        facture.isLinkedToBL && facture.bon_livraison
-          ? `
-        <div style="margin-top:20px; padding:10px; background:#f8f9fa; border-radius:5px;">
-          <p style="margin:0;"><strong>Note:</strong> Cette facture est basée sur le Bon de Livraison ${facture.bon_livraison.num_bon_livraison}</p>
-        </div>
-      `
-          : ""
-      }
-
-      ${
-        facture.notes
-          ? `
-        <div style="margin-top:15px; padding:10px; background:#f8f9fa; border-radius:5px;">
-          <p style="margin:0;"><strong>Notes:</strong> ${facture.notes}</p>
-        </div>
-      `
-          : ""
-      }
     `;
 
       document.body.appendChild(pdfContainer);
@@ -683,15 +820,15 @@ const FactureDetailsModal = ({
         pdf.addImage(imgData, "PNG", 0, position, pageWidth, imgHeight);
         heightLeft -= pageHeight;
 
-        while (heightLeft > 1) {
-          position = heightLeft - imgHeight;
+        while (heightLeft > 0) {
+          position -= pageHeight;
           pdf.addPage();
           pdf.addImage(imgData, "PNG", 0, position, pageWidth, imgHeight);
           heightLeft -= pageHeight;
         }
       }
 
-      pdf.save(`Facture-${facture.invoiceNumber}.pdf`);
+      pdf.save(`Facture-${facture.invoiceNumber || facture.num_facture}.pdf`);
       topTost("PDF téléchargé avec succès!", "success");
     } catch (err) {
       console.error("Erreur PDF:", err);
@@ -704,19 +841,10 @@ const FactureDetailsModal = ({
       <ModalHeader toggle={toggle}>
         <div className="d-flex align-items-center">
           <FiFileText className="me-2" />
-          Facture #{facture.invoiceNumber}
+          Facture #{facture.invoiceNumber || facture.num_facture}
           <Badge color={getStatusBadge(formData.status)} className="ms-2">
             {statusOptions.find((opt) => opt.value === formData.status)
               ?.label || formData.status}
-          </Badge>
-          <Badge color={getPaymentStatusBadge()} className="ms-2">
-            {formData.isOverdue
-              ? "En Retard"
-              : facture.isFullyPaid
-                ? "Payée"
-                : facture.paidAmount > 0
-                  ? "Part. Payée"
-                  : "Impayée"}
           </Badge>
           {facture.isLinkedToBL && (
             <Badge color="info" className="ms-2">
@@ -738,7 +866,8 @@ const FactureDetailsModal = ({
               </h6>
               <div className="p-3 bg-light rounded">
                 <p>
-                  <strong>Nom:</strong> {facture.clientName}
+                  <strong>Nom:</strong>{" "}
+                  {facture.clientName || facture.client?.nom_complete}
                 </p>
                 <p>
                   <strong>Téléphone:</strong>{" "}
@@ -757,19 +886,13 @@ const FactureDetailsModal = ({
               <div className="p-3 bg-light rounded">
                 <p>
                   <strong>Date création:</strong>{" "}
-                  {format(facture.createdAt, "dd/MM/yyyy", { locale: fr })}
+                  {facture.createdAt
+                    ? format(facture.createdAt, "dd/MM/yyyy", { locale: fr })
+                    : "N/A"}
                 </p>
                 <p>
-                  <strong>Date facturation:</strong> {facture.invoiceDate}
-                </p>
-                <p>
-                  <strong>Date échéance:</strong>{" "}
-                  <span
-                    className={formData.isOverdue ? "text-danger fw-bold" : ""}
-                  >
-                    {facture.dueDate}
-                    {formData.isOverdue && <FiClock className="ms-1" />}
-                  </span>
+                  <strong>Date facturation:</strong>{" "}
+                  {facture.invoiceDate || "N/A"}
                 </p>
               </div>
             </div>
@@ -997,7 +1120,7 @@ const FactureDetailsModal = ({
                     <th>Quantité</th>
                     <th>Prix Unitaire</th>
                     <th>Remise Ligne</th>
-                    <th>Total Ligne</th>
+                    <th>Total Ligne HT</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1038,10 +1161,12 @@ const FactureDetailsModal = ({
                 <div className="col-md-6">
                   <h6>Résumé de la Facture</h6>
                   <p>
-                    <strong>N° Facture:</strong> {facture.invoiceNumber}
+                    <strong>N° Facture:</strong>{" "}
+                    {facture.invoiceNumber || facture.num_facture}
                   </p>
                   <p>
-                    <strong>Client:</strong> {facture.clientName}
+                    <strong>Client:</strong>{" "}
+                    {facture.clientName || facture.client?.nom_complete}
                   </p>
                   <p>
                     <strong>Statut:</strong>{" "}
@@ -1060,28 +1185,26 @@ const FactureDetailsModal = ({
                 <div className="col-md-6 text-end">
                   <h6>Montants</h6>
                   <div className="d-flex justify-content-between">
-                    <span>Total HT:</span>
-                    <span>{facture.totalHT.toFixed(2)} Dh</span>
+                    <span>Total HT avant remise:</span>
+                    <span>{totalHTBeforeDiscount.toFixed(2)} Dh</span>
                   </div>
-                  {facture.globalDiscount > 0 && (
+                  {globalDiscount > 0 && (
                     <div className="d-flex justify-content-between text-danger">
                       <span>Remise globale:</span>
-                      <span>-{facture.globalDiscount.toFixed(2)} Dh</span>
+                      <span>-{globalDiscount.toFixed(2)} Dh</span>
                     </div>
                   )}
                   <div className="d-flex justify-content-between">
                     <span>HT après remise:</span>
-                    <span>
-                      {(facture.totalHT - facture.globalDiscount).toFixed(2)} Dh
-                    </span>
+                    <span>{montantHTAfterRemise.toFixed(2)} Dh</span>
                   </div>
                   <div className="d-flex justify-content-between text-success">
-                    <span>TVA ({facture.tva}%):</span>
-                    <span>{facture.montantTVA.toFixed(2)} Dh</span>
+                    <span>TVA ({facture.tva || 0}%):</span>
+                    <span>{montantTVA.toFixed(2)} Dh</span>
                   </div>
                   <div className="d-flex justify-content-between fw-bold border-top pt-1">
                     <span>Total TTC:</span>
-                    <span>{facture.totalTTC.toFixed(2)} Dh</span>
+                    <span>{totalTTC.toFixed(2)} Dh</span>
                   </div>
                   {totalPayments > 0 && (
                     <>
@@ -1135,7 +1258,7 @@ const FactureDetailsModal = ({
             <Button
               onClick={generateAndDownloadPDF}
               color="outline-secondary"
-              className="me-2"
+              className="mt-4"
             >
               <FiDownload className="me-2" />
               Télécharger PDF
@@ -1162,6 +1285,7 @@ const FactureDetailsModal = ({
                 onClick={handleSubmit}
                 color="primary"
                 disabled={isSubmitting}
+                className="mt-4"
               >
                 <FiSave className="me-2" />
                 {isSubmitting ? "Enregistrement..." : "Enregistrer"}

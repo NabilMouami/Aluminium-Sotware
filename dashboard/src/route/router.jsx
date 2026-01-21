@@ -20,8 +20,6 @@ import FornisseurCreate from "../pages/Fornisseur/fornisseur-create";
 import ProduitsCreate from "../pages/Produits/produits-create";
 import ProduitsList from "../pages/Produits/produits-list";
 
-import PaymentCreate from "../pages/payment-create";
-
 import LayoutAuth from "../layout/layoutAuth";
 import LoginCreative from "../pages/login-creative";
 
@@ -33,9 +31,12 @@ import DevisCreate from "../pages/Devis/devis-create";
 
 import DevisList from "../pages/Devis/devis-list";
 import BonLivraisonsList from "../pages/BonLivraison/bonlivraisons-list";
-import BonLivrCreate from "@/components/payment/BonLivrCreate";
 import BonLivraisonCreate from "../pages/BonLivraison/bl-create";
 import FactureCreate from "../pages/Invoices/facture-create";
+import BonAvoirCreate from "../pages/BonAvoir/bonAvoir-create";
+import BonAvoirList from "../pages/BonAvoir/bonAvoir-list";
+import BonAchatCreate from "../pages/BonAchat/bonAchat-create";
+import BonAchatList from "../pages/BonAchat/bonAchat-list";
 
 export const router = createBrowserRouter([
   {
@@ -142,6 +143,22 @@ export const router = createBrowserRouter([
       {
         path: "bon-livraison/create",
         element: <BonLivraisonCreate />,
+      },
+      {
+        path: "bon-avoir/create",
+        element: <BonAvoirCreate />,
+      },
+      {
+        path: "bon-avoir/list",
+        element: <BonAvoirList />,
+      },
+      {
+        path: "bon-achat/create",
+        element: <BonAchatCreate />,
+      },
+      {
+        path: "bon-achat/list",
+        element: <BonAchatList />,
       },
     ],
   },

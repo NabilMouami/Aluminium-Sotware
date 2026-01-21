@@ -14,18 +14,29 @@ import {
   FiTrash,
   FiPrinter,
   FiFileText,
-  FiDollarSign,
-  FiCreditCard,
   FiUser,
   FiClock,
   FiCheckCircle,
   FiXCircle,
-  FiPercent,
   FiTag,
+  FiDollarSign,
+  FiTrendingUp,
+  FiPercent,
+  FiAlertCircle,
+  FiPackage,
+  FiCreditCard,
+  FiBarChart,
 } from "react-icons/fi";
 import { config_url } from "@/utils/config";
 import Swal from "sweetalert2";
-import { Input, InputGroup, InputGroupText, Label } from "reactstrap";
+import {
+  Input,
+  InputGroup,
+  InputGroupText,
+  Label,
+  Card,
+  CardBody,
+} from "reactstrap";
 import withReactContent from "sweetalert2-react-content";
 import { Link } from "react-router-dom";
 
@@ -59,6 +70,25 @@ const FactureTable = () => {
   const [isPaidFilter, setIsPaidFilter] = useState("all");
   const [clients, setClients] = useState([]);
   const [selectedClient, setSelectedClient] = useState("all");
+
+  // Statistics states
+  const [statistics, setStatistics] = useState({
+    totalFactures: 0,
+    totalAmountTTC: 0,
+    totalAmountHT: 0,
+    totalTVACollected: 0,
+    totalPaid: 0,
+    totalRemaining: 0,
+    paidFactures: 0,
+    draftFactures: 0,
+    partiallyPaidFactures: 0,
+    cancelledFactures: 0,
+    overdueFactures: 0,
+    linkedToBLCount: 0,
+    averageInvoiceAmount: 0,
+    paymentCompletionRate: 0,
+    overdueAmount: 0,
+  });
 
   useEffect(() => {
     fetchFactures();
@@ -148,17 +178,97 @@ const FactureTable = () => {
         console.log("Formatted Factures Data:", formattedData);
         setFactures(formattedData);
         setFilteredFactures(formattedData);
+        calculateStatistics(formattedData);
       } else {
         console.error("No factures data found in response");
         setFactures([]);
         setFilteredFactures([]);
+        resetStatistics();
       }
     } catch (error) {
       console.error("Error fetching factures:", error);
       topTost("Erreur lors du chargement des factures", "error");
       setFactures([]);
       setFilteredFactures([]);
+      resetStatistics();
     }
+  };
+
+  // Calculate statistics from factures data
+  const calculateStatistics = (data) => {
+    if (!data || data.length === 0) {
+      resetStatistics();
+      return;
+    }
+
+    const totalFactures = data.length;
+    const totalAmountTTC = data.reduce((sum, f) => sum + (f.totalTTC || 0), 0);
+    const totalAmountHT = data.reduce((sum, f) => sum + (f.totalHT || 0), 0);
+    const totalTVACollected = data.reduce(
+      (sum, f) => sum + (f.montantTVA || 0),
+      0,
+    );
+    const totalPaid = data.reduce((sum, f) => sum + (f.paidAmount || 0), 0);
+    const totalRemaining = data.reduce(
+      (sum, f) => sum + (f.remainingAmount || 0),
+      0,
+    );
+
+    const paidFactures = data.filter((f) => f.status === "payée").length;
+    const draftFactures = data.filter((f) => f.status === "brouillon").length;
+    const partiallyPaidFactures = data.filter(
+      (f) => f.status === "partiellement_payée",
+    ).length;
+    const cancelledFactures = data.filter((f) => f.status === "annulée").length;
+    const overdueFactures = data.filter((f) => f.isOverdue).length;
+    const linkedToBLCount = data.filter((f) => f.isLinkedToBL).length;
+
+    const overdueAmount = data
+      .filter((f) => f.isOverdue)
+      .reduce((sum, f) => sum + (f.remainingAmount || 0), 0);
+
+    const averageInvoiceAmount =
+      totalFactures > 0 ? totalAmountTTC / totalFactures : 0;
+    const paymentCompletionRate =
+      totalAmountTTC > 0 ? (totalPaid / totalAmountTTC) * 100 : 0;
+
+    setStatistics({
+      totalFactures,
+      totalAmountTTC,
+      totalAmountHT,
+      totalTVACollected,
+      totalPaid,
+      totalRemaining,
+      paidFactures,
+      draftFactures,
+      partiallyPaidFactures,
+      cancelledFactures,
+      overdueFactures,
+      linkedToBLCount,
+      averageInvoiceAmount,
+      paymentCompletionRate,
+      overdueAmount,
+    });
+  };
+
+  const resetStatistics = () => {
+    setStatistics({
+      totalFactures: 0,
+      totalAmountTTC: 0,
+      totalAmountHT: 0,
+      totalTVACollected: 0,
+      totalPaid: 0,
+      totalRemaining: 0,
+      paidFactures: 0,
+      draftFactures: 0,
+      partiallyPaidFactures: 0,
+      cancelledFactures: 0,
+      overdueFactures: 0,
+      linkedToBLCount: 0,
+      averageInvoiceAmount: 0,
+      paymentCompletionRate: 0,
+      overdueAmount: 0,
+    });
   };
 
   // Filter factures based on selected criteria
@@ -201,6 +311,7 @@ const FactureTable = () => {
     }
 
     setFilteredFactures(result);
+    calculateStatistics(result);
   }, [selectedStatus, isPaidFilter, selectedClient, dateRange, factures]);
 
   const handleDateRangeChange = (ranges) => {
@@ -226,28 +337,6 @@ const FactureTable = () => {
       annulée: "Annulée",
     };
     return texts[status] || status;
-  };
-
-  const getPaymentStatusColor = (paymentStatus, isOverdue) => {
-    if (isOverdue) return "bg-danger text-white";
-
-    const colors = {
-      payée: "bg-success text-white",
-      "partiellement payée": "bg-warning text-dark",
-      impayée: "bg-danger text-white",
-    };
-    return colors[paymentStatus] || "bg-secondary text-white";
-  };
-
-  const getPaymentStatusText = (paymentStatus, isOverdue) => {
-    if (isOverdue) return "En Retard";
-
-    const texts = {
-      payée: "Payée",
-      "partiellement payée": "Part. Payée",
-      impayée: "Impayée",
-    };
-    return texts[paymentStatus] || paymentStatus;
   };
 
   const handleFactureUpdate = (updatedFacture) => {
@@ -286,6 +375,9 @@ const FactureTable = () => {
           : facture,
       ),
     );
+
+    // Recalculate statistics
+    calculateStatistics(filteredFactures);
 
     // Show success message
     topTost("Facture mise à jour avec succès!", "success");
@@ -460,6 +552,7 @@ const FactureTable = () => {
       });
 
       setFactures((prev) => prev.filter((facture) => facture.id !== factureId));
+      calculateStatistics(filteredFactures.filter((f) => f.id !== factureId));
       topTost("Facture supprimée avec succès!", "success");
     } catch (error) {
       console.error("Delete error:", error);
@@ -548,38 +641,6 @@ const FactureTable = () => {
     }
   };
 
-  const handlePrintFacture = (factureId) => {
-    window.open(`${config_url}/factures/${factureId}/print`, "_blank");
-  };
-
-  const handleSendWhatsApp = (facture) => {
-    if (!facture.clientPhone) {
-      topTost("Numéro de téléphone du client non disponible", "warning");
-      return;
-    }
-
-    const message = `Bonjour ${facture.clientName},
-
-Votre Facture ${facture.invoiceNumber} :
-
-Montant HT: ${facture.totalHT.toFixed(2)} Dh
-TVA: ${facture.montantTVA.toFixed(2)} Dh
-Total TTC: ${facture.totalTTC.toFixed(2)} Dh
-Déjà payé: ${facture.paidAmount.toFixed(2)} Dh
-Reste à payer: ${facture.remainingAmount.toFixed(2)} Dh
-
-Date d'échéance: ${facture.dueDate}
-Mode de règlement: ${facture.mode_reglement}
-
-Merci de régler votre facture.`;
-
-    const encodedMessage = encodeURIComponent(message);
-    const whatsappUrl = `https://wa.me/${facture.clientPhone.replace(/\D/g, "")}?text=${encodedMessage}`;
-
-    window.open(whatsappUrl, "_blank");
-    topTost("Message WhatsApp préparé!", "success");
-  };
-
   const columns = [
     {
       accessorKey: "id",
@@ -635,31 +696,6 @@ Merci de régler votre facture.`;
       ),
     },
     {
-      accessorKey: "paidAmount",
-      header: () => "Payé",
-      cell: ({ getValue }) => (
-        <span className="text-success">
-          {parseFloat(getValue()).toFixed(2)} Dh
-        </span>
-      ),
-    },
-    {
-      accessorKey: "remainingAmount",
-      header: () => "Reste à Payer",
-      cell: ({ row }) => {
-        const remaining = parseFloat(row.original.remainingAmount);
-        const isOverdue = row.original.isOverdue;
-        return (
-          <span
-            className={`fw-bold ${isOverdue ? "text-danger" : remaining > 0 ? "text-warning" : "text-success"}`}
-          >
-            {remaining.toFixed(2)} Dh
-            {isOverdue && <span className="badge bg-danger ms-2">RETARD</span>}
-          </span>
-        );
-      },
-    },
-    {
       accessorKey: "status",
       header: () => "Statut",
       cell: ({ getValue }) => {
@@ -667,35 +703,6 @@ Merci de régler votre facture.`;
         return (
           <span className={`badge ${getStatusColor(status)}`}>
             {getStatusText(status)}
-          </span>
-        );
-      },
-    },
-    {
-      accessorKey: "paymentStatus",
-      header: () => "Paiement",
-      cell: ({ row }) => {
-        const paymentStatus = row.original.paymentStatus;
-        const isOverdue = row.original.isOverdue;
-        return (
-          <span
-            className={`badge ${getPaymentStatusColor(paymentStatus, isOverdue)}`}
-          >
-            {getPaymentStatusText(paymentStatus, isOverdue)}
-          </span>
-        );
-      },
-    },
-    {
-      accessorKey: "dueDate",
-      header: () => "Échéance",
-      cell: ({ row }) => {
-        const dueDate = row.original.dueDate;
-        const isOverdue = row.original.isOverdue;
-        return (
-          <span className={isOverdue ? "text-danger fw-bold" : ""}>
-            {dueDate}
-            {isOverdue && <FiClock className="ms-1" />}
           </span>
         );
       },
@@ -717,20 +724,7 @@ Merci de régler votre facture.`;
           >
             <FiEye />
           </button>
-          <button
-            className="btn btn-sm btn-outline-info"
-            onClick={() => handlePrintFacture(row.original.id)}
-            title="Imprimer"
-          >
-            <FiPrinter />
-          </button>
-          <button
-            className="btn btn-sm btn-outline-success"
-            onClick={() => handleSendWhatsApp(row.original)}
-            title="Envoyer WhatsApp"
-          >
-            <FiFileText />
-          </button>
+
           {row.original.status !== "annulée" && (
             <>
               <button
@@ -774,16 +768,16 @@ Merci de régler votre facture.`;
 
   return (
     <>
+      {/* Filters Section */}
       <div
         className="mb-3 d-flex align-items-center flex-wrap gap-3"
         style={{
           zIndex: 999,
-          marginTop: "60px",
         }}
       >
         <InputGroup size="sm" className="w-auto shadow-sm rounded">
           <InputGroupText className="bg-white border-0">
-            <FiFilter className="text-primary fs-6" />
+            <FiFilter className="text-white fs-6" />
           </InputGroupText>
           <Input
             type="select"
@@ -801,24 +795,7 @@ Merci de régler votre facture.`;
 
         <InputGroup size="sm" className="w-auto shadow-sm rounded">
           <InputGroupText className="bg-white border-0">
-            <FiDollarSign className="text-success fs-6" />
-          </InputGroupText>
-          <Input
-            type="select"
-            value={isPaidFilter}
-            onChange={(e) => setIsPaidFilter(e.target.value)}
-            className="border-0 bg-white"
-          >
-            <option value="all">Tous les paiements</option>
-            <option value="paid">Payées</option>
-            <option value="unpaid">Impayées</option>
-            <option value="overdue">En retard</option>
-          </Input>
-        </InputGroup>
-
-        <InputGroup size="sm" className="w-auto shadow-sm rounded">
-          <InputGroupText className="bg-white border-0">
-            <FiUser className="text-info fs-6" />
+            <FiUser className="text-white fs-6" />
           </InputGroupText>
           <Input
             type="select"
@@ -869,6 +846,173 @@ Merci de régler votre facture.`;
         </div>
       </div>
 
+      {/* Statistics Cards Section */}
+      <div
+        className="mb-4"
+        style={{
+          marginTop: "60px",
+        }}
+      >
+        <div className="row g-3">
+          {/* Total Factures Card */}
+          <div className="col-xl-3 col-lg-4 col-md-6">
+            <Card className="border-0 shadow-sm h-100">
+              <CardBody className="d-flex align-items-center">
+                <div className="bg-primary bg-opacity-10 rounded-circle p-3 me-3">
+                  <FiFileText className="text-white fs-3" />
+                </div>
+                <div>
+                  <h6 className="text-muted mb-1">Total Factures</h6>
+                  <h3 className="mb-0">{statistics.totalFactures}</h3>
+                  <small className="text-muted">
+                    {filteredFactures.length} affichées
+                  </small>
+                </div>
+              </CardBody>
+            </Card>
+          </div>
+
+          {/* Total TTC Amount Card */}
+          <div className="col-xl-3 col-lg-4 col-md-6">
+            <Card className="border-0 shadow-sm h-100">
+              <CardBody className="d-flex align-items-center">
+                <div className="bg-success bg-opacity-10 rounded-circle p-3 me-3">
+                  <FiDollarSign className="text-white fs-3" />
+                </div>
+                <div>
+                  <h6 className="text-muted mb-1">Montant TTC</h6>
+                  <h3 className="mb-0">
+                    {statistics.totalAmountTTC.toFixed(2)} Dh
+                  </h3>
+                  <small className="text-muted">
+                    Moyenne: {statistics.averageInvoiceAmount.toFixed(2)} Dh
+                  </small>
+                </div>
+              </CardBody>
+            </Card>
+          </div>
+
+          {/* Total HT Amount Card */}
+          <div className="col-xl-3 col-lg-4 col-md-6">
+            <Card className="border-0 shadow-sm h-100">
+              <CardBody className="d-flex align-items-center">
+                <div className="bg-info bg-opacity-10 rounded-circle p-3 me-3">
+                  <FiBarChart className="text-white fs-3" />
+                </div>
+                <div>
+                  <h6 className="text-muted mb-1">Montant HT</h6>
+                  <h3 className="mb-0">
+                    {statistics.totalAmountHT.toFixed(2)} Dh
+                  </h3>
+                  <small className="text-muted">
+                    TVA: {statistics.totalTVACollected.toFixed(2)} Dh
+                  </small>
+                </div>
+              </CardBody>
+            </Card>
+          </div>
+
+          {/* Paid Amount Card */}
+          <div className="col-xl-3 col-lg-4 col-md-6">
+            <Card className="border-0 shadow-sm h-100">
+              <CardBody className="d-flex align-items-center">
+                <div className="bg-success bg-opacity-10 rounded-circle p-3 me-3">
+                  <FiCreditCard className="text-white fs-3" />
+                </div>
+                <div>
+                  <h6 className="text-muted mb-1">Montant Payé</h6>
+                  <h3 className="mb-0">{statistics.totalPaid.toFixed(2)} Dh</h3>
+                  <small className="text-muted">
+                    Taux: {statistics.paymentCompletionRate.toFixed(1)}%
+                  </small>
+                </div>
+              </CardBody>
+            </Card>
+          </div>
+
+          {/* Remaining Amount Card */}
+          <div className="col-xl-3 col-lg-4 col-md-6">
+            <Card className="border-0 shadow-sm h-100">
+              <CardBody className="d-flex align-items-center">
+                <div className="bg-warning bg-opacity-10 rounded-circle p-3 me-3">
+                  <FiDollarSign className="text-white fs-3" />
+                </div>
+                <div>
+                  <h6 className="text-muted mb-1">Reste à Payer</h6>
+                  <h3 className="mb-0">
+                    {statistics.totalRemaining.toFixed(2)} Dh
+                  </h3>
+                  <small className="text-muted">
+                    {statistics.totalAmountTTC > 0
+                      ? `${((statistics.totalRemaining / statistics.totalAmountTTC) * 100).toFixed(1)}% du total`
+                      : "0%"}
+                  </small>
+                </div>
+              </CardBody>
+            </Card>
+          </div>
+
+          {/* Overdue Factures Card */}
+          <div className="col-xl-3 col-lg-4 col-md-6">
+            <Card className="border-0 shadow-sm h-100">
+              <CardBody className="d-flex align-items-center">
+                <div className="bg-danger bg-opacity-10 rounded-circle p-3 me-3">
+                  <FiAlertCircle className="text-white fs-3" />
+                </div>
+                <div>
+                  <h6 className="text-muted mb-1">Factures En Retard</h6>
+                  <h3 className="mb-0">{statistics.overdueFactures}</h3>
+                  <small className="text-muted">
+                    {statistics.overdueAmount.toFixed(2)} Dh en retard
+                  </small>
+                </div>
+              </CardBody>
+            </Card>
+          </div>
+
+          {/* Paid Factures Card */}
+          <div className="col-xl-3 col-lg-4 col-md-6">
+            <Card className="border-0 shadow-sm h-100">
+              <CardBody className="d-flex align-items-center">
+                <div className="bg-success bg-opacity-10 rounded-circle p-3 me-3">
+                  <FiCheckCircle className="text-white fs-3" />
+                </div>
+                <div>
+                  <h6 className="text-muted mb-1">Factures Payées</h6>
+                  <h3 className="mb-0">{statistics.paidFactures}</h3>
+                  <small className="text-muted">
+                    {statistics.totalFactures > 0
+                      ? `${((statistics.paidFactures / statistics.totalFactures) * 100).toFixed(1)}%`
+                      : "0%"}
+                  </small>
+                </div>
+              </CardBody>
+            </Card>
+          </div>
+
+          {/* Linked to BL Card */}
+          <div className="col-xl-3 col-lg-4 col-md-6">
+            <Card className="border-0 shadow-sm h-100">
+              <CardBody className="d-flex align-items-center">
+                <div className="bg-info bg-opacity-10 rounded-circle p-3 me-3">
+                  <FiPackage className="text-white fs-3" />
+                </div>
+                <div>
+                  <h6 className="text-muted mb-1">Liées à BL</h6>
+                  <h3 className="mb-0">{statistics.linkedToBLCount}</h3>
+                  <small className="text-muted">
+                    {statistics.totalFactures > 0
+                      ? `${((statistics.linkedToBLCount / statistics.totalFactures) * 100).toFixed(1)}%`
+                      : "0%"}
+                  </small>
+                </div>
+              </CardBody>
+            </Card>
+          </div>
+        </div>
+      </div>
+
+      {/* Summary Alert */}
       <div className="mt-4">
         <div className="alert alert-info mb-3">
           <div className="d-flex justify-content-between">
@@ -907,81 +1051,6 @@ Merci de régler votre facture.`;
         toggle={() => setIsDetailsModalOpen(false)}
         onUpdate={handleFactureUpdate}
         facture={selectedFacture}
-        footerContent={
-          selectedFacture &&
-          selectedFacture.status !== "annulée" && (
-            <div className="container-fluid">
-              <div className="row mb-3">
-                <div className="col-md-4">
-                  <Label for="statusSelect">Statut de la Facture</Label>
-                  <Input
-                    type="select"
-                    id="statusSelect"
-                    value={factureStatus}
-                    onChange={handleStatusChange}
-                  >
-                    {statusOptions
-                      .filter((option) => option.value !== "all")
-                      .map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                  </Input>
-                </div>
-                <div className="col-md-4">
-                  <Label for="paymentInput">Ajouter Paiement (Dh)</Label>
-                  <div className="input-group">
-                    <Input
-                      type="number"
-                      id="paymentInput"
-                      value={paymentAmount}
-                      onChange={handlePaymentChange}
-                      min="0"
-                      max={selectedFacture?.remainingAmount || 0}
-                      placeholder="Montant du paiement"
-                    />
-                    <button
-                      className="btn btn-primary"
-                      onClick={handleAddPayment}
-                      disabled={
-                        paymentAmount <= 0 ||
-                        paymentAmount > selectedFacture.remainingAmount
-                      }
-                    >
-                      <FiCheckCircle />
-                    </button>
-                  </div>
-                  {selectedFacture && (
-                    <small className="text-muted">
-                      Reste à payer:{" "}
-                      {selectedFacture.remainingAmount.toFixed(2)} Dh
-                    </small>
-                  )}
-                </div>
-                <div className="col-md-4 d-flex align-items-end">
-                  {selectedFacture.isLinkedToBL && (
-                    <div className="alert alert-info mb-0 w-100">
-                      <FiTag className="me-2" />
-                      <small>
-                        Liée au BL:{" "}
-                        {selectedFacture.bon_livraison?.num_bon_livraison ||
-                          "N/A"}
-                      </small>
-                    </div>
-                  )}
-                </div>
-              </div>
-              {selectedFacture.isOverdue && (
-                <div className="alert alert-danger">
-                  <FiClock className="me-2" />
-                  <strong>Attention!</strong> Cette facture est en retard de
-                  paiement.
-                </div>
-              )}
-            </div>
-          )
-        }
       />
     </>
   );

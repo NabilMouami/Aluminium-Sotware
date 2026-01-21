@@ -23,6 +23,11 @@ Client.init(
         },
       },
     },
+    reference: {
+      type: DataTypes.STRING(200),
+      allowNull: true,
+    },
+
     ville: {
       type: DataTypes.STRING(100),
       allowNull: true,
@@ -41,7 +46,7 @@ Client.init(
     modelName: "Client",
     tableName: "clients",
     timestamps: true,
-  }
+  },
 );
 
 module.exports = Client;

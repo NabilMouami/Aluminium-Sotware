@@ -5,10 +5,12 @@ import Select from "react-select";
 import AsyncSelect from "react-select/async";
 import PageHeader from "@/components/shared/pageHeader/PageHeader";
 import {
+  FiPackage,
   FiUser,
   FiShoppingCart,
   FiPlus,
   FiMinus,
+  FiTrash2,
   FiSearch,
   FiPercent,
   FiDollarSign,
@@ -17,12 +19,13 @@ import {
   FiFileText,
   FiSave,
   FiX,
-  FiCreditCard as FiCard,
-  FiDollarSign as FiCash,
+  FiCheck,
+  FiTruck,
+  FiChevronDown,
+  FiChevronUp,
   FiXCircle,
   FiRefreshCw,
-  FiFile,
-  FiCheckCircle,
+  FiBox,
 } from "react-icons/fi";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
@@ -30,45 +33,48 @@ import api from "@/utils/axiosConfig";
 
 const MySwal = withReactContent(Swal);
 
-const DevisCreate = () => {
+const BonAchatCreate = () => {
   const [loading, setLoading] = useState(false);
-  const [clients, setClients] = useState([]);
+  const [fornisseurs, setfornisseurs] = useState([]);
   const [allProduits, setAllProduits] = useState([]);
   const [selectedProduits, setSelectedProduits] = useState([]);
   const [loadingProduits, setLoadingProduits] = useState(true);
   const [formData, setFormData] = useState({
-    client_id: "",
+    fornisseurId: "",
     mode_reglement: "espèces",
     remise: 0,
     notes: "",
-    date_creation: new Date().toISOString().split("T")[0],
   });
 
   const selectRef = useRef();
 
   useEffect(() => {
-    fetchClients();
+    fetchfornisseurs();
     fetchAllProduits();
+    const today = new Date().toISOString().split("T")[0];
+    setFormData((prev) => ({ ...prev, date_creation: today }));
   }, []);
 
-  const fetchClients = async () => {
+  const fetchfornisseurs = async () => {
     try {
       const token =
         localStorage.getItem("token") || sessionStorage.getItem("token");
-      const response = await axios.get(`${config_url}/api/clients`, {
+      const response = await axios.get(`${config_url}/api/fornisseurs`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      const clientOptions = (response.data?.clients || []).map((client) => ({
-        value: client.id,
-        label: `${client.nom_complete} ${client.telephone ? `- ${client.telephone}` : ""}`,
-        ...client,
-      }));
+      const fornisseurOptions = (response.data?.fornisseurs || []).map(
+        (fornisseur) => ({
+          value: fornisseur.id,
+          label: `${fornisseur.nom_complete} ${fornisseur.telephone ? `- ${fornisseur.telephone}` : ""}`,
+          ...fornisseur,
+        }),
+      );
 
-      setClients(clientOptions);
+      setfornisseurs(fornisseurOptions);
     } catch (error) {
-      console.error("Error fetching clients:", error);
-      topTost("Erreur lors du chargement des clients", "error");
+      console.error("Error fetching fornisseurs:", error);
+      topTost("Erreur lors du chargement des fornisseurs", "error");
     }
   };
 
@@ -86,7 +92,7 @@ const DevisCreate = () => {
         label: `${produit.reference} - ${produit.designation}`,
         data: {
           ...produit,
-          displayText: `${produit.reference} - ${produit.designation} (Stock: ${produit.qty}, Prix: ${produit.prix_vente} DH)`,
+          displayText: `${produit.reference} - ${produit.designation} (Stock: ${produit.qty}, Prix Achat: ${produit.prix_achat} DH)`,
         },
       }));
 
@@ -133,7 +139,7 @@ const DevisCreate = () => {
           label: `${produit.reference} - ${produit.designation}`,
           data: {
             ...produit,
-            displayText: `${produit.reference} - ${produit.designation} (Stock: ${produit.qty}, Prix: ${produit.prix_vente} DH)`,
+            displayText: `${produit.reference} - ${produit.designation} (Stock: ${produit.qty}, Prix Achat: ${produit.prix_achat} DH)`,
           },
         }));
 
@@ -189,7 +195,7 @@ const DevisCreate = () => {
         <div
           className={`text-sm ${isSelected ? "text-white" : "text-gray-600"}`}
         >
-          Stock: {data.data.qty} | Prix: {data.data.prix_vente} DH
+          Stock: {data.data.qty} | Prix Achat: {data.data.prix_achat} DH
         </div>
         {data.data.categorie && (
           <div
@@ -202,72 +208,34 @@ const DevisCreate = () => {
     );
   };
 
-  const handleProduitSelect = (selectedOptions) => {
-    if (!selectedOptions) return;
+  const handleProduitSelect = (selectedOption) => {
+    if (!selectedOption) return;
 
-    // Si c'est un tableau (multi-sélection)
-    if (Array.isArray(selectedOptions)) {
-      selectedOptions.forEach((selectedOption) => {
-        if (!selectedOption) return;
-
-        if (selectedProduits.some((p) => p.id === selectedOption.value)) {
-          return;
-        }
-
-        const produitData = selectedOption.data;
-        const newProduit = {
-          ...produitData,
-          quantite: 1,
-          prix_unitaire: produitData.prix_vente,
-          remise_ligne: 0,
-          total_ligne: produitData.prix_vente,
-          description: "",
-          unite: "unité",
-        };
-
-        setSelectedProduits((prev) => [...prev, newProduit]);
-      });
-
-      // Réinitialiser le champ de sélection
-      if (selectRef.current) {
-        selectRef.current.setValue(null);
-      }
-
-      if (selectedOptions.length > 0) {
-        topTost(`${selectedOptions.length} produit(s) ajouté(s)`, "success");
-      }
-    }
-    // Si c'est une seule sélection
-    else {
-      if (selectedProduits.some((p) => p.id === selectedOptions.value)) {
-        topTost("Produit déjà ajouté", "warning");
-
-        if (selectRef.current) {
-          selectRef.current.setValue(null);
-        }
-
-        return;
-      }
-
-      const produitData = selectedOptions.data;
-      const newProduit = {
-        ...produitData,
-        quantite: 1,
-        prix_unitaire: produitData.prix_vente,
-        remise_ligne: 0,
-        total_ligne: produitData.prix_vente,
-        description: "",
-        unite: "unité",
-      };
-
-      setSelectedProduits((prev) => [...prev, newProduit]);
+    if (selectedProduits.some((p) => p.id === selectedOption.value)) {
+      topTost("Produit déjà ajouté", "warning");
 
       if (selectRef.current) {
         selectRef.current.setValue(null);
       }
-
-      topTost("Produit ajouté", "success");
+      return;
     }
+
+    const produitData = selectedOption.data;
+    const newProduit = {
+      ...produitData,
+      quantite: 1,
+      prix_unitaire: produitData.prix_achat || 0,
+      remise_ligne: 0,
+      total_ligne: produitData.prix_achat || 0,
+    };
+
+    setSelectedProduits((prev) => [...prev, newProduit]);
+
+    if (selectRef.current) {
+      selectRef.current.setValue(null);
+    }
+
+    topTost("Produit ajouté", "success");
   };
 
   const removeProduit = (index) => {
@@ -307,18 +275,6 @@ const DevisCreate = () => {
     setSelectedProduits(newProduits);
   };
 
-  const updateProduitDescription = (index, description) => {
-    const newProduits = [...selectedProduits];
-    newProduits[index].description = description;
-    setSelectedProduits(newProduits);
-  };
-
-  const updateProduitUnite = (index, unite) => {
-    const newProduits = [...selectedProduits];
-    newProduits[index].unite = unite;
-    setSelectedProduits(newProduits);
-  };
-
   const calculateTotals = () => {
     const sousTotal = selectedProduits.reduce(
       (sum, p) => sum + p.total_ligne,
@@ -326,13 +282,17 @@ const DevisCreate = () => {
     );
     const remise = parseFloat(formData.remise) || 0;
     const montantHT = sousTotal - remise;
-    const montantTTC = montantHT;
+    const tvaPourcentage = parseFloat(formData.tva) || 0;
+    const montantTVA = (montantHT * tvaPourcentage) / 100;
+    const montantTTC = montantHT + montantTVA;
 
     return {
       sousTotal: sousTotal.toFixed(2),
       montantHT: montantHT.toFixed(2),
+      montantTVA: montantTVA.toFixed(2),
       montantTTC: montantTTC.toFixed(2),
       remise: remise.toFixed(2),
+      tvaPourcentage: tvaPourcentage.toFixed(2),
     };
   };
 
@@ -341,8 +301,8 @@ const DevisCreate = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!formData.client_id) {
-      topTost("Veuillez sélectionner un client", "error");
+    if (!formData.fornisseurId) {
+      topTost("Veuillez sélectionner un fornisseur", "error");
       return;
     }
 
@@ -351,29 +311,40 @@ const DevisCreate = () => {
       return;
     }
 
+    // Validation des prix
+    for (const produit of selectedProduits) {
+      if (produit.prix_unitaire <= 0) {
+        topTost(
+          `Le prix d'achat pour ${produit.designation} doit être positif`,
+          "error",
+        );
+        return;
+      }
+    }
+
     const payload = {
-      client_id: formData.client_id,
+      fornisseurId: formData.fornisseurId,
       mode_reglement: formData.mode_reglement,
       remise: parseFloat(formData.remise) || 0,
       notes: formData.notes,
-      date_creation: formData.date_creation,
       produits: selectedProduits.map((p) => ({
-        produit_id: p.id,
+        produitId: p.id,
         quantite: p.quantite,
         prix_unitaire: p.prix_unitaire,
         remise_ligne: p.remise_ligne,
-        description: p.description,
-        unite: p.unite,
       })),
     };
 
     const result = await MySwal.fire({
-      title: "Créer le devis ?",
+      title: "Créer le bon d'achat ?",
       html: `
         <div class="text-start">
-          <p><strong>Montant TTC:</strong> ${totals.montantTTC} DH</p>
+          <p><strong>fornisseur:</strong> ${fornisseurs.find((f) => f.value === formData.fornisseurId)?.label}</p>
+          <p><strong>Montant HT:</strong> ${totals.montantHT} DH</p>
+          <p><strong>Total TTC:</strong> ${totals.montantTTC} DH</p>
+          <p><strong>Mode règlement:</strong> ${formData.mode_reglement}</p>
           <p><strong>Nombre de produits:</strong> ${selectedProduits.length}</p>
-          <p><strong>Mode de règlement:</strong> ${formData.mode_reglement}</p>
+          <p><strong>Articles totaux:</strong> ${selectedProduits.reduce((sum, p) => sum + p.quantite, 0)}</p>
         </div>
       `,
       icon: "question",
@@ -391,53 +362,55 @@ const DevisCreate = () => {
     try {
       const token =
         localStorage.getItem("token") || sessionStorage.getItem("token");
-      const response = await api.post("/api/devis", payload, {
+      const response = await api.post(`${config_url}/api/bon-achats`, payload, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
       if (response.data.success) {
         MySwal.fire({
           title: "Succès !",
-          text: "Devis créé avec succès",
+          text: "Bon d'achat créé avec succès",
           icon: "success",
           html: `
             <div class="text-start">
-              <p><strong>Numéro:</strong> ${response.data.devis.num_devis}</p>
-              <p><strong>Montant TTC:</strong> ${
-                response.data.devis.montant_ttc
-              } DH</p>
-              <p><strong>Statut:</strong> ${response.data.devis.status}</p>
-              <p><strong>Date de création:</strong> ${new Date(
-                response.data.devis.date_creation,
-              ).toLocaleDateString("fr-FR")}</p>
+              <p><strong>Numéro:</strong> ${response.data.bon.num_bon_achat}</p>
+              <p><strong>Montant TTC:</strong> ${response.data.bon.montant_ttc} DH</p>
+              <p><strong>Statut:</strong> ${response.data.bon.status}</p>
+              <p><strong>Mode règlement:</strong> ${response.data.bon.mode_reglement}</p>
             </div>
           `,
-          confirmButtonText: "Voir le devis",
+          confirmButtonText: "Voir le bon",
           showCancelButton: true,
-          cancelButtonText: "Nouveau devis",
+          cancelButtonText: "Nouveau bon",
         }).then((result) => {
           if (result.isConfirmed) {
-            window.location.href = `/devis/${response.data.devis.id}`;
+            window.location.href = `/bon-achat/${response.data.bon.id}`;
           } else {
-            setSelectedProduits([]);
-            setFormData({
-              client_id: "",
-              mode_reglement: "espèces",
-              remise: 0,
-              notes: "",
-
-              date_creation: new Date().toISOString().split("T")[0],
-            });
+            resetForm();
           }
         });
       }
     } catch (error) {
-      console.error("Error creating devis:", error);
+      console.error("Error creating bon achat:", error);
       const errorMsg =
-        error.response?.data?.message || "Erreur lors de la création du devis";
+        error.response?.data?.message ||
+        "Erreur lors de la création du bon d'achat";
       topTost(errorMsg, "error");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const resetForm = () => {
+    setSelectedProduits([]);
+    setFormData({
+      fornisseurId: "",
+      mode_reglement: "espèces",
+      remise: 0,
+      notes: "",
+    });
+    if (selectRef.current) {
+      selectRef.current.setValue(null);
     }
   };
 
@@ -456,14 +429,22 @@ const DevisCreate = () => {
     });
   };
 
+  const typeAchatOptions = [
+    { value: "matiere_premiere", label: "Matière Première" },
+    { value: "produit_fini", label: "Produit Fini" },
+    { value: "equipement", label: "Équipement" },
+    { value: "service", label: "Service" },
+    { value: "autre", label: "Autre" },
+  ];
+
   return (
     <div className="main-content">
       <PageHeader
-        title="Nouveau Devis"
-        subtitle="Créer un nouveau devis"
+        title="Nouveau Bon d'Achat"
+        subtitle="Créer un nouveau bon d'achat (commande fornisseur)"
         breadcrumb={[
           { label: "Dashboard", link: "/dashboard" },
-          { label: "Devis", link: "/devis" },
+          { label: "Bons d'Achat", link: "/bon-achat" },
           { label: "Nouveau", active: true },
         ]}
       >
@@ -482,35 +463,35 @@ const DevisCreate = () => {
           <div className="card">
             <div className="card-header">
               <h5 className="card-title mb-0">
-                <FiFile className="me-2" />
-                Informations du Devis
+                <FiFileText className="me-2" />
+                Informations du Bon d'Achat
               </h5>
             </div>
             <div className="card-body">
-              <form id="devisForm" onSubmit={handleSubmit}>
+              <form id="bonAchatForm" onSubmit={handleSubmit}>
                 <div className="row g-3">
                   <div className="col-md-6">
                     <label className="form-label">
                       <FiUser className="me-2" />
-                      Client <span className="text-danger">*</span>
+                      fornisseur <span className="text-danger">*</span>
                     </label>
                     <Select
-                      options={clients}
+                      options={fornisseurs}
                       className="react-select"
                       classNamePrefix="react-select"
-                      placeholder="Sélectionner un client"
-                      value={clients.find(
-                        (c) => c.value === formData.client_id,
+                      placeholder="Sélectionner un fornisseur"
+                      value={fornisseurs.find(
+                        (f) => f.value === formData.fornisseurId,
                       )}
                       onChange={(selectedOption) =>
                         setFormData({
                           ...formData,
-                          client_id: selectedOption?.value || "",
+                          fornisseurId: selectedOption?.value || "",
                         })
                       }
                       isSearchable
                       required
-                      noOptionsMessage={() => "Aucun client trouvé"}
+                      noOptionsMessage={() => "Aucun fornisseur trouvé"}
                       styles={{
                         control: (base) => ({
                           ...base,
@@ -543,46 +524,9 @@ const DevisCreate = () => {
                       <option value="carte_bancaire">Carte Bancaire</option>
                       <option value="chèque">Chèque</option>
                       <option value="virement">Virement</option>
+                      <option value="crédit">Crédit</option>
                       <option value="autre">Autre</option>
                     </select>
-                  </div>
-
-                  <div className="col-md-6">
-                    <label className="form-label">
-                      <FiCalendar className="me-2" />
-                      Date du Devis
-                    </label>
-                    <input
-                      type="date"
-                      className="form-control"
-                      value={formData.date_creation}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          date_creation: e.target.value,
-                        })
-                      }
-                    />
-                  </div>
-
-                  <div className="col-md-6">
-                    <label className="form-label">
-                      <FiPercent className="me-2" />
-                      Remise Globale (DH)
-                    </label>
-                    <div className="input-group">
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        className="form-control"
-                        value={formData.remise}
-                        onChange={(e) =>
-                          setFormData({ ...formData, remise: e.target.value })
-                        }
-                      />
-                      <span className="input-group-text">DH</span>
-                    </div>
                   </div>
 
                   <div className="col-12">
@@ -597,7 +541,7 @@ const DevisCreate = () => {
                       onChange={(e) =>
                         setFormData({ ...formData, notes: e.target.value })
                       }
-                      placeholder="Notes supplémentaires..."
+                      placeholder="Notes supplémentaires (conditions, spécifications...)"
                     />
                   </div>
                 </div>
@@ -609,7 +553,7 @@ const DevisCreate = () => {
             <div className="card-header">
               <h5 className="card-title mb-0">
                 <FiShoppingCart className="me-2" />
-                Produits
+                Produits à Commander
               </h5>
             </div>
             <div className="card-body">
@@ -649,8 +593,8 @@ const DevisCreate = () => {
                       <div>
                         <div className="font-semibold">{option.label}</div>
                         <div className="text-sm text-muted">
-                          Stock: {option.data.qty} | Prix:{" "}
-                          {option.data.prix_vente} DH
+                          Stock: {option.data.qty} | Prix Achat:{" "}
+                          {option.data.prix_achat} DH
                         </div>
                       </div>
                     )}
@@ -692,22 +636,19 @@ const DevisCreate = () => {
                     <thead>
                       <tr>
                         <th width="25%">Produit</th>
-                        <th width="12%" className="text-center">
-                          Prix U.
-                        </th>
                         <th width="15%" className="text-center">
+                          Prix Achat
+                        </th>
+                        <th width="20%" className="text-center">
                           Quantité
                         </th>
-                        <th width="12%" className="text-center">
-                          Unité
-                        </th>
-                        <th width="12%" className="text-center">
+                        <th width="15%" className="text-center">
                           Remise
                         </th>
-                        <th width="12%" className="text-center">
+                        <th width="15%" className="text-center">
                           Total
                         </th>
-                        <th width="12%" className="text-center">
+                        <th width="10%" className="text-center">
                           Actions
                         </th>
                       </tr>
@@ -723,20 +664,10 @@ const DevisCreate = () => {
                               <small className="text-muted d-block">
                                 {produit.designation}
                               </small>
-                              <div className="mt-2">
-                                <input
-                                  type="text"
-                                  className="form-control form-control-sm"
-                                  value={produit.description}
-                                  onChange={(e) =>
-                                    updateProduitDescription(
-                                      index,
-                                      e.target.value,
-                                    )
-                                  }
-                                  placeholder="Description..."
-                                />
-                              </div>
+                              <small className="text-warning">
+                                Stock actuel: {produit.qty}{" "}
+                                {produit.unite || "unité"}
+                              </small>
                             </div>
                           </td>
                           <td className="text-center">
@@ -795,24 +726,6 @@ const DevisCreate = () => {
                                 <FiPlus size={12} />
                               </button>
                             </div>
-                          </td>
-                          <td className="text-center">
-                            <select
-                              className="form-select form-select-sm"
-                              value={produit.unite}
-                              onChange={(e) =>
-                                updateProduitUnite(index, e.target.value)
-                              }
-                            >
-                              <option value="unité">Unité</option>
-                              <option value="kg">KG</option>
-                              <option value="m">Mètre</option>
-                              <option value="m²">Mètre²</option>
-                              <option value="L">Litre</option>
-                              <option value="heure">Heure</option>
-                              <option value="jour">Jour</option>
-                              <option value="lot">Lot</option>
-                            </select>
                           </td>
                           <td className="text-center">
                             <div className="input-group input-group-sm">
@@ -891,8 +804,9 @@ const DevisCreate = () => {
               <hr />
 
               <div className="mb-3">
+                <h6 className="text-muted mb-3">Calcul des montants</h6>
                 <div className="d-flex justify-content-between mb-2">
-                  <span>Sous-total:</span>
+                  <span>Sous-total produits:</span>
                   <strong>{totals.sousTotal} DH</strong>
                 </div>
                 <div className="d-flex justify-content-between mb-2">
@@ -903,6 +817,10 @@ const DevisCreate = () => {
                   <span>Montant HT:</span>
                   <strong>{totals.montantHT} DH</strong>
                 </div>
+                <div className="d-flex justify-content-between mb-2">
+                  <span>TVA ({totals.tvaPourcentage}%):</span>
+                  <strong className="text-info">+{totals.montantTVA} DH</strong>
+                </div>
               </div>
 
               <hr />
@@ -912,10 +830,15 @@ const DevisCreate = () => {
                 <h3 className="mb-0 text-primary">{totals.montantTTC} DH</h3>
               </div>
 
+              <div className="alert alert-info mb-3">
+                <strong>Note:</strong> Le stock sera augmenté uniquement lors de
+                la réception des produits.
+              </div>
+
               <div className="d-grid gap-2">
                 <button
                   type="submit"
-                  form="devisForm"
+                  form="bonAchatForm"
                   className="btn btn-primary btn-lg"
                   disabled={loading || selectedProduits.length === 0}
                 >
@@ -927,24 +850,14 @@ const DevisCreate = () => {
                   ) : (
                     <>
                       <FiSave className="me-2" />
-                      Créer le Devis
+                      Créer le Bon d'Achat
                     </>
                   )}
                 </button>
                 <button
                   type="button"
                   className="btn btn-outline-secondary"
-                  onClick={() => {
-                    setSelectedProduits([]);
-                    setFormData({
-                      client_id: formData.client_id,
-                      mode_reglement: formData.mode_reglement,
-                      remise: 0,
-                      notes: "",
-
-                      date_creation: new Date().toISOString().split("T")[0],
-                    });
-                  }}
+                  onClick={resetForm}
                   disabled={selectedProduits.length === 0}
                 >
                   <FiX className="me-2" />
@@ -967,65 +880,9 @@ const DevisCreate = () => {
             </div>
             <div className="card-footer">
               <small className="text-muted">
-                <FiCheckCircle className="me-1" />
-                Le devis sera créé avec le statut "brouillon"
+                <FiCheck className="me-1" />
+                Le statut initial sera "Brouillon"
               </small>
-            </div>
-          </div>
-
-          <div className="card mt-3">
-            <div className="card-body">
-              <h6 className="card-title">
-                <FiCreditCard className="me-2" />
-                Mode de Règlement
-              </h6>
-              <div className="alert alert-info mb-0">
-                <strong>{formData.mode_reglement}</strong>
-              </div>
-            </div>
-          </div>
-
-          <div className="card mt-3">
-            <div className="card-body">
-              <h6 className="card-title">
-                <FiFile className="me-2" />
-                Détails du Client
-              </h6>
-              {formData.client_id ? (
-                <div className="mt-2">
-                  {(() => {
-                    const selectedClient = clients.find(
-                      (c) => c.value === formData.client_id,
-                    );
-                    return selectedClient ? (
-                      <>
-                        <p className="mb-1">
-                          <strong>Nom:</strong> {selectedClient.nom_complete}
-                        </p>
-                        {selectedClient.telephone && (
-                          <p className="mb-1">
-                            <strong>Tél:</strong> {selectedClient.telephone}
-                          </p>
-                        )}
-                        {selectedClient.address && (
-                          <p className="mb-1">
-                            <strong>Adresse:</strong> {selectedClient.address}
-                          </p>
-                        )}
-                        {selectedClient.ville && (
-                          <p className="mb-0">
-                            <strong>Ville:</strong> {selectedClient.ville}
-                          </p>
-                        )}
-                      </>
-                    ) : (
-                      <p className="text-muted mb-0">Client non chargé</p>
-                    );
-                  })()}
-                </div>
-              ) : (
-                <p className="text-muted mb-0">Aucun client sélectionné</p>
-              )}
             </div>
           </div>
         </div>
@@ -1034,4 +891,4 @@ const DevisCreate = () => {
   );
 };
 
-export default DevisCreate;
+export default BonAchatCreate;

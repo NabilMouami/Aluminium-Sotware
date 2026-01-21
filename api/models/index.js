@@ -10,6 +10,10 @@ const Devis = require("./Devis");
 const DevisProduit = require("./DevisProduit");
 const Facture = require("./Facture");
 const FactureProduit = require("./FactureProduit");
+const BonAvoir = require("./BonAvoir");
+const BonAvoirProduit = require("./BonAvoirProduit");
+const BonAchat = require("./BonAchat");
+const BonAchatProduit = require("./BonAchatProduit");
 
 // Define relationships
 
@@ -45,14 +49,14 @@ Devis.belongsTo(Client, {
 
 // Client - BonLivraison relationships
 Client.hasMany(BonLivraison, {
-  foreignKey: "clientId",
+  foreignKey: "client_id",
   as: "bonLivraisons",
   onDelete: "CASCADE",
   onUpdate: "CASCADE",
 });
 
 BonLivraison.belongsTo(Client, {
-  foreignKey: "clientId",
+  foreignKey: "client_id",
   as: "client",
   onDelete: "CASCADE",
   onUpdate: "CASCADE",
@@ -75,29 +79,29 @@ Facture.belongsTo(Client, {
 
 // BonLivraison - Advancement relationships
 BonLivraison.hasMany(Advancement, {
-  foreignKey: "bonLivraisonId",
+  foreignKey: "bon_livraison_id",
   as: "advancements",
   onDelete: "CASCADE",
   onUpdate: "CASCADE",
 });
 
 Advancement.belongsTo(BonLivraison, {
-  foreignKey: "bonLivraisonId",
-  as: "bonLivraison",
+  foreignKey: "bon_livraison_id",
+  as: "bon_livraison",
   onDelete: "CASCADE",
   onUpdate: "CASCADE",
 });
 
 // Facture - Advancement relationships
 Facture.hasMany(Advancement, {
-  foreignKey: "factureId",
+  foreignKey: "facture_id",
   as: "advancements",
   onDelete: "CASCADE",
   onUpdate: "CASCADE",
 });
 
 Advancement.belongsTo(Facture, {
-  foreignKey: "factureId",
+  foreignKey: "facture_id",
   as: "facture",
   onDelete: "SET NULL",
   onUpdate: "CASCADE",
@@ -155,8 +159,8 @@ Produit.belongsToMany(Devis, {
 // Many-to-Many relationship between BonLivraison and Produit
 BonLivraison.belongsToMany(Produit, {
   through: BonLivraisonProduit,
-  foreignKey: "bonLivraisonId",
-  otherKey: "produitId",
+  foreignKey: "bon_livraison_id",
+  otherKey: "produit_id",
   as: "produits",
   onDelete: "CASCADE",
   onUpdate: "CASCADE",
@@ -164,8 +168,8 @@ BonLivraison.belongsToMany(Produit, {
 
 Produit.belongsToMany(BonLivraison, {
   through: BonLivraisonProduit,
-  foreignKey: "produitId",
-  otherKey: "bonLivraisonId",
+  foreignKey: "produit_id",
+  otherKey: "bon_livraison_id",
   as: "bonLivraisons",
   onDelete: "CASCADE",
   onUpdate: "CASCADE",
@@ -174,8 +178,8 @@ Produit.belongsToMany(BonLivraison, {
 // Many-to-Many relationship between Facture and Produit
 Facture.belongsToMany(Produit, {
   through: FactureProduit,
-  foreignKey: "factureId",
-  otherKey: "produitId",
+  foreignKey: "facture_id",
+  otherKey: "produit_id",
   as: "produits",
   onDelete: "CASCADE",
   onUpdate: "CASCADE",
@@ -183,8 +187,8 @@ Facture.belongsToMany(Produit, {
 
 Produit.belongsToMany(Facture, {
   through: FactureProduit,
-  foreignKey: "produitId",
-  otherKey: "factureId",
+  foreignKey: "produit_id",
+  otherKey: "facture_id",
   as: "factures",
   onDelete: "CASCADE",
   onUpdate: "CASCADE",
@@ -215,50 +219,105 @@ Produit.hasMany(DevisProduit, {
 
 // Direct relationships for BonLivraisonProduit
 BonLivraisonProduit.belongsTo(BonLivraison, {
-  foreignKey: "bonLivraisonId",
+  foreignKey: "bon_livraison_id",
   as: "bonLivraison",
 });
 
 BonLivraisonProduit.belongsTo(Produit, {
-  foreignKey: "produitId",
+  foreignKey: "produit_id",
   as: "produit",
 });
 
 BonLivraison.hasMany(BonLivraisonProduit, {
-  foreignKey: "bonLivraisonId",
+  foreignKey: "bon_livraison_id",
   as: "lignes",
   onDelete: "CASCADE",
 });
 
 Produit.hasMany(BonLivraisonProduit, {
-  foreignKey: "produitId",
+  foreignKey: "produit_id",
   as: "bonLivraisonItems",
   onDelete: "CASCADE",
 });
 
 // Direct relationships for FactureProduit
 FactureProduit.belongsTo(Facture, {
-  foreignKey: "factureId",
+  foreignKey: "facture_id",
   as: "facture",
 });
 
 FactureProduit.belongsTo(Produit, {
-  foreignKey: "produitId",
+  foreignKey: "produit_id",
   as: "produit",
 });
 
 Facture.hasMany(FactureProduit, {
-  foreignKey: "factureId",
+  foreignKey: "facture_id",
   as: "lignes",
   onDelete: "CASCADE",
 });
 
 Produit.hasMany(FactureProduit, {
-  foreignKey: "produitId",
+  foreignKey: "produit_id",
   as: "factureItems",
   onDelete: "CASCADE",
 });
 
+// Dans votre fichier d'associations (ex: models/index.js)
+
+// Associations pour BonAvoir
+BonAvoir.belongsTo(Client, { foreignKey: "client_id", as: "client" });
+BonAvoir.belongsTo(BonLivraison, {
+  foreignKey: "bon_livraison_id",
+  as: "bonLivraison",
+});
+
+// Associations many-to-many avec Produit
+BonAvoir.belongsToMany(Produit, {
+  through: BonAvoirProduit,
+  foreignKey: "bon_avoir_id",
+  otherKey: "produit_id",
+  as: "produits",
+});
+
+Produit.belongsToMany(BonAvoir, {
+  through: BonAvoirProduit,
+  foreignKey: "produit_id",
+  otherKey: "bon_avoir_id",
+  as: "bonsAvoir",
+});
+
+// Association inverse pour BonAvoirProduit
+BonAvoirProduit.belongsTo(BonAvoir, { foreignKey: "bon_avoir_id" });
+BonAvoirProduit.belongsTo(Produit, { foreignKey: "produit_id" });
+BonAvoirProduit.belongsTo(BonLivraisonProduit, {
+  foreignKey: "bon_livraison_produit_id",
+  as: "bonLivraisonProduit",
+});
+// Associations pour BonAchat
+BonAchat.belongsTo(Fornisseur, {
+  foreignKey: "fornisseur_id",
+  as: "fornisseur",
+});
+
+// Associations many-to-many avec Produit
+BonAchat.belongsToMany(Produit, {
+  through: BonAchatProduit,
+  foreignKey: "bon_achat_id",
+  otherKey: "produit_id",
+  as: "produits",
+});
+
+Produit.belongsToMany(BonAchat, {
+  through: BonAchatProduit,
+  foreignKey: "produit_id",
+  otherKey: "bon_achat_id",
+  as: "bonsAchat",
+});
+
+// Association inverse pour BonAchatProduit
+BonAchatProduit.belongsTo(BonAchat, { foreignKey: "bon_achat_id" });
+BonAchatProduit.belongsTo(Produit, { foreignKey: "produit_id" });
 const db = {
   sequelize: sequelize,
   User: require("./user"),
@@ -272,6 +331,10 @@ const db = {
   DevisProduit: DevisProduit,
   Facture: Facture,
   FactureProduit: FactureProduit,
+  BonAvoir: BonAvoir,
+  BonAvoirProduit: BonAvoirProduit,
+  BonAchat: BonAchat,
+  BonAchatProduit: BonAchatProduit,
 };
 
 module.exports = db;

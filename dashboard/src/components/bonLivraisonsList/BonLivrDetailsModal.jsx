@@ -14,7 +14,6 @@ import {
   FiSave,
   FiPlus,
   FiTrash2,
-  FiEye,
 } from "react-icons/fi";
 import DatePicker from "react-datepicker";
 import axios from "axios";
@@ -32,7 +31,7 @@ const MySwal = withReactContent(Swal);
 const statusOptions = [
   { value: "brouillon", label: "Brouillon" },
   { value: "payé", label: "Payé" },
-  { value: "partiellement payé", label: "Partiellement Payé" },
+  { value: "partiellement_payée", label: "Partiellement Payé" },
   { value: "annulé", label: "Annulé" },
 ];
 
@@ -44,19 +43,158 @@ const paymentMethodOptions = [
   { value: "carte", label: "Carte Bancaire" },
 ];
 
-const BonLivrDetailsModal = ({
-  isOpen,
-  toggle,
-  bon,
-  onUpdate,
-  footerContent,
-}) => {
+// Move totalToFrenchText outside and make it synchronous
+const totalToFrenchText = (amount) => {
+  if (amount === 0) return "Zéro dirham";
+
+  const units = [
+    "",
+    "un",
+    "deux",
+    "trois",
+    "quatre",
+    "cinq",
+    "six",
+    "sept",
+    "huit",
+    "neuf",
+  ];
+  const teens = [
+    "dix",
+    "onze",
+    "douze",
+    "treize",
+    "quatorze",
+    "quinze",
+    "seize",
+    "dix-sept",
+    "dix-huit",
+    "dix-neuf",
+  ];
+  const tens = [
+    "",
+    "",
+    "vingt",
+    "trente",
+    "quarante",
+    "cinquante",
+    "soixante",
+    "soixante",
+    "quatre-vingt",
+    "quatre-vingt",
+  ];
+
+  const convertLessThanOneThousand = (num) => {
+    if (num === 0) return "";
+
+    let result = "";
+
+    // Hundreds
+    if (num >= 100) {
+      const h = Math.floor(num / 100);
+      result += h === 1 ? "cent" : units[h] + " cent";
+      num %= 100;
+      if (num === 0 && h > 1) result += "s"; // deux cents
+      if (num > 0) result += " ";
+    }
+
+    // Tens & units
+    if (num < 10) {
+      result += units[num];
+    } else if (num < 20) {
+      result += teens[num - 10];
+    } else {
+      const t = Math.floor(num / 10);
+      const u = num % 10;
+
+      if (t === 7) {
+        result += "soixante";
+        result += u === 1 ? " et onze" : "-" + teens[u];
+      } else if (t === 9) {
+        result += "quatre-vingt";
+        result += "-" + teens[u];
+      } else {
+        result += tens[t];
+        if (u === 1 && t !== 8) {
+          result += " et un";
+        } else if (u > 0) {
+          result += "-" + units[u];
+        }
+        if (t === 8 && u === 0) result += "s"; // quatre-vingts
+      }
+    }
+
+    return result;
+  };
+  const convertNumberToWords = (num) => {
+    if (num === 0) return "zéro";
+
+    let result = "";
+
+    // Billions (not needed for our use case, but kept for completeness)
+    if (num >= 1000000000) {
+      const billions = Math.floor(num / 1000000000);
+      result += convertLessThanOneThousand(billions) + " milliard";
+      if (billions > 1) result += "s";
+      num %= 1000000000;
+      if (num > 0) result += " ";
+    }
+
+    // Millions
+    if (num >= 1000000) {
+      const millions = Math.floor(num / 1000000);
+      result += convertLessThanOneThousand(millions) + " million";
+      if (millions > 1) result += "s";
+      num %= 1000000;
+      if (num > 0) result += " ";
+    }
+
+    // Thousands
+    if (num >= 1000) {
+      const thousands = Math.floor(num / 1000);
+      if (thousands === 1) {
+        result += "mille";
+      } else {
+        result += convertLessThanOneThousand(thousands) + " mille";
+      }
+      num %= 1000;
+      if (num > 0) {
+        if (num < 100) result += " ";
+        else result += " ";
+      }
+    }
+
+    // Hundreds, tens and units
+    if (num > 0) {
+      result += convertLessThanOneThousand(num);
+    }
+
+    return result.trim();
+  };
+
+  const dirhams = Math.floor(amount);
+  const centimes = Math.round((amount - dirhams) * 100);
+
+  let text = convertNumberToWords(dirhams) + " dirham";
+  if (dirhams > 1) text += "s";
+
+  if (centimes > 0) {
+    text += " et " + convertNumberToWords(centimes) + " centime";
+    if (centimes > 1) text += "s";
+  }
+
+  return text.charAt(0).toUpperCase() + text.slice(1);
+};
+
+const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     status: "brouillon",
     notes: "",
     advancements: [],
   });
+  const [totalText, setTotalText] = useState("");
+  const [isCalculatingTotal, setIsCalculatingTotal] = useState(false);
 
   // Initialize form data when bon changes
   useEffect(() => {
@@ -81,6 +219,33 @@ const BonLivrDetailsModal = ({
     }
   }, [bon]);
 
+  // Calculate total in French text
+  useEffect(() => {
+    const calculateTotalText = () => {
+      if (bon) {
+        const total = parseFloat(bon.montant_ttc) || 0;
+        if (total > 0) {
+          setIsCalculatingTotal(true);
+          try {
+            const text = totalToFrenchText(total);
+            setTotalText(text);
+          } catch (error) {
+            console.error("Error converting total to French text:", error);
+            setTotalText(`${total.toFixed(2)} dirhams`);
+          } finally {
+            setIsCalculatingTotal(false);
+          }
+        } else {
+          setTotalText("Zéro dirham");
+        }
+      }
+    };
+
+    if (bon) {
+      calculateTotalText();
+    }
+  }, [bon]);
+
   if (!bon) return null;
 
   const getStatusBadge = (status) => {
@@ -93,7 +258,7 @@ const BonLivrDetailsModal = ({
         return "info";
       case "en_retard":
         return "danger";
-      case "partiellement payé":
+      case "partiellement_payée":
         return "primary";
       default:
         return "secondary";
@@ -270,10 +435,9 @@ const BonLivrDetailsModal = ({
     }
 
     const remise = parseFloat(bon.remise) || 0;
-    const montantHT = parseFloat(bon.montant_ht) || 0;
-    const montantTTC = parseFloat(bon.montant_ttc) || 0;
-
     const printWindow = window.open("", "_blank");
+    const printTotalText = totalToFrenchText(subTotal);
+
     const printContent = `
 <!DOCTYPE html>
 <html>
@@ -402,6 +566,11 @@ const BonLivrDetailsModal = ({
 
   <div class="totals">
     <p><strong>Net A Payer:</strong> ${subTotal.toFixed(2)} Dh</p>
+         <p style="font-size:10px; font-style:italic;">
+    Arrêté le présent bon à la somme de :
+    <strong>${printTotalText}</strong>
+  </p>
+
     ${
       remise > 0
         ? `<p><strong>Remise globale:</strong> -${remise.toFixed(2)} Dh</p>`
@@ -472,6 +641,7 @@ const BonLivrDetailsModal = ({
       const remise = parseFloat(bon.remise) || 0;
       const montantHT = parseFloat(bon.montant_ht) || 0;
       const montantTTC = parseFloat(bon.montant_ttc) || 0;
+      const pdfTotalText = totalToFrenchText(montantHT);
 
       pdfContainer.innerHTML = `
       <div style="text-align:center; border-bottom:2px solid #333; padding-bottom:10px; margin-bottom:15px;">
@@ -497,15 +667,15 @@ const BonLivrDetailsModal = ({
       </div>
 
       <table style="width:100%; border-collapse:collapse; font-size:10px; margin-bottom:15px;">
-        <thead>
-          <tr style="background-color:#2c5aa0; color:#fff;">
-            <th style="padding:6px; border:1px solid #2c5aa0;">Code</th>
-            <th style="padding:6px; border:1px solid #2c5aa0;">Produit</th>
-            <th style="padding:6px; border:1px solid #2c5aa0;">Qté</th>
-            <th style="padding:6px; border:1px solid #2c5aa0;">Prix U.</th>
-            <th style="padding:6px; border:1px solid #2c5aa0;">Montant</th>
-          </tr>
-        </thead>
+<thead>
+  <tr style="background-color:#2c5aa0; color:#fff;">
+    <th style="padding:6px; border:1px solid #2c5aa0;">Code</th>
+    <th style="padding:6px; border:1px solid #2c5aa0;">Produit</th>
+    <th style="padding:6px; border:1px solid #2c5aa0;">Qté</th>
+    <th style="padding:6px; border:1px solid #2c5aa0;">Prix U.</th>
+    <th style="padding:6px; border:1px solid #2c5aa0;">Montant</th>
+  </tr>
+</thead>
         <tbody>
           ${(bon.produits || [])
             .map(
@@ -541,6 +711,10 @@ const BonLivrDetailsModal = ({
             : ""
         }
         <p><strong>Total a Payer:</strong> ${montantHT.toFixed(2)} Dh</p>
+                <p style="font-size:10px; font-style:italic;">
+          Arrêté le présent bon à la somme de : <strong>${pdfTotalText}</strong>
+        </p>
+
         ${
           totalAdvancements > 0
             ? `
@@ -893,17 +1067,11 @@ const BonLivrDetailsModal = ({
                 </div>
                 <div className="col-md-6 text-end">
                   <h6>Montants</h6>
-                  <div className="d-flex justify-content-between">
+                  <div className="d-flex  fw-bold justify-content-between">
                     <span>Montant HT:</span>
                     <span>{parseFloat(bon.montant_ht || 0).toFixed(2)} Dh</span>
                   </div>
-                  <div className="d-flex justify-content-between fw-bold border-top pt-1">
-                    <span>Total TTC:</span>
-                    <span>
-                      {parseFloat(bon.montant_ttc || bon.total || 0).toFixed(2)}{" "}
-                      Dh
-                    </span>
-                  </div>
+
                   {totalAdvancements > 0 && (
                     <>
                       <div className="d-flex justify-content-between text-success">
@@ -924,8 +1092,6 @@ const BonLivrDetailsModal = ({
       </ModalBody>
 
       <ModalFooter>
-        {footerContent && <div className="w-100 mb-3">{footerContent}</div>}
-
         <div className="d-flex justify-content-between w-100">
           <div>
             <Button

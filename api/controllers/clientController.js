@@ -3,7 +3,7 @@ const { Client } = require("../models");
 // Create a new client
 const createClient = async (req, res) => {
   try {
-    const { nom_complete, ville, address, telephone } = req.body;
+    const { nom_complete, reference, ville, address, telephone } = req.body;
 
     // Validation
     if (!nom_complete || !telephone) {
@@ -23,6 +23,7 @@ const createClient = async (req, res) => {
     // Create client
     const client = await Client.create({
       nom_complete,
+      reference,
       ville,
       address,
       telephone,
@@ -33,6 +34,7 @@ const createClient = async (req, res) => {
       client: {
         id: client.id,
         nom_complete: client.nom_complete,
+        reference: client.reference,
         ville: client.ville,
         address: client.address,
         telephone: client.telephone,
@@ -124,7 +126,7 @@ const getClientById = async (req, res) => {
 const updateClient = async (req, res) => {
   try {
     const { id } = req.params;
-    const { nom_complete, ville, address, telephone } = req.body;
+    const { nom_complete, reference, ville, address, telephone } = req.body;
 
     // Check if client exists
     const client = await Client.findByPk(id);
@@ -147,6 +149,7 @@ const updateClient = async (req, res) => {
     // Prepare update data
     const updateData = {};
     if (nom_complete) updateData.nom_complete = nom_complete;
+    if (reference) updateData.reference = reference;
     if (ville !== undefined) updateData.ville = ville;
     if (address !== undefined) updateData.address = address;
     if (telephone) updateData.telephone = telephone;

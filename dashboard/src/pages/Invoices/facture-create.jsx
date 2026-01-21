@@ -322,7 +322,7 @@ const FactureCreate = () => {
           quantite: 1,
           prix_unitaire: produitData.prix_vente,
           remise_ligne: 0,
-          total_ligne: produitData.prix_vente,
+          total_ligne: produitData.prix_vente, // C'est le HT
         };
 
         setSelectedProduits((prev) => [...prev, newProduit]);
@@ -352,7 +352,7 @@ const FactureCreate = () => {
         quantite: 1,
         prix_unitaire: produitData.prix_vente,
         remise_ligne: 0,
-        total_ligne: produitData.prix_vente,
+        total_ligne: produitData.prix_vente, // C'est le HT
       };
 
       setSelectedProduits((prev) => [...prev, newProduit]);
@@ -475,7 +475,7 @@ const FactureCreate = () => {
       remiseMontant = totalHT;
     }
 
-    const montantHTAfterRemise = totalHT - remiseMontant;
+    const montantHTAfterRemise = Math.max(totalHT - remiseMontant, 0);
 
     // Calculer la TVA sur le montant HT après remise
     const tauxTVA = parseFloat(formData.tva) || 0;
@@ -580,16 +580,23 @@ const FactureCreate = () => {
       html: `
         <div class="text-start">
           <p><strong>Client:</strong> ${clients.find((c) => c.value === formData.client_id)?.label || "Non spécifié"}</p>
-          <p><strong>Total HT:</strong> ${totals.totalHT} DH</p>
-          <p><strong>Remise:</strong> -${totals.remiseMontant} DH</p>
+          <p><strong>Total HT avant remise:</strong> ${totals.totalHT} DH</p>
+          <p><strong>Remise globale:</strong> -${totals.remiseMontant} DH
+          ${formData.remise_total_type === "pourcentage" && formData.remise_total > 0 ? ` (${formData.remise_total}%)` : ""}</p>
           <p><strong>HT après remise:</strong> ${totals.montantHTAfterRemise} DH</p>
           <p><strong>TVA (${totals.tauxTVA}%):</strong> ${totals.montantTVA} DH</p>
           <p><strong>Montant TTC:</strong> ${totals.montantTTC} DH</p>
-          <p><strong>Paiements:</strong> ${totals.totalAdvancements} DH</p>
-          <p><strong>Reste à payer:</strong> ${totals.remaining} DH</p>
-          <p><strong>Statut paiement:</strong> ${paymentStatus}</p>
-          <p><strong>Date d'échéance:</strong> ${format(new Date(formData.date_echeance), "dd/MM/yyyy", { locale: fr })}</p>
+          ${
+            advancements.length > 0
+              ? `
+            <p><strong>Paiements:</strong> ${totals.totalAdvancements} DH</p>
+            <p><strong>Reste à payer:</strong> ${totals.remaining} DH</p>
+            <p><strong>Statut paiement:</strong> ${paymentStatus}</p>
+          `
+              : ""
+          }
           <p><strong>Nombre de produits:</strong> ${selectedProduits.length}</p>
+          <p><strong>Total articles:</strong> ${selectedProduits.reduce((sum, p) => sum + p.quantite, 0)}</p>
         </div>
       `,
       icon: "question",
@@ -622,20 +629,28 @@ const FactureCreate = () => {
               <p><strong>Numéro:</strong> ${
                 response.data.facture.num_facture
               }</p>
-              <p><strong>Montant HT:</strong> ${
+              <p><strong>Total HT avant remise:</strong> ${
+                response.data.facture.montant_ht_initial || totals.totalHT
+              } DH</p>
+              <p><strong>Remise globale:</strong> -${
+                response.data.facture.remise_total || totals.remiseMontant
+              } DH</p>
+              <p><strong>HT après remise:</strong> ${
                 response.data.facture.montant_ht
               } DH</p>
               <p><strong>TVA (${response.data.facture.tva}%):</strong> ${response.data.facture.montant_tva} DH</p>
               <p><strong>Montant TTC:</strong> ${
                 response.data.facture.montant_ttc
               } DH</p>
-              <p><strong>Paiements:</strong> ${
-                response.data.facture.montant_paye
-              } DH</p>
-              <p><strong>Reste à payer:</strong> ${
-                response.data.facture.montant_restant
-              } DH</p>
-              <p><strong>Statut:</strong> ${response.data.facture.status}</p>
+              ${
+                advancements.length > 0
+                  ? `
+                  <p><strong>Paiements:</strong> ${response.data.facture.montant_paye} DH</p>
+                  <p><strong>Reste à payer:</strong> ${response.data.facture.montant_restant} DH</p>
+                  <p><strong>Statut:</strong> ${response.data.facture.status}</p>
+                `
+                  : ""
+              }
             </div>
           `,
           showDenyButton: true,
@@ -880,25 +895,6 @@ const FactureCreate = () => {
                         setFormData({
                           ...formData,
                           date_facturation: e.target.value,
-                        })
-                      }
-                      required
-                    />
-                  </div>
-
-                  <div className="col-md-3">
-                    <label className="form-label">
-                      <FiClock className="me-2" />
-                      Date d'Échéance <span className="text-danger">*</span>
-                    </label>
-                    <input
-                      type="date"
-                      className="form-control"
-                      value={formData.date_echeance}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          date_echeance: e.target.value,
                         })
                       }
                       required
@@ -1289,7 +1285,7 @@ const FactureCreate = () => {
                           Remise Ligne
                         </th>
                         <th width="15%" className="text-center">
-                          Total Ligne
+                          Total Ligne HT
                         </th>
                         <th width="5%" className="text-center">
                           Actions
@@ -1468,7 +1464,7 @@ const FactureCreate = () => {
 
               <div className="mb-3">
                 <div className="d-flex justify-content-between mb-2">
-                  <span>Total HT des produits:</span>
+                  <span>Total HT avant remise:</span>
                   <strong>{totals.totalHT} DH</strong>
                 </div>
 
@@ -1540,18 +1536,6 @@ const FactureCreate = () => {
                     <span>Date facturation:</span>
                     <strong>{formData.date_facturation}</strong>
                   </div>
-                  <div className="d-flex justify-content-between">
-                    <span>Date échéance:</span>
-                    <strong
-                      className={
-                        new Date(formData.date_echeance) < new Date()
-                          ? "text-danger"
-                          : ""
-                      }
-                    >
-                      {formData.date_echeance}
-                    </strong>
-                  </div>
                 </div>
               </div>
 
@@ -1614,19 +1598,6 @@ const FactureCreate = () => {
                 <FiCreditCard className="me-2" />
                 Mode de Règlement
               </h6>
-              <div className="alert alert-info mb-0">
-                <strong>{formData.mode_reglement}</strong>
-                {formData.date_echeance && (
-                  <div className="mt-1">
-                    <small>
-                      Échéance:{" "}
-                      {format(new Date(formData.date_echeance), "dd/MM/yyyy", {
-                        locale: fr,
-                      })}
-                    </small>
-                  </div>
-                )}
-              </div>
             </div>
           </div>
 

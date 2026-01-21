@@ -12,10 +12,23 @@ import {
   FiCalendar,
   FiPlusCircle,
   FiTrash,
+  FiDollarSign,
+  FiFileText,
+  FiCheckCircle,
+  FiClock,
+  FiTrendingUp,
+  FiPercent,
 } from "react-icons/fi";
 import { config_url } from "@/utils/config";
 import Swal from "sweetalert2";
-import { Input, InputGroup, InputGroupText, Label } from "reactstrap";
+import {
+  Input,
+  InputGroup,
+  InputGroupText,
+  Label,
+  Card,
+  CardBody,
+} from "reactstrap";
 import withReactContent from "sweetalert2-react-content";
 import { Link } from "react-router-dom";
 
@@ -23,7 +36,7 @@ const MySwal = withReactContent(Swal);
 
 // Updated status options to match your backend
 const statusOptions = [
-  { value: "all", label: "Tous les statuss" },
+  { value: "all", label: "Tous les statuts" },
   { value: "brouillon", label: "Brouillon" },
   { value: "payé", label: "Payé" },
   { value: "partiellement payé", label: "Partiellement Payé" },
@@ -47,6 +60,20 @@ const BonLivraisonTable = () => {
   const [advancementPrice, setAdvancementPrice] = useState(0);
   const [bonStatus, setBonStatus] = useState("brouillon");
 
+  // Statistics states
+  const [statistics, setStatistics] = useState({
+    totalBons: 0,
+    totalAmount: 0,
+    totalAdvancements: 0,
+    totalRemaining: 0,
+    paidBons: 0,
+    draftBons: 0,
+    partiallyPaidBons: 0,
+    cancelledBons: 0,
+    averageAmount: 0,
+    completionRate: 0,
+  });
+
   useEffect(() => {
     const fetchBons = async () => {
       try {
@@ -68,7 +95,7 @@ const BonLivraisonTable = () => {
               }, 0);
             }
 
-            const total = parseFloat(bon.montant_ttc) || 0;
+            const total = parseFloat(bon.montant_ht) || 0;
             const remainingAmount = total - totalAdvancements;
 
             return {
@@ -101,20 +128,81 @@ const BonLivraisonTable = () => {
           console.log("Formatted Data:", formattedData);
           setBookings(formattedData);
           setFilteredBookings(formattedData);
+          calculateStatistics(formattedData);
         } else {
           console.error("No bons data found in response");
           setBookings([]);
           setFilteredBookings([]);
+          resetStatistics();
         }
       } catch (error) {
         console.error("Error fetching bons:", error);
         topTost("Erreur lors du chargement des bons de livraison", "error");
         setBookings([]);
         setFilteredBookings([]);
+        resetStatistics();
       }
     };
     fetchBons();
   }, []);
+
+  // Calculate statistics from bookings data
+  const calculateStatistics = (data) => {
+    if (!data || data.length === 0) {
+      resetStatistics();
+      return;
+    }
+
+    const totalBons = data.length;
+    const totalAmount = data.reduce((sum, bon) => sum + (bon.total || 0), 0);
+    const totalAdvancements = data.reduce(
+      (sum, bon) => sum + (bon.advancement || 0),
+      0,
+    );
+    const totalRemaining = data.reduce(
+      (sum, bon) => sum + (bon.remainingAmount || 0),
+      0,
+    );
+
+    const paidBons = data.filter((bon) => bon.status === "payé").length;
+    const draftBons = data.filter((bon) => bon.status === "brouillon").length;
+    const partiallyPaidBons = data.filter(
+      (bon) => bon.status === "partiellement payé",
+    ).length;
+    const cancelledBons = data.filter((bon) => bon.status === "annulé").length;
+
+    const averageAmount = totalBons > 0 ? totalAmount / totalBons : 0;
+    const completionRate =
+      totalBons > 0 ? ((totalAmount - totalRemaining) / totalAmount) * 100 : 0;
+
+    setStatistics({
+      totalBons,
+      totalAmount,
+      totalAdvancements,
+      totalRemaining,
+      paidBons,
+      draftBons,
+      partiallyPaidBons,
+      cancelledBons,
+      averageAmount,
+      completionRate,
+    });
+  };
+
+  const resetStatistics = () => {
+    setStatistics({
+      totalBons: 0,
+      totalAmount: 0,
+      totalAdvancements: 0,
+      totalRemaining: 0,
+      paidBons: 0,
+      draftBons: 0,
+      partiallyPaidBons: 0,
+      cancelledBons: 0,
+      averageAmount: 0,
+      completionRate: 0,
+    });
+  };
 
   // Filter bookings based on selected status and date range
   useEffect(() => {
@@ -140,6 +228,7 @@ const BonLivraisonTable = () => {
     }
 
     setFilteredBookings(result);
+    calculateStatistics(result);
   }, [selectedStatus, dateRange, bookings]);
 
   const handleDateRangeChange = (ranges) => {
@@ -206,6 +295,9 @@ const BonLivraisonTable = () => {
       ),
     );
 
+    // Recalculate statistics
+    calculateStatistics(filteredBookings);
+
     // Show success message
     topTost("Bon de livraison mis à jour avec succès!", "success");
   };
@@ -237,78 +329,6 @@ const BonLivraisonTable = () => {
     }
   };
 
-  // Send bon via WhatsApp
-  const handleSendWhatsApp = async () => {
-    if (!selectedBon) return;
-
-    try {
-      // Generate WhatsApp message
-      const message = `Bonjour ${selectedBon.customerName},
-
-Votre Bon de Livraison ${selectedBon.deliveryNumber} :
-
-Montant HT: ${selectedBon.montant_ht} Dh
-TVA: ${selectedBon.tva} Dh
-Total TTC: ${selectedBon.total} Dh
-Acompte: ${advancementPrice} Dh
-Reste à payer: ${selectedBon.total - advancementPrice} Dh
-
-Mode de règlement: ${selectedBon.mode_reglement}
-Date de livraison: ${selectedBon.date_livraison}
-
-Merci de votre confiance!`;
-
-      const encodedMessage = encodeURIComponent(message);
-      const whatsappUrl = `https://wa.me/${selectedBon.customerPhone.replace(
-        /\D/g,
-        "",
-      )}?text=${encodedMessage}`;
-
-      // Open WhatsApp in new tab
-      window.open(whatsappUrl, "_blank");
-
-      topTost("Bon de livraison envoyé via WhatsApp!", "success");
-    } catch (error) {
-      console.error("Error sending bon:", error);
-      topTost("Erreur lors de l'envoi du bon de livraison", "error");
-    }
-  };
-
-  // Upload PDF bon
-  const handleUploadPDF = async (event) => {
-    const file = event.target.files[0];
-    if (!file || !selectedBon) return;
-
-    if (file.type !== "application/pdf") {
-      topTost("Veuillez sélectionner un fichier PDF", "error");
-      return;
-    }
-
-    try {
-      const token =
-        localStorage.getItem("token") || sessionStorage.getItem("token");
-      const formData = new FormData();
-      formData.append("pdf", file);
-      formData.append("bonId", selectedBon.id);
-
-      await axios.post(
-        `${config_url}/api/bon-livraisons/upload-pdf`,
-        formData,
-        {
-          headers: {
-            "Content-Type": "multipart/form-data",
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      );
-
-      topTost("PDF téléchargé avec succès!", "success");
-    } catch (error) {
-      console.error("Error uploading PDF:", error);
-      topTost("Erreur lors du téléchargement du PDF", "error");
-    }
-  };
-
   const handleDeleteBon = async (bonId) => {
     const result = await MySwal.fire({
       title: "Supprimer ce Bon de Livraison?",
@@ -330,6 +350,7 @@ Merci de votre confiance!`;
         });
 
         setBookings((prev) => prev.filter((bon) => bon.id !== bonId));
+        calculateStatistics(filteredBookings.filter((bon) => bon.id !== bonId));
         topTost("Bon de livraison supprimé avec succès!", "success");
       } catch (error) {
         console.error("Delete error:", error);
@@ -453,35 +474,14 @@ Merci de votre confiance!`;
     },
     {
       accessorKey: "total",
-      header: () => "Total TTC",
+      header: () => "Total a Payer",
       cell: ({ getValue }) => (
         <span>{parseFloat(getValue()).toFixed(2)} Dh</span>
       ),
-    },
-    {
-      accessorKey: "advancement",
-      header: () => "Avancements",
-      cell: ({ getValue }) => (
-        <span>{parseFloat(getValue()).toFixed(2)} Dh</span>
-      ),
-    },
-    {
-      accessorKey: "remainingAmount",
-      header: () => "Reste à Payer",
-      cell: ({ row }) => {
-        const remaining = parseFloat(row.original.remainingAmount);
-        return (
-          <span
-            className={remaining > 0 ? "text-danger fw-bold" : "text-success"}
-          >
-            {remaining.toFixed(2)} Dh
-          </span>
-        );
-      },
     },
     {
       accessorKey: "status",
-      header: () => "status",
+      header: () => "statut",
       cell: ({ getValue }) => {
         const status = getValue();
         return (
@@ -540,11 +540,11 @@ Merci de votre confiance!`;
 
   return (
     <>
+      {/* Filters Section */}
       <div
         className="mb-3 d-flex align-items-center flex-wrap gap-3"
         style={{
           zIndex: 999,
-          marginTop: "60px",
         }}
       >
         <InputGroup size="sm" className="w-auto shadow-sm rounded">
@@ -598,6 +598,174 @@ Merci de votre confiance!`;
           </Link>
         </div>
       </div>
+
+      {/* Statistics Cards Section */}
+      <div
+        className="mb-4"
+        style={{
+          marginTop: "60px",
+        }}
+      >
+        <div className="row g-3">
+          {/* Total Bons Card */}
+          <div className="col-xl-3 col-lg-4 col-md-6">
+            <Card className="border-0 shadow-sm h-100">
+              <CardBody className="d-flex align-items-center">
+                <div className="bg-primary bg-opacity-10 rounded-circle p-3 me-3">
+                  <FiFileText className="text-white fs-3 z-3" />
+                </div>
+                <div>
+                  <h6 className="text-muted mb-1">Total Bons</h6>
+                  <h3 className="mb-0">{statistics.totalBons}</h3>
+                  <small className="text-muted">
+                    {filteredBookings.length} affichés
+                  </small>
+                </div>
+              </CardBody>
+            </Card>
+          </div>
+
+          {/* Total Amount Card */}
+          <div className="col-xl-3 col-lg-4 col-md-6">
+            <Card className="border-0 shadow-sm h-100">
+              <CardBody className="d-flex align-items-center">
+                <div className="bg-success bg-opacity-10 rounded-circle p-3 me-3">
+                  <FiDollarSign className="text-white fs-3" />
+                </div>
+                <div>
+                  <h6 className="text-muted mb-1">Montant Total</h6>
+                  <h3 className="mb-0">
+                    {statistics.totalAmount.toFixed(2)} Dh
+                  </h3>
+                  <small className="text-muted">
+                    Moyenne: {statistics.averageAmount.toFixed(2)} Dh
+                  </small>
+                </div>
+              </CardBody>
+            </Card>
+          </div>
+
+          {/* Paid Bons Card */}
+          <div className="col-xl-3 col-lg-4 col-md-6">
+            <Card className="border-0 shadow-sm h-100">
+              <CardBody className="d-flex align-items-center">
+                <div className="bg-success bg-opacity-10 rounded-circle p-3 me-3">
+                  <FiCheckCircle className="text-white fs-3" />
+                </div>
+                <div>
+                  <h6 className="text-muted mb-1">Bons Payés</h6>
+                  <h3 className="mb-0">{statistics.paidBons}</h3>
+                  <small className="text-muted">
+                    {statistics.totalBons > 0
+                      ? `${((statistics.paidBons / statistics.totalBons) * 100).toFixed(1)}%`
+                      : "0%"}
+                  </small>
+                </div>
+              </CardBody>
+            </Card>
+          </div>
+
+          {/* Draft Bons Card */}
+          <div className="col-xl-3 col-lg-4 col-md-6">
+            <Card className="border-0 shadow-sm h-100">
+              <CardBody className="d-flex align-items-center">
+                <div className="bg-secondary bg-opacity-10 rounded-circle p-3 me-3">
+                  <FiClock className="text-white fs-3" />
+                </div>
+                <div>
+                  <h6 className="text-muted mb-1">Bons Brouillon</h6>
+                  <h3 className="mb-0">{statistics.draftBons}</h3>
+                  <small className="text-muted">En attente de traitement</small>
+                </div>
+              </CardBody>
+            </Card>
+          </div>
+
+          {/* Partially Paid Card */}
+          <div className="col-xl-3 col-lg-4 col-md-6">
+            <Card className="border-0 shadow-sm h-100">
+              <CardBody className="d-flex align-items-center">
+                <div className="bg-warning bg-opacity-10 rounded-circle p-3 me-3">
+                  <FiTrendingUp className="text-white fs-3" />
+                </div>
+                <div>
+                  <h6 className="text-muted mb-1">Partiellement Payés</h6>
+                  <h3 className="mb-0">{statistics.partiallyPaidBons}</h3>
+                  <small className="text-muted">
+                    {statistics.totalAdvancements.toFixed(2)} Dh d'avances
+                  </small>
+                </div>
+              </CardBody>
+            </Card>
+          </div>
+
+          {/* Total Remaining Card */}
+          <div className="col-xl-3 col-lg-4 col-md-6">
+            <Card className="border-0 shadow-sm h-100">
+              <CardBody className="d-flex align-items-center">
+                <div className="bg-danger bg-opacity-10 rounded-circle p-3 me-3">
+                  <FiDollarSign className="text-white fs-3" />
+                </div>
+                <div>
+                  <h6 className="text-muted mb-1">Reste à Payer</h6>
+                  <h3 className="mb-0">
+                    {statistics.totalRemaining.toFixed(2)} Dh
+                  </h3>
+                  <small className="text-muted">
+                    {statistics.totalAmount > 0
+                      ? `${((statistics.totalRemaining / statistics.totalAmount) * 100).toFixed(1)}% du total`
+                      : "0%"}
+                  </small>
+                </div>
+              </CardBody>
+            </Card>
+          </div>
+
+          {/* Completion Rate Card */}
+          <div className="col-xl-3 col-lg-4 col-md-6">
+            <Card className="border-0 shadow-sm h-100">
+              <CardBody className="d-flex align-items-center">
+                <div className="bg-info bg-opacity-10 rounded-circle p-3 me-3">
+                  <FiPercent className="text-white fs-3" />
+                </div>
+                <div>
+                  <h6 className="text-muted mb-1">Taux de Paiement</h6>
+                  <h3 className="mb-0">
+                    {statistics.completionRate.toFixed(1)}%
+                  </h3>
+                  <small className="text-muted">
+                    {statistics.totalAmount > 0
+                      ? `${(statistics.totalAmount - statistics.totalRemaining).toFixed(2)} Dh collectés`
+                      : "0 Dh collectés"}
+                  </small>
+                </div>
+              </CardBody>
+            </Card>
+          </div>
+
+          {/* Cancelled Bons Card */}
+          <div className="col-xl-3 col-lg-4 col-md-6">
+            <Card className="border-0 shadow-sm h-100">
+              <CardBody className="d-flex align-items-center">
+                <div className="bg-dark bg-opacity-10 rounded-circle p-3 me-3">
+                  <FiFileText className="text-white fs-3" />
+                </div>
+                <div>
+                  <h6 className="text-muted mb-1">Bons Annulés</h6>
+                  <h3 className="mb-0">{statistics.cancelledBons}</h3>
+                  <small className="text-muted">
+                    {statistics.totalBons > 0
+                      ? `${((statistics.cancelledBons / statistics.totalBons) * 100).toFixed(1)}%`
+                      : "0%"}
+                  </small>
+                </div>
+              </CardBody>
+            </Card>
+          </div>
+        </div>
+      </div>
+
+      {/* Table Section */}
       <div className="mt-4">
         <Table
           data={filteredBookings}
@@ -612,49 +780,6 @@ Merci de votre confiance!`;
         toggle={() => setIsDetailsModalOpen(false)}
         onUpdate={handleBonUpdate}
         bon={selectedBon}
-        footerContent={
-          selectedBon && (
-            <div className="container-fluid">
-              <div className="row mb-3">
-                <div className="col-md-6">
-                  <Label for="statusSelect">status du Bon</Label>
-                  <Input
-                    type="select"
-                    id="statusSelect"
-                    value={bonStatus}
-                    onChange={handleStatusChange}
-                  >
-                    {statusOptions
-                      .filter((option) => option.value !== "all")
-                      .map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                  </Input>
-                </div>
-                <div className="col-md-6">
-                  <Label for="advancementInput">Ajouter Acompte (Dh)</Label>
-                  <Input
-                    type="number"
-                    id="advancementInput"
-                    value={advancementPrice}
-                    onChange={handleAdvancementChange}
-                    min="0"
-                    max={selectedBon?.total || 0}
-                    placeholder="Montant de l'acompte"
-                  />
-                  {selectedBon && (
-                    <small className="text-muted">
-                      Total: {selectedBon.total.toFixed(2)} Dh | Reste:{" "}
-                      {(selectedBon.total - advancementPrice).toFixed(2)} Dh
-                    </small>
-                  )}
-                </div>
-              </div>
-            </div>
-          )
-        }
       />
     </>
   );

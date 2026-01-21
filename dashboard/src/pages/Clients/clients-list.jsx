@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from "react";
 import Table from "@/components/shared/table/Table";
 import axios from "axios";
-
 import { config_url } from "@/utils/config";
-
 import PageHeader from "@/components/shared/pageHeader/PageHeader";
 import {
   FiEdit,
@@ -12,6 +10,10 @@ import {
   FiPhone,
   FiMapPin,
   FiHome,
+  FiHash,
+  FiSave,
+  FiX,
+  FiUsers,
 } from "react-icons/fi";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
@@ -22,11 +24,15 @@ const MySwal = withReactContent(Swal);
 
 const ClientsList = () => {
   const [clients, setClients] = useState([]);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedClient, setSelectedClient] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+  const [editModal, setEditModal] = useState({
+    show: false,
+    client: null,
+    formData: {},
+    loading: false,
+  });
 
   useEffect(() => {
     fetchClients();
@@ -35,8 +41,13 @@ const ClientsList = () => {
   const fetchClients = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(`${config_url}/api/clients`);
-      // Make sure we have an array, even if empty
+      const token =
+        localStorage.getItem("token") || sessionStorage.getItem("token");
+      const response = await axios.get(`${config_url}/api/clients`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
       setClients(response.data?.clients || []);
       setError("");
     } catch (error) {
@@ -56,54 +67,121 @@ const ClientsList = () => {
     }
   };
 
-  const toggleModal = () => setIsModalOpen(!isModalOpen);
-
-  const handleEditClient = (client) => {
-    setSelectedClient(client);
-    toggleModal();
-  };
-
-  const handleSaveClient = () => {
-    // Refresh the clients list after update
-    fetchClients();
-  };
-
   const handleDeleteClient = async (clientId, clientName) => {
     const result = await MySwal.fire({
       title: (
         <p>
-          Delete <strong>{clientName}</strong>?
+          Supprimer <strong>{clientName}</strong> ?
         </p>
       ),
-      text: "Are you sure you want to delete this client? This action cannot be undone.",
+      html: `
+        <p>Êtes-vous sûr de vouloir supprimer ce client ?</p>
+        <p class="text-danger"><small>Cette action est irréversible.</small></p>
+      `,
       icon: "warning",
       showCancelButton: true,
       confirmButtonColor: "#d33",
       cancelButtonColor: "#3085d6",
-      confirmButtonText: "Yes, delete it!",
-      cancelButtonText: "Cancel",
+      confirmButtonText: "Oui, supprimer!",
+      cancelButtonText: "Annuler",
     });
 
     if (result.isConfirmed) {
       try {
-        await api.delete(`/api/clients/${clientId}`);
-        setClients((prevClients) =>
-          prevClients.filter((client) => client.id !== clientId)
-        );
+        const token =
+          localStorage.getItem("token") || sessionStorage.getItem("token");
+        await api.delete(`/api/clients/${clientId}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        setClients((prev) => prev.filter((client) => client.id !== clientId));
 
         MySwal.fire({
-          title: <p>Deleted!</p>,
-          text: `${clientName} has been deleted successfully.`,
+          title: <p>Supprimé!</p>,
+          text: `${clientName} a été supprimé avec succès.`,
           icon: "success",
         });
       } catch (error) {
         console.error("Delete error:", error);
         MySwal.fire({
-          title: <p>Error</p>,
-          text: error.response?.data?.message || "Failed to delete the client.",
+          title: <p>Erreur</p>,
+          text:
+            error.response?.data?.message ||
+            "Échec de la suppression du client.",
           icon: "error",
         });
       }
+    }
+  };
+
+  const handleEditClick = (client) => {
+    setEditModal({
+      show: true,
+      client,
+      formData: {
+        nom_complete: client.nom_complete || "",
+        reference: client.reference || "",
+        telephone: client.telephone || "",
+        ville: client.ville || "",
+        address: client.address || "",
+      },
+      loading: false,
+    });
+  };
+
+  const handleEditSubmit = async () => {
+    if (!editModal.formData.nom_complete) {
+      topTost("Le nom complet est requis", "error");
+      return;
+    }
+
+    try {
+      setEditModal((prev) => ({ ...prev, loading: true }));
+
+      const token =
+        localStorage.getItem("token") || sessionStorage.getItem("token");
+
+      const response = await api.put(
+        `/api/clients/${editModal.client.id}`,
+        editModal.formData,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
+
+      // Update local state
+      setClients((prev) =>
+        prev.map((client) => {
+          if (client.id === editModal.client.id) {
+            return { ...client, ...editModal.formData };
+          }
+          return client;
+        }),
+      );
+
+      MySwal.fire({
+        title: "Succès!",
+        text: "Client mis à jour avec succès",
+        icon: "success",
+      });
+
+      setEditModal({
+        show: false,
+        client: null,
+        formData: {},
+        loading: false,
+      });
+    } catch (error) {
+      console.error("Update error:", error);
+      topTost(
+        error.response?.data?.message ||
+          "Erreur lors de la mise à jour du client",
+        "error",
+      );
+      setEditModal((prev) => ({ ...prev, loading: false }));
     }
   };
 
@@ -116,14 +194,20 @@ const ClientsList = () => {
       client.nom_complete?.toLowerCase().includes(searchLower) ||
       client.telephone?.includes(searchTerm) ||
       client.ville?.toLowerCase().includes(searchLower) ||
-      client.address?.toLowerCase().includes(searchLower)
+      client.address?.toLowerCase().includes(searchLower) ||
+      client.reference?.toLowerCase().includes(searchLower)
     );
   });
 
   const columns = [
     {
       accessorKey: "id",
-      header: () => "ID",
+      header: () => (
+        <span>
+          <FiHash className="me-2" />
+          ID
+        </span>
+      ),
       cell: (info) => <span className="fw-semibold">#{info.getValue()}</span>,
     },
     {
@@ -144,6 +228,23 @@ const ClientsList = () => {
       },
     },
     {
+      accessorKey: "reference",
+      header: () => (
+        <span>
+          <FiHash className="me-2" />
+          Référence
+        </span>
+      ),
+      cell: (info) => {
+        const reference = info.getValue();
+        return (
+          <div>
+            <span className="fw-medium">{reference || "-"}</span>
+          </div>
+        );
+      },
+    },
+    {
       accessorKey: "telephone",
       header: () => (
         <span>
@@ -151,11 +252,16 @@ const ClientsList = () => {
           Téléphone
         </span>
       ),
-      cell: (info) => (
-        <a href={`tel:${info.getValue()}`} className="text-decoration-none">
-          {info.getValue()}
-        </a>
-      ),
+      cell: (info) => {
+        const phone = info.getValue();
+        return phone ? (
+          <a href={`tel:${phone}`} className="text-decoration-none">
+            {phone}
+          </a>
+        ) : (
+          <span className="text-muted">-</span>
+        );
+      },
     },
     {
       accessorKey: "ville",
@@ -165,11 +271,16 @@ const ClientsList = () => {
           Ville
         </span>
       ),
-      cell: (info) => (
-        <span className="badge bg-secondary bg-opacity-10 text-white fw-bold">
-          {info.getValue() || "Non spécifiée"}
-        </span>
-      ),
+      cell: (info) => {
+        const ville = info.getValue();
+        return ville ? (
+          <span className="badge bg-secondary bg-opacity-10 text-white fw-bold">
+            {ville}
+          </span>
+        ) : (
+          <span className="text-muted">-</span>
+        );
+      },
     },
     {
       accessorKey: "address",
@@ -181,14 +292,16 @@ const ClientsList = () => {
       ),
       cell: (info) => {
         const address = info.getValue();
-        return (
+        return address ? (
           <div
             className="text-truncate"
             style={{ maxWidth: "200px" }}
             title={address}
           >
-            {address || "Non spécifiée"}
+            {address}
           </div>
+        ) : (
+          <span className="text-muted">-</span>
         );
       },
     },
@@ -215,7 +328,7 @@ const ClientsList = () => {
           <div className="hstack d-flex gap-2 justify-content-center">
             <button
               className="btn btn-sm btn-outline-primary"
-              onClick={() => handleEditClient(client)}
+              onClick={() => handleEditClick(client)}
               title="Modifier"
             >
               <FiEdit />
@@ -287,7 +400,7 @@ const ClientsList = () => {
         )}
 
         {/* Stats Cards */}
-        <div className="row mb-4">
+        <div className="row mt-4 mb-4">
           <div className="col-xl-3 col-md-6">
             <div className="card card-animate">
               <div className="card-body">
@@ -299,35 +412,7 @@ const ClientsList = () => {
                     <h4 className="mb-0">{clients.length}</h4>
                   </div>
                   <div className="flex-shrink-0">
-                    <div className="avatar-sm rounded-circle bg-primary bg-opacity-10">
-                      <FiUser className="avatar-title text-primary fs-24" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="col-xl-3 col-md-6">
-            <div className="card card-animate">
-              <div className="card-body">
-                <div className="d-flex align-items-center">
-                  <div className="flex-grow-1">
-                    <p className="text-uppercase fw-medium text-muted mb-0">
-                      Avec Adresse
-                    </p>
-                    <h4 className="mb-0">
-                      {
-                        clients.filter(
-                          (c) => c.address && c.address.trim() !== ""
-                        ).length
-                      }
-                    </h4>
-                  </div>
-                  <div className="flex-shrink-0">
-                    <div className="avatar-sm rounded-circle bg-success bg-opacity-10">
-                      <FiHome className="avatar-title text-success fs-24" />
-                    </div>
+                    <FiUsers className="avatar-title text-primary fs-24" />
                   </div>
                 </div>
               </div>
@@ -385,7 +470,7 @@ const ClientsList = () => {
                   <Table
                     data={filteredClients}
                     columns={columns}
-                    searchable={false} // We have our own search
+                    searchable={false}
                     pagination={true}
                     pageSize={10}
                   />
@@ -396,15 +481,183 @@ const ClientsList = () => {
         </div>
       </div>
 
-      {/* Update Client Modal - You need to create this component */}
-      {/* <UpdateClientModal
-        isOpen={isModalOpen}
-        toggle={toggleModal}
-        client={selectedClient}
-        onSave={handleSaveClient}
-      /> */}
+      {/* Edit Client Modal */}
+      {editModal.show && (
+        <div
+          className="modal show d-block"
+          tabIndex="-1"
+          style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+        >
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">
+                  <FiEdit className="me-2" />
+                  Modifier le client: {editModal.client.nom_complete}
+                </h5>
+                <button
+                  type="button"
+                  className="btn-close"
+                  onClick={() =>
+                    setEditModal({
+                      show: false,
+                      client: null,
+                      formData: {},
+                      loading: false,
+                    })
+                  }
+                ></button>
+              </div>
+              <div className="modal-body">
+                <div className="row g-3">
+                  <div className="col-12">
+                    <label className="form-label">
+                      Nom Complet <span className="text-danger">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={editModal.formData.nom_complete}
+                      onChange={(e) =>
+                        setEditModal((prev) => ({
+                          ...prev,
+                          formData: {
+                            ...prev.formData,
+                            nom_complete: e.target.value,
+                          },
+                        }))
+                      }
+                      required
+                    />
+                  </div>
+                  <div className="col-md-6">
+                    <label className="form-label">Référence/Code</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={editModal.formData.reference}
+                      onChange={(e) =>
+                        setEditModal((prev) => ({
+                          ...prev,
+                          formData: {
+                            ...prev.formData,
+                            reference: e.target.value,
+                          },
+                        }))
+                      }
+                    />
+                  </div>
+                  <div className="col-md-6">
+                    <label className="form-label">Téléphone</label>
+                    <input
+                      type="tel"
+                      className="form-control"
+                      value={editModal.formData.telephone}
+                      onChange={(e) =>
+                        setEditModal((prev) => ({
+                          ...prev,
+                          formData: {
+                            ...prev.formData,
+                            telephone: e.target.value,
+                          },
+                        }))
+                      }
+                    />
+                  </div>
+                  <div className="col-md-6">
+                    <label className="form-label">Ville</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={editModal.formData.ville}
+                      onChange={(e) =>
+                        setEditModal((prev) => ({
+                          ...prev,
+                          formData: {
+                            ...prev.formData,
+                            ville: e.target.value,
+                          },
+                        }))
+                      }
+                    />
+                  </div>
+                  <div className="col-md-6">
+                    <label className="form-label">Adresse</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={editModal.formData.address}
+                      onChange={(e) =>
+                        setEditModal((prev) => ({
+                          ...prev,
+                          formData: {
+                            ...prev.formData,
+                            address: e.target.value,
+                          },
+                        }))
+                      }
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() =>
+                    setEditModal({
+                      show: false,
+                      client: null,
+                      formData: {},
+                      loading: false,
+                    })
+                  }
+                  disabled={editModal.loading}
+                >
+                  <FiX className="me-2" />
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={handleEditSubmit}
+                  disabled={editModal.loading}
+                >
+                  {editModal.loading ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm me-2"></span>
+                      Enregistrement...
+                    </>
+                  ) : (
+                    <>
+                      <FiSave className="me-2" />
+                      Enregistrer
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
+};
+
+// Helper function for toast notifications
+const topTost = (message, type = "success") => {
+  const toast = Swal.mixin({
+    toast: true,
+    position: "top-end",
+    showConfirmButton: false,
+    timer: 3000,
+    timerProgressBar: true,
+  });
+
+  toast.fire({
+    icon: type,
+    title: message,
+  });
 };
 
 export default ClientsList;

@@ -114,6 +114,46 @@ export const menuList = [
   },
   {
     id: 5,
+    name: "Bon Achat",
+    path: "#",
+    icon: "feather-file-text",
+    dropdownMenu: [
+      {
+        id: 1,
+        name: "List Bon Achats",
+        path: "/bon-achat/list",
+        subdropdownMenu: false,
+      },
+      {
+        id: 2,
+        name: "Creer Bon Achat",
+        path: "/bon-achat/create",
+        subdropdownMenu: false,
+      },
+    ],
+  },
+  {
+    id: 6,
+    name: "Bon D'Avoir",
+    path: "#",
+    icon: "feather-file-text",
+    dropdownMenu: [
+      {
+        id: 1,
+        name: "List Bon D'Avoir",
+        path: "/bon-avoir/list",
+        subdropdownMenu: false,
+      },
+      {
+        id: 2,
+        name: "Creer Bon D'Avoir",
+        path: "/bon-avoir/create",
+        subdropdownMenu: false,
+      },
+    ],
+  },
+  {
+    id: 7,
     name: "authentication",
     path: "#",
     icon: "feather-power",
@@ -135,7 +175,7 @@ export const menuList = [
   },
 
   {
-    id: 6,
+    id: 8,
     name: "clients",
     path: "#",
     icon: "feather-users",
@@ -156,7 +196,7 @@ export const menuList = [
   },
 
   {
-    id: 7,
+    id: 9,
     name: "fornisseurs",
     path: "#",
     icon: "feather-briefcase",
@@ -178,7 +218,7 @@ export const menuList = [
   },
 
   {
-    id: 8,
+    id: 10,
     name: "produits",
     path: "#",
     icon: "feather-archive",

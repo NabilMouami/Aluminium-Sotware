@@ -18,8 +18,6 @@ import {
   FiFileText,
   FiUser,
   FiShoppingCart,
-  FiTag,
-  FiDollarSign,
 } from "react-icons/fi";
 import axios from "axios";
 import { config_url } from "@/utils/config";
@@ -39,8 +37,166 @@ const statusOptions = [
   { value: "refusé", label: "Refusé" },
   { value: "expiré", label: "Expiré" },
   { value: "transformé_en_commande", label: "Transformé en Commande" },
+  { value: "transformé_en_facture", label: "Transformé en Facture" },
+  { value: "transformé_en_bl", label: "Transformé en BL" },
   { value: "en_attente", label: "En Attente" },
 ];
+
+// Move totalToFrenchText outside and make it synchronous
+const totalToFrenchText = (amount) => {
+  if (amount === 0) return "Zéro dirham";
+
+  const units = [
+    "",
+    "un",
+    "deux",
+    "trois",
+    "quatre",
+    "cinq",
+    "six",
+    "sept",
+    "huit",
+    "neuf",
+  ];
+  const teens = [
+    "dix",
+    "onze",
+    "douze",
+    "treize",
+    "quatorze",
+    "quinze",
+    "seize",
+    "dix-sept",
+    "dix-huit",
+    "dix-neuf",
+  ];
+  const tens = [
+    "",
+    "",
+    "vingt",
+    "trente",
+    "quarante",
+    "cinquante",
+    "soixante",
+    "soixante",
+    "quatre-vingt",
+    "quatre-vingt",
+  ];
+  const hundreds = [
+    "",
+    "cent",
+    "deux cent",
+    "trois cent",
+    "quatre cent",
+    "cinq cent",
+    "six cent",
+    "sept cent",
+    "huit cent",
+    "neuf cent",
+  ];
+
+  const convertLessThanOneThousand = (num) => {
+    if (num === 0) return "";
+
+    let result = "";
+
+    // Hundreds
+    if (num >= 100) {
+      const h = Math.floor(num / 100);
+      result += h === 1 ? "cent" : units[h] + " cent";
+      num %= 100;
+      if (num === 0 && h > 1) result += "s"; // deux cents
+      if (num > 0) result += " ";
+    }
+
+    // Tens & units
+    if (num < 10) {
+      result += units[num];
+    } else if (num < 20) {
+      result += teens[num - 10];
+    } else {
+      const t = Math.floor(num / 10);
+      const u = num % 10;
+
+      if (t === 7) {
+        result += "soixante";
+        result += u === 1 ? " et onze" : "-" + teens[u];
+      } else if (t === 9) {
+        result += "quatre-vingt";
+        result += "-" + teens[u];
+      } else {
+        result += tens[t];
+        if (u === 1 && t !== 8) {
+          result += " et un";
+        } else if (u > 0) {
+          result += "-" + units[u];
+        }
+        if (t === 8 && u === 0) result += "s"; // quatre-vingts
+      }
+    }
+
+    return result;
+  };
+
+  const convertNumberToWords = (num) => {
+    if (num === 0) return "zéro";
+
+    let result = "";
+
+    // Billions (not needed for our use case, but kept for completeness)
+    if (num >= 1000000000) {
+      const billions = Math.floor(num / 1000000000);
+      result += convertLessThanOneThousand(billions) + " milliard";
+      if (billions > 1) result += "s";
+      num %= 1000000000;
+      if (num > 0) result += " ";
+    }
+
+    // Millions
+    if (num >= 1000000) {
+      const millions = Math.floor(num / 1000000);
+      result += convertLessThanOneThousand(millions) + " million";
+      if (millions > 1) result += "s";
+      num %= 1000000;
+      if (num > 0) result += " ";
+    }
+
+    // Thousands
+    if (num >= 1000) {
+      const thousands = Math.floor(num / 1000);
+      if (thousands === 1) {
+        result += "mille";
+      } else {
+        result += convertLessThanOneThousand(thousands) + " mille";
+      }
+      num %= 1000;
+      if (num > 0) {
+        if (num < 100) result += " ";
+        else result += " ";
+      }
+    }
+
+    // Hundreds, tens and units
+    if (num > 0) {
+      result += convertLessThanOneThousand(num);
+    }
+
+    return result.trim();
+  };
+
+  const dirhams = Math.floor(amount);
+  const centimes = Math.round((amount - dirhams) * 100);
+
+  let text = convertNumberToWords(dirhams) + " dirham";
+  if (dirhams > 1) text += "s";
+
+  if (centimes > 0) {
+    text += " et " + convertNumberToWords(centimes) + " centime";
+    if (centimes > 1) text += "s";
+  }
+
+  return text.charAt(0).toUpperCase() + text.slice(1);
+};
 
 const DevisDetailsModal = ({
   isOpen,
@@ -57,6 +213,8 @@ const DevisDetailsModal = ({
     objet: "",
     conditions_generales: "",
   });
+  const [totalText, setTotalText] = useState("");
+  const [isCalculatingTotal, setIsCalculatingTotal] = useState(false);
 
   // Initialize form data when devis changes
   useEffect(() => {
@@ -69,6 +227,33 @@ const DevisDetailsModal = ({
         objet: devis.objet || "",
         conditions_generales: devis.conditions_generales || "",
       });
+    }
+  }, [devis]);
+
+  // Calculate total in French text
+  useEffect(() => {
+    const calculateTotalText = () => {
+      if (devis) {
+        const total = parseFloat(devis.montant_ttc) || 0;
+        if (total > 0) {
+          setIsCalculatingTotal(true);
+          try {
+            const text = totalToFrenchText(total);
+            setTotalText(text);
+          } catch (error) {
+            console.error("Error converting total to French text:", error);
+            setTotalText(`${total.toFixed(2)} dirhams`);
+          } finally {
+            setIsCalculatingTotal(false);
+          }
+        } else {
+          setTotalText("Zéro dirham");
+        }
+      }
+    };
+
+    if (devis) {
+      calculateTotalText();
     }
   }, [devis]);
 
@@ -87,6 +272,10 @@ const DevisDetailsModal = ({
       case "expiré":
         return "dark";
       case "transformé_en_commande":
+        return "info";
+      case "transformé_en_facture":
+        return "info";
+      case "transformé_en_bl":
         return "info";
       case "en_attente":
         return "secondary";
@@ -274,6 +463,10 @@ const DevisDetailsModal = ({
       : new Date();
 
     const printWindow = window.open("", "_blank");
+
+    // Calculate total text for print
+    const printTotalText = totalToFrenchText(total);
+
     const printContent = `
 <!DOCTYPE html>
 <html>
@@ -369,15 +562,6 @@ const DevisDetailsModal = ({
     </div>
   </div>
 
-  ${
-    devis.objet
-      ? `
-  <div class="objet" style="margin-bottom:15px;">
-    <h4 style="margin:0 0 5px 0; font-size:12px;">Objet: ${devis.objet}</h4>
-  </div>
-  `
-      : ""
-  }
 
   <table class="table">
     <thead>
@@ -418,11 +602,12 @@ const DevisDetailsModal = ({
     <p style="font-size:14px; font-weight:bold;">
       <strong>Total a Payer:</strong> ${total.toFixed(2)} Dh
     </p>
+
+     <p style="font-size:10px; font-style:italic;">
+    Arrêté le présent devis à la somme de :
+    <strong>${printTotalText}</strong>
+  </p>
   </div>
-
-
-
-
 
 </body>
 </html>
@@ -464,6 +649,9 @@ const DevisDetailsModal = ({
 
       const remise = parseFloat(devis.remise) || 0;
       const sousTotal = total + remise;
+
+      // Calculate total text for PDF
+      const pdfTotalText = totalToFrenchText(total);
 
       pdfContainer.innerHTML = `
       <div style="text-align:center; border-bottom:2px solid #333; padding-bottom:10px; margin-bottom:15px;">
@@ -524,9 +712,10 @@ const DevisDetailsModal = ({
         <p style="font-size:14px; font-weight:bold; color:#2c5aa0;">
           Total a Payer: ${total.toFixed(2)} Dh
         </p>
+        <p style="font-size:10px; font-style:italic;">
+          Arrêté le présent devis à la somme de : <strong>${pdfTotalText}</strong>
+        </p>
       </div>
-
-
     `;
 
       document.body.appendChild(pdfContainer);
@@ -667,55 +856,6 @@ const DevisDetailsModal = ({
             </div>
           </div>
 
-          <div className="col-md-8">
-            <div className="form-group mb-3">
-              <label className="form-label">
-                <FiTag className="me-2" />
-                Objet
-              </label>
-              <input
-                type="text"
-                className="form-control"
-                value={formData.objet}
-                onChange={(e) => handleInputChange("objet", e.target.value)}
-                placeholder="Objet du devis"
-                disabled={!canEdit}
-              />
-            </div>
-          </div>
-
-          <div className="col-12">
-            <div className="form-group mb-3">
-              <label className="form-label">Conditions de Règlement</label>
-              <textarea
-                className="form-control"
-                rows="2"
-                value={formData.conditions_reglement}
-                onChange={(e) =>
-                  handleInputChange("conditions_reglement", e.target.value)
-                }
-                placeholder="Ex: 50% à la commande, 50% à la livraison..."
-                disabled={!canEdit}
-              />
-            </div>
-          </div>
-
-          <div className="col-12">
-            <div className="form-group mb-3">
-              <label className="form-label">Conditions Générales</label>
-              <textarea
-                className="form-control"
-                rows="3"
-                value={formData.conditions_generales}
-                onChange={(e) =>
-                  handleInputChange("conditions_generales", e.target.value)
-                }
-                placeholder="Conditions générales de vente..."
-                disabled={!canEdit}
-              />
-            </div>
-          </div>
-
           <div className="col-12">
             <div className="form-group mb-3">
               <label className="form-label">Notes</label>
@@ -826,6 +966,23 @@ const DevisDetailsModal = ({
                     <span>Total a Payer:</span>
                     <span>{total.toFixed(2)} Dh</span>
                   </div>
+                  {isCalculatingTotal ? (
+                    <div
+                      className="text-start mt-2"
+                      style={{ fontSize: "0.85em", fontStyle: "italic" }}
+                    >
+                      <small>Calcul en cours...</small>
+                    </div>
+                  ) : totalText ? (
+                    <div
+                      className="text-start mt-2"
+                      style={{ fontSize: "0.85em", fontStyle: "italic" }}
+                    >
+                      <small>Arrêté le présent devis à la somme de :</small>
+                      <br />
+                      <strong>{totalText}</strong>
+                    </div>
+                  ) : null}
                 </div>
               </div>
             </div>

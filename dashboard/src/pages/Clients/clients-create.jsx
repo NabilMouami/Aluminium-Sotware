@@ -9,6 +9,7 @@ const MySwal = withReactContent(Swal);
 
 function ClientsCreate() {
   const [nom_complete, setNomComplete] = useState("");
+  const [reference, setReference] = useState("");
   const [ville, setVille] = useState("");
   const [address, setAddress] = useState("");
   const [telephone, setTelephone] = useState("");
@@ -21,6 +22,7 @@ function ClientsCreate() {
     try {
       const clientData = {
         nom_complete,
+        reference,
         ville,
         address,
         telephone,
@@ -32,7 +34,7 @@ function ClientsCreate() {
 
       const response = await axios.post(
         `${config_url}/api/clients`,
-        clientData
+        clientData,
       );
 
       MySwal.fire({
@@ -43,6 +45,7 @@ function ClientsCreate() {
       }).then(() => {
         // Reset form
         setNomComplete("");
+        setReference("");
         setVille("");
         setAddress("");
         setTelephone("");
@@ -59,7 +62,7 @@ function ClientsCreate() {
       } else {
         topTost(
           error.response?.data?.message || "Error creating client",
-          "error"
+          "error",
         );
       }
     } finally {
@@ -96,9 +99,21 @@ function ClientsCreate() {
                     minLength="2"
                     maxLength="200"
                   />
-                  <small className="text-muted">
-                    Entre 2 et 200 caractères
-                  </small>
+                </div>
+                <div className="mb-4">
+                  <label className="form-label">
+                    Refrence (Code) <span className="text-danger">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="Entrez le Refrence ou Code du client"
+                    value={reference}
+                    onChange={(e) => setReference(e.target.value)}
+                    required
+                    minLength="2"
+                    maxLength="200"
+                  />
                 </div>
 
                 <div className="mb-4">
@@ -157,40 +172,6 @@ function ClientsCreate() {
               </div>
             </div>
           </form>
-
-          {/* Optional: Instructions panel */}
-          <div className="col-xl-3">
-            <div className="card">
-              <div className="card-header">
-                <h5 className="card-title mb-0">Instructions</h5>
-              </div>
-              <div className="card-body">
-                <ul className="list-unstyled mb-0">
-                  <li className="mb-2">
-                    <small className="text-muted">
-                      <strong>Nom Complet:</strong> Obligatoire (2-200
-                      caractères)
-                    </small>
-                  </li>
-                  <li className="mb-2">
-                    <small className="text-muted">
-                      <strong>Téléphone:</strong> Obligatoire, doit être unique
-                    </small>
-                  </li>
-                  <li className="mb-2">
-                    <small className="text-muted">
-                      <strong>Ville:</strong> Optionnel
-                    </small>
-                  </li>
-                  <li>
-                    <small className="text-muted">
-                      <strong>Adresse:</strong> Optionnel (max 500 caractères)
-                    </small>
-                  </li>
-                </ul>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
     </>

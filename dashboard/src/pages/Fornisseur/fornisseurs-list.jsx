@@ -12,6 +12,10 @@ import {
   FiHome,
   FiHash,
   FiPackage,
+  FiSave,
+  FiX,
+  FiUsers,
+  FiDollarSign,
 } from "react-icons/fi";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
@@ -22,8 +26,6 @@ const MySwal = withReactContent(Swal);
 
 const FornisseursList = () => {
   const [fornisseurs, setFornisseurs] = useState([]);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedFornisseur, setSelectedFornisseur] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
@@ -31,18 +33,32 @@ const FornisseursList = () => {
     total: 0,
     withReference: 0,
     withAddress: 0,
-    totalProducts: 0,
+  });
+  const [editModal, setEditModal] = useState({
+    show: false,
+    fornisseur: null,
+    formData: {},
+    loading: false,
   });
 
   useEffect(() => {
     fetchFornisseurs();
-    fetchStats();
   }, []);
+
+  useEffect(() => {
+    calculateStats();
+  }, [fornisseurs]);
 
   const fetchFornisseurs = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(`${config_url}/api/fornisseurs`);
+      const token =
+        localStorage.getItem("token") || sessionStorage.getItem("token");
+      const response = await axios.get(`${config_url}/api/fornisseurs`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
       setFornisseurs(response.data?.fornisseurs || []);
       setError("");
     } catch (error) {
@@ -62,32 +78,20 @@ const FornisseursList = () => {
     }
   };
 
-  const fetchStats = async () => {
-    try {
-      const response = await axios.get(`${config_url}/api/fornisseurs/stats`);
-      if (response.data?.statistics) {
-        setStats({
-          total: response.data.statistics.totalFornisseurs || 0,
-          withReference: response.data.statistics.withReference || 0,
-          withAddress: 0, // You might need to calculate this
-          totalProducts: 0, // You might need a separate endpoint
-        });
-      }
-    } catch (error) {
-      console.error("Error fetching stats:", error);
-    }
-  };
+  const calculateStats = () => {
+    const total = fornisseurs.length;
+    const withReference = fornisseurs.filter(
+      (f) => f.reference && f.reference.trim() !== "",
+    ).length;
+    const withAddress = fornisseurs.filter(
+      (f) => f.address && f.address.trim() !== "",
+    ).length;
 
-  const toggleModal = () => setIsModalOpen(!isModalOpen);
-
-  const handleEditFornisseur = (fornisseur) => {
-    setSelectedFornisseur(fornisseur);
-    toggleModal();
-  };
-
-  const handleSaveFornisseur = () => {
-    fetchFornisseurs();
-    fetchStats();
+    setStats({
+      total,
+      withReference,
+      withAddress,
+    });
   };
 
   const handleDeleteFornisseur = async (fornisseurId, fornisseurName) => {
@@ -111,9 +115,15 @@ const FornisseursList = () => {
 
     if (result.isConfirmed) {
       try {
-        await api.delete(`/api/fornisseurs/${fornisseurId}`);
+        const token =
+          localStorage.getItem("token") || sessionStorage.getItem("token");
+        await api.delete(`/api/fornisseurs/${fornisseurId}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
         setFornisseurs((prev) =>
-          prev.filter((fornisseur) => fornisseur.id !== fornisseurId)
+          prev.filter((fornisseur) => fornisseur.id !== fornisseurId),
         );
 
         MySwal.fire({
@@ -121,9 +131,6 @@ const FornisseursList = () => {
           text: `${fornisseurName} a été supprimé avec succès.`,
           icon: "success",
         });
-
-        // Refresh stats
-        fetchStats();
       } catch (error) {
         console.error("Delete error:", error);
         MySwal.fire({
@@ -134,6 +141,76 @@ const FornisseursList = () => {
           icon: "error",
         });
       }
+    }
+  };
+
+  const handleEditClick = (fornisseur) => {
+    setEditModal({
+      show: true,
+      fornisseur,
+      formData: {
+        nom_complete: fornisseur.nom_complete || "",
+        reference: fornisseur.reference || "",
+        telephone: fornisseur.telephone || "",
+        ville: fornisseur.ville || "",
+        address: fornisseur.address || "",
+      },
+      loading: false,
+    });
+  };
+
+  const handleEditSubmit = async () => {
+    if (!editModal.formData.nom_complete) {
+      topTost("Le nom complet est requis", "error");
+      return;
+    }
+
+    try {
+      setEditModal((prev) => ({ ...prev, loading: true }));
+
+      const token =
+        localStorage.getItem("token") || sessionStorage.getItem("token");
+
+      const response = await api.put(
+        `/api/fornisseurs/${editModal.fornisseur.id}`,
+        editModal.formData,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
+
+      // Update local state
+      setFornisseurs((prev) =>
+        prev.map((f) => {
+          if (f.id === editModal.fornisseur.id) {
+            return { ...f, ...editModal.formData };
+          }
+          return f;
+        }),
+      );
+
+      MySwal.fire({
+        title: "Succès!",
+        text: "Fournisseur mis à jour avec succès",
+        icon: "success",
+      });
+
+      setEditModal({
+        show: false,
+        fornisseur: null,
+        formData: {},
+        loading: false,
+      });
+    } catch (error) {
+      console.error("Update error:", error);
+      topTost(
+        error.response?.data?.message ||
+          "Erreur lors de la mise à jour du fournisseur",
+        "error",
+      );
+      setEditModal((prev) => ({ ...prev, loading: false }));
     }
   };
 
@@ -154,7 +231,12 @@ const FornisseursList = () => {
   const columns = [
     {
       accessorKey: "id",
-      header: () => "ID",
+      header: () => (
+        <span>
+          <FiHash className="me-2" />
+          ID
+        </span>
+      ),
       cell: (info) => <span className="fw-semibold">#{info.getValue()}</span>,
     },
     {
@@ -201,14 +283,19 @@ const FornisseursList = () => {
           Téléphone
         </span>
       ),
-      cell: (info) => (
-        <a
-          href={`tel:${info.getValue()}`}
-          className="text-decoration-none text-primary"
-        >
-          {info.getValue()}
-        </a>
-      ),
+      cell: (info) => {
+        const phone = info.getValue();
+        return phone ? (
+          <a
+            href={`tel:${phone}`}
+            className="text-decoration-none text-primary"
+          >
+            {phone}
+          </a>
+        ) : (
+          <span className="text-muted">-</span>
+        );
+      },
     },
     {
       accessorKey: "ville",
@@ -275,7 +362,7 @@ const FornisseursList = () => {
           <div className="hstack d-flex gap-2 justify-content-center">
             <button
               className="btn btn-sm btn-outline-primary"
-              onClick={() => handleEditFornisseur(fornisseur)}
+              onClick={() => handleEditClick(fornisseur)}
               title="Modifier"
             >
               <FiEdit />
@@ -354,7 +441,7 @@ const FornisseursList = () => {
         )}
 
         {/* Stats Cards */}
-        <div className="row mb-4">
+        <div className="row mt-4 mb-4">
           <div className="col-xl-3 col-md-6">
             <div className="card card-animate">
               <div className="card-body">
@@ -366,9 +453,7 @@ const FornisseursList = () => {
                     <h4 className="mb-0">{stats.total}</h4>
                   </div>
                   <div className="flex-shrink-0">
-                    <div className="avatar-sm rounded-circle bg-primary bg-opacity-10">
-                      <FiUser className="avatar-title text-primary fs-24" />
-                    </div>
+                    <FiUsers className="avatar-title text-primary fs-24" />
                   </div>
                 </div>
               </div>
@@ -386,9 +471,7 @@ const FornisseursList = () => {
                     <h4 className="mb-0">{stats.withReference}</h4>
                   </div>
                   <div className="flex-shrink-0">
-                    <div className="avatar-sm rounded-circle bg-success bg-opacity-10">
-                      <FiHash className="avatar-title text-success fs-24" />
-                    </div>
+                    <FiHash className="avatar-title text-success fs-24" />
                   </div>
                 </div>
               </div>
@@ -403,18 +486,10 @@ const FornisseursList = () => {
                     <p className="text-uppercase fw-medium text-muted mb-0">
                       Avec Adresse
                     </p>
-                    <h4 className="mb-0">
-                      {
-                        fornisseurs.filter(
-                          (f) => f.address && f.address.trim() !== ""
-                        ).length
-                      }
-                    </h4>
+                    <h4 className="mb-0">{stats.withAddress}</h4>
                   </div>
                   <div className="flex-shrink-0">
-                    <div className="avatar-sm rounded-circle bg-info bg-opacity-10">
-                      <FiHome className="avatar-title text-info fs-24" />
-                    </div>
+                    <FiHome className="avatar-title text-warning fs-24" />
                   </div>
                 </div>
               </div>
@@ -429,11 +504,46 @@ const FornisseursList = () => {
                     <p className="text-uppercase fw-medium text-muted mb-0">
                       Produits Associés
                     </p>
-                    <h4 className="mb-0">{stats.totalProducts}</h4>
+                    <h4 className="mb-0">
+                      {/* You might want to add this data if available */}-
+                    </h4>
                   </div>
                   <div className="flex-shrink-0">
-                    <div className="avatar-sm rounded-circle bg-warning bg-opacity-10">
-                      <FiPackage className="avatar-title text-warning fs-24" />
+                    <FiPackage className="avatar-title text-info fs-24" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Filters */}
+        <div className="row mb-4">
+          <div className="col-12">
+            <div className="card">
+              <div className="card-body">
+                <div className="row g-3">
+                  <div className="col-md-6">
+                    <div className="search-box">
+                      <input
+                        type="text"
+                        className="form-control"
+                        placeholder="Rechercher par nom, téléphone, référence, ville..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                      />
+                      <i className="ri-search-line search-icon"></i>
+                    </div>
+                  </div>
+                  <div className="col-md-6">
+                    <div className="d-flex justify-content-end gap-2">
+                      <button
+                        className="btn btn-outline-secondary"
+                        onClick={fetchFornisseurs}
+                        title="Rafraîchir"
+                      >
+                        <i className="ri-refresh-line"></i> Rafraîchir
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -447,32 +557,7 @@ const FornisseursList = () => {
           <div className="col-12">
             <div className="card">
               <div className="card-header">
-                <div className="row align-items-center">
-                  <div className="col-md-6">
-                    <h5 className="card-title mb-0">Liste des Fournisseurs</h5>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="d-flex justify-content-end gap-2">
-                      <div className="search-box me-2">
-                        <input
-                          type="text"
-                          className="form-control"
-                          placeholder="Rechercher fournisseur..."
-                          value={searchTerm}
-                          onChange={(e) => setSearchTerm(e.target.value)}
-                        />
-                        <i className="ri-search-line search-icon"></i>
-                      </div>
-                      <button
-                        className="btn btn-outline-secondary"
-                        onClick={fetchFornisseurs}
-                        title="Rafraîchir"
-                      >
-                        <i className="ri-refresh-line"></i>
-                      </button>
-                    </div>
-                  </div>
-                </div>
+                <h5 className="card-title mb-0">Liste des Fournisseurs</h5>
               </div>
               <div className="card-body">
                 {filteredFornisseurs.length === 0 ? (
@@ -519,17 +604,14 @@ const FornisseursList = () => {
                       </small>
                     </div>
                     <div className="col-md-6">
-                      <div className="d-flex justify-content-end">
+                      <div className="d-flex justify-content-end gap-4">
                         <small className="text-muted">
                           <FiHash className="me-1" />
-                          {stats.withReference} avec référence |{" "}
-                          <FiHome className="me-1 ms-2" />
-                          {
-                            fornisseurs.filter(
-                              (f) => f.address && f.address.trim() !== ""
-                            ).length
-                          }{" "}
-                          avec adresse
+                          {stats.withReference} avec référence
+                        </small>
+                        <small className="text-muted">
+                          <FiHome className="me-1" />
+                          {stats.withAddress} avec adresse
                         </small>
                       </div>
                     </div>
@@ -541,15 +623,183 @@ const FornisseursList = () => {
         </div>
       </div>
 
-      {/* Update Fornisseur Modal - You need to create this component */}
-      {/* <UpdateFornisseurModal
-        isOpen={isModalOpen}
-        toggle={toggleModal}
-        fornisseur={selectedFornisseur}
-        onSave={handleSaveFornisseur}
-      /> */}
+      {/* Edit Fornisseur Modal */}
+      {editModal.show && (
+        <div
+          className="modal show d-block"
+          tabIndex="-1"
+          style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+        >
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">
+                  <FiEdit className="me-2" />
+                  Modifier le fournisseur: {editModal.fornisseur.nom_complete}
+                </h5>
+                <button
+                  type="button"
+                  className="btn-close"
+                  onClick={() =>
+                    setEditModal({
+                      show: false,
+                      fornisseur: null,
+                      formData: {},
+                      loading: false,
+                    })
+                  }
+                ></button>
+              </div>
+              <div className="modal-body">
+                <div className="row g-3">
+                  <div className="col-12">
+                    <label className="form-label">
+                      Nom Complet <span className="text-danger">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={editModal.formData.nom_complete}
+                      onChange={(e) =>
+                        setEditModal((prev) => ({
+                          ...prev,
+                          formData: {
+                            ...prev.formData,
+                            nom_complete: e.target.value,
+                          },
+                        }))
+                      }
+                      required
+                    />
+                  </div>
+                  <div className="col-md-6">
+                    <label className="form-label">Référence/Code</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={editModal.formData.reference}
+                      onChange={(e) =>
+                        setEditModal((prev) => ({
+                          ...prev,
+                          formData: {
+                            ...prev.formData,
+                            reference: e.target.value,
+                          },
+                        }))
+                      }
+                    />
+                  </div>
+                  <div className="col-md-6">
+                    <label className="form-label">Téléphone</label>
+                    <input
+                      type="tel"
+                      className="form-control"
+                      value={editModal.formData.telephone}
+                      onChange={(e) =>
+                        setEditModal((prev) => ({
+                          ...prev,
+                          formData: {
+                            ...prev.formData,
+                            telephone: e.target.value,
+                          },
+                        }))
+                      }
+                    />
+                  </div>
+                  <div className="col-md-6">
+                    <label className="form-label">Ville</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={editModal.formData.ville}
+                      onChange={(e) =>
+                        setEditModal((prev) => ({
+                          ...prev,
+                          formData: {
+                            ...prev.formData,
+                            ville: e.target.value,
+                          },
+                        }))
+                      }
+                    />
+                  </div>
+                  <div className="col-md-6">
+                    <label className="form-label">Adresse</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={editModal.formData.address}
+                      onChange={(e) =>
+                        setEditModal((prev) => ({
+                          ...prev,
+                          formData: {
+                            ...prev.formData,
+                            address: e.target.value,
+                          },
+                        }))
+                      }
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() =>
+                    setEditModal({
+                      show: false,
+                      fornisseur: null,
+                      formData: {},
+                      loading: false,
+                    })
+                  }
+                  disabled={editModal.loading}
+                >
+                  <FiX className="me-2" />
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={handleEditSubmit}
+                  disabled={editModal.loading}
+                >
+                  {editModal.loading ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm me-2"></span>
+                      Enregistrement...
+                    </>
+                  ) : (
+                    <>
+                      <FiSave className="me-2" />
+                      Enregistrer
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
+};
+
+// Helper function for toast notifications
+const topTost = (message, type = "success") => {
+  const toast = Swal.mixin({
+    toast: true,
+    position: "top-end",
+    showConfirmButton: false,
+    timer: 3000,
+    timerProgressBar: true,
+  });
+
+  toast.fire({
+    icon: type,
+    title: message,
+  });
 };
 
 export default FornisseursList;
