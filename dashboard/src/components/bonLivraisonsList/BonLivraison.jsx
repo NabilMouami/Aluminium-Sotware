@@ -39,9 +39,17 @@ const statusOptions = [
   { value: "all", label: "Tous les statuts" },
   { value: "brouillon", label: "Brouillon" },
   { value: "payé", label: "Payé" },
-  { value: "partiellement payé", label: "Partiellement Payé" },
-  { value: "annulé", label: "Annulé" },
+  { value: "partiellement_payée", label: "Partiellement Payé" },
+  { value: "annulée", label: "Annulé" },
 ];
+
+// Helper function to safely format numbers
+const safeToFixed = (value, decimals = 2) => {
+  if (typeof value !== "number" || isNaN(value) || !isFinite(value)) {
+    return "0." + "0".repeat(decimals);
+  }
+  return value.toFixed(decimals);
+};
 
 const BonLivraisonTable = () => {
   const [bookings, setBookings] = useState([]);
@@ -96,7 +104,7 @@ const BonLivraisonTable = () => {
             }
 
             const total = parseFloat(bon.montant_ht) || 0;
-            const remainingAmount = total - totalAdvancements;
+            const remainingAmount = Math.max(0, total - totalAdvancements);
 
             return {
               id: bon.id,
@@ -105,15 +113,14 @@ const BonLivraisonTable = () => {
               customerPhone: bon.client?.telephone || "",
               total: total,
               advancement: totalAdvancements,
-              remainingAmount: remainingAmount > 0 ? remainingAmount : 0,
+              remainingAmount: remainingAmount,
               status: bon.status || "brouillon",
               createdAt: new Date(bon.date_creation || bon.createdAt),
               createdAtString: new Date(
                 bon.date_creation || bon.createdAt,
               ).toLocaleDateString("fr-FR"),
-              date_livraison: bon.date_livraison
-                ? new Date(bon.date_livraison).toLocaleDateString("fr-FR")
-                : "",
+              date_livraison: bon.date_livraison,
+              date_creation: bon.date_creation,
               mode_reglement: bon.mode_reglement || "espèces",
               remise: parseFloat(bon.remise) || 0,
               montant_ht: parseFloat(bon.montant_ht) || 0,
@@ -148,44 +155,54 @@ const BonLivraisonTable = () => {
 
   // Calculate statistics from bookings data
   const calculateStatistics = (data) => {
-    if (!data || data.length === 0) {
+    if (!data || !Array.isArray(data) || data.length === 0) {
       resetStatistics();
       return;
     }
 
+    // S'assurer que toutes les valeurs sont des nombres
     const totalBons = data.length;
-    const totalAmount = data.reduce((sum, bon) => sum + (bon.total || 0), 0);
-    const totalAdvancements = data.reduce(
-      (sum, bon) => sum + (bon.advancement || 0),
-      0,
-    );
-    const totalRemaining = data.reduce(
-      (sum, bon) => sum + (bon.remainingAmount || 0),
-      0,
-    );
+    const totalAmount =
+      parseFloat(
+        data.reduce((sum, bon) => sum + (parseFloat(bon.total) || 0), 0),
+      ) || 0;
+    const totalAdvancements =
+      parseFloat(
+        data.reduce((sum, bon) => sum + (parseFloat(bon.advancement) || 0), 0),
+      ) || 0;
+    const totalRemaining =
+      parseFloat(
+        data.reduce(
+          (sum, bon) => sum + (parseFloat(bon.remainingAmount) || 0),
+          0,
+        ),
+      ) || 0;
 
     const paidBons = data.filter((bon) => bon.status === "payé").length;
     const draftBons = data.filter((bon) => bon.status === "brouillon").length;
     const partiallyPaidBons = data.filter(
-      (bon) => bon.status === "partiellement payé",
+      (bon) => bon.status === "partiellement_payée",
     ).length;
-    const cancelledBons = data.filter((bon) => bon.status === "annulé").length;
+    const cancelledBons = data.filter((bon) => bon.status === "annulée").length;
 
-    const averageAmount = totalBons > 0 ? totalAmount / totalBons : 0;
+    const averageAmount =
+      totalBons > 0 ? parseFloat(totalAmount / totalBons) : 0;
     const completionRate =
-      totalBons > 0 ? ((totalAmount - totalRemaining) / totalAmount) * 100 : 0;
+      totalAmount > 0
+        ? parseFloat(((totalAmount - totalRemaining) / totalAmount) * 100)
+        : 0;
 
     setStatistics({
-      totalBons,
-      totalAmount,
-      totalAdvancements,
-      totalRemaining,
-      paidBons,
-      draftBons,
-      partiallyPaidBons,
-      cancelledBons,
-      averageAmount,
-      completionRate,
+      totalBons: totalBons || 0,
+      totalAmount: totalAmount || 0,
+      totalAdvancements: totalAdvancements || 0,
+      totalRemaining: totalRemaining || 0,
+      paidBons: paidBons || 0,
+      draftBons: draftBons || 0,
+      partiallyPaidBons: partiallyPaidBons || 0,
+      cancelledBons: cancelledBons || 0,
+      averageAmount: averageAmount || 0,
+      completionRate: completionRate || 0,
     });
   };
 
@@ -241,9 +258,9 @@ const BonLivraisonTable = () => {
       brouillon: "bg-secondary text-white",
       envoyé: "bg-primary text-white",
       payé: "bg-success text-white",
-      "partiellement payé": "bg-warning text-dark",
+      partiellement_payée: "bg-warning text-dark",
       en_retard: "bg-danger text-white",
-      annulé: "bg-dark text-white",
+      annulée: "bg-dark text-white",
       en_attente: "bg-info text-white",
     };
     return colors[status] || "bg-secondary text-white";
@@ -254,9 +271,9 @@ const BonLivraisonTable = () => {
       brouillon: "Brouillon",
       envoyé: "Envoyé",
       payé: "Payé",
-      "partiellement payé": "Partiellement Payé",
+      partiellement_payée: "Partiellement Payé",
       en_retard: "En Retard",
-      annulé: "Annulé",
+      annulée: "Annulé",
       en_attente: "En Attente",
     };
     return texts[status] || status;
@@ -476,7 +493,7 @@ const BonLivraisonTable = () => {
       accessorKey: "total",
       header: () => "Total a Payer",
       cell: ({ getValue }) => (
-        <span>{parseFloat(getValue()).toFixed(2)} Dh</span>
+        <span>{safeToFixed(parseFloat(getValue() || 0))} Dh</span>
       ),
     },
     {
@@ -635,10 +652,10 @@ const BonLivraisonTable = () => {
                 <div>
                   <h6 className="text-muted mb-1">Montant Total</h6>
                   <h3 className="mb-0">
-                    {statistics.totalAmount.toFixed(2)} Dh
+                    {safeToFixed(statistics.totalAmount)} Dh
                   </h3>
                   <small className="text-muted">
-                    Moyenne: {statistics.averageAmount.toFixed(2)} Dh
+                    Moyenne: {safeToFixed(statistics.averageAmount)} Dh
                   </small>
                 </div>
               </CardBody>
@@ -692,7 +709,7 @@ const BonLivraisonTable = () => {
                   <h6 className="text-muted mb-1">Partiellement Payés</h6>
                   <h3 className="mb-0">{statistics.partiallyPaidBons}</h3>
                   <small className="text-muted">
-                    {statistics.totalAdvancements.toFixed(2)} Dh d'avances
+                    {safeToFixed(statistics.totalAdvancements)} Dh d'avances
                   </small>
                 </div>
               </CardBody>
@@ -709,7 +726,7 @@ const BonLivraisonTable = () => {
                 <div>
                   <h6 className="text-muted mb-1">Reste à Payer</h6>
                   <h3 className="mb-0">
-                    {statistics.totalRemaining.toFixed(2)} Dh
+                    {safeToFixed(statistics.totalRemaining)} Dh
                   </h3>
                   <small className="text-muted">
                     {statistics.totalAmount > 0
@@ -731,11 +748,11 @@ const BonLivraisonTable = () => {
                 <div>
                   <h6 className="text-muted mb-1">Taux de Paiement</h6>
                   <h3 className="mb-0">
-                    {statistics.completionRate.toFixed(1)}%
+                    {safeToFixed(statistics.completionRate, 1)}%
                   </h3>
                   <small className="text-muted">
                     {statistics.totalAmount > 0
-                      ? `${(statistics.totalAmount - statistics.totalRemaining).toFixed(2)} Dh collectés`
+                      ? `${safeToFixed(statistics.totalAmount - statistics.totalRemaining)} Dh collectés`
                       : "0 Dh collectés"}
                   </small>
                 </div>

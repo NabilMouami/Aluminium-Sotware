@@ -216,6 +216,7 @@ const createBonAchat = async (req, res) => {
       mode_reglement,
       remise = 0,
       notes = "",
+      updateStock = true, // Option to control stock update
     } = req.body;
 
     console.log("Bon Achat Items:", JSON.stringify(req.body));
@@ -256,13 +257,22 @@ const createBonAchat = async (req, res) => {
     // Vérifier les produits
     const produitsVerifies = [];
     for (const item of produits) {
-      const produit = await Produit.findByPk(item.produitId, { transaction });
+      const produit = await Produit.findByPk(item.produitId, {
+        transaction,
+        lock: transaction.LOCK.UPDATE, // Lock the product for update
+      });
 
       if (!produit) {
         throw new Error(`Produit ${item.produitId} non trouvé`);
       }
 
       const quantite = parseInt(item.quantite) || 1;
+      if (quantite <= 0) {
+        throw new Error(
+          `Quantité invalide pour le produit ${produit.designation}`,
+        );
+      }
+
       const prix_unitaire =
         parseFloat(item.prix_unitaire) || produit.prix_achat || 0;
       const remise_ligne = parseFloat(item.remise_ligne) || 0;
@@ -303,7 +313,7 @@ const createBonAchat = async (req, res) => {
       { transaction },
     );
 
-    // Ajouter les produits
+    // Ajouter les produits et mettre à jour le stock
     for (const produitVerifie of produitsVerifies) {
       const {
         produit,
@@ -326,8 +336,45 @@ const createBonAchat = async (req, res) => {
         { transaction },
       );
 
-      // NE PAS modifier le stock à la création, seulement à la réception
-      // Le stock sera augmenté lors de la réception des produits
+      // Mettre à jour le stock du produit si updateStock est true
+      if (updateStock !== false) {
+        // Default to true if not specified
+        // Augmenter la quantité du produit
+        const nouvelleQuantite = (parseFloat(produit.qty) || 0) + quantite;
+
+        await Produit.update(
+          {
+            qty: nouvelleQuantite,
+            // Optionnel: mettre à jour le dernier prix d'achat
+            prix_achat: prix_unitaire,
+            date_modification: new Date(),
+          },
+          {
+            where: { id: item.produitId },
+            transaction,
+          },
+        );
+
+        // Optionnel: créer une entrée dans l'historique des mouvements de stock
+        try {
+          await MouvementStock.create(
+            {
+              produit_id: item.produitId,
+              type_mouvement: "achat",
+              quantite: quantite,
+              quantite_avant: parseFloat(produit.qty) || 0,
+              quantite_apres: nouvelleQuantite,
+              reference: `BA-${num_bon_achat}`,
+              notes: `Bon d'achat ${num_bon_achat}`,
+              created_at: new Date(),
+            },
+            { transaction },
+          );
+        } catch (historyError) {
+          console.warn("Erreur création historique stock:", historyError);
+          // Ne pas annuler la transaction pour cette erreur mineure
+        }
+      }
     }
 
     // Commit transaction
@@ -355,10 +402,24 @@ const createBonAchat = async (req, res) => {
       ],
     });
 
+    // Récupérer les produits avec leurs nouvelles quantités
+    const updatedProduits = await Promise.all(
+      createdBon.produits.map(async (produit) => {
+        const updatedProduit = await Produit.findByPk(produit.id);
+        return {
+          ...produit.toJSON(),
+          qty: updatedProduit.qty,
+        };
+      }),
+    );
+
+    createdBon.produits = updatedProduits;
+
     res.status(201).json({
       success: true,
       message: "Bon d'achat créé avec succès",
       bon: createdBon,
+      stockUpdated: updateStock !== false,
     });
   } catch (error) {
     // Rollback transaction
@@ -373,7 +434,6 @@ const createBonAchat = async (req, res) => {
     });
   }
 };
-
 // Mettre à jour un bon d'achat
 const updateBonAchat = async (req, res) => {
   let transaction;

@@ -59,16 +59,35 @@ const DevisCreate = () => {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      const clientOptions = (response.data?.clients || []).map((client) => ({
-        value: client.id,
-        label: `${client.nom_complete} ${client.telephone ? `- ${client.telephone}` : ""}`,
-        ...client,
-      }));
+      const clientOptions = (response.data?.clients || []).map((client) => {
+        const refPart = client.reference ? `(${client.reference}) ` : "";
+
+        // Ensure all required properties exist with fallback values
+        const nom_complete = client.nom_complete || "";
+        const telephone = client.telephone || "";
+        const reference = client.reference || "";
+
+        return {
+          value: client.id,
+          label: `${refPart}${nom_complete}${telephone ? ` - ${telephone}` : ""}`,
+          searchText: [
+            nom_complete.toLowerCase(),
+            telephone.toLowerCase(),
+            reference.toLowerCase(),
+          ].join(" "),
+          nom_complete,
+          telephone,
+          reference,
+          address: client.address || "",
+          ville: client.ville || "",
+        };
+      });
 
       setClients(clientOptions);
     } catch (error) {
       console.error("Error fetching clients:", error);
       topTost("Erreur lors du chargement des clients", "error");
+      setClients([]); // Set empty array on error
     }
   };
 
@@ -367,6 +386,8 @@ const DevisCreate = () => {
       })),
     };
 
+    console.log("Payload to send:", payload); // Debug log
+
     const result = await MySwal.fire({
       title: "Créer le devis ?",
       html: `
@@ -425,7 +446,6 @@ const DevisCreate = () => {
               mode_reglement: "espèces",
               remise: 0,
               notes: "",
-
               date_creation: new Date().toISOString().split("T")[0],
             });
           }
@@ -477,8 +497,8 @@ const DevisCreate = () => {
         </button>
       </PageHeader>
 
-      <div className="row">
-        <div className="col-lg-8 mt-4">
+      <div className="col">
+        <div className="col-lg-12 mt-4">
           <div className="card">
             <div className="card-header">
               <h5 className="card-title mb-0">
@@ -511,17 +531,32 @@ const DevisCreate = () => {
                       isSearchable
                       required
                       noOptionsMessage={() => "Aucun client trouvé"}
+                      filterOption={(option, rawInput) => {
+                        if (!rawInput) return true;
+                        const search = rawInput.toLowerCase().trim();
+
+                        // Create search text from available properties
+                        const searchableText = [
+                          option.data?.nom_complete || "",
+                          option.data?.telephone || "",
+                          option.data?.reference || "",
+                          option.data?.ville || "",
+                          option.data?.address || "",
+                        ]
+                          .map((text) => text.toLowerCase())
+                          .join(" ");
+
+                        return searchableText.includes(search);
+                      }}
                       styles={{
                         control: (base) => ({
                           ...base,
                           minHeight: "45px",
                           borderColor: "#dee2e6",
-                          "&:hover": {
-                            borderColor: "#405189",
-                          },
+                          "&:hover": { borderColor: "#405189" },
                         }),
                       }}
-                    />
+                    />{" "}
                   </div>
 
                   <div className="col-md-6">
@@ -699,9 +734,6 @@ const DevisCreate = () => {
                           Quantité
                         </th>
                         <th width="12%" className="text-center">
-                          Unité
-                        </th>
-                        <th width="12%" className="text-center">
                           Remise
                         </th>
                         <th width="12%" className="text-center">
@@ -723,20 +755,6 @@ const DevisCreate = () => {
                               <small className="text-muted d-block">
                                 {produit.designation}
                               </small>
-                              <div className="mt-2">
-                                <input
-                                  type="text"
-                                  className="form-control form-control-sm"
-                                  value={produit.description}
-                                  onChange={(e) =>
-                                    updateProduitDescription(
-                                      index,
-                                      e.target.value,
-                                    )
-                                  }
-                                  placeholder="Description..."
-                                />
-                              </div>
                             </div>
                           </td>
                           <td className="text-center">
@@ -797,24 +815,6 @@ const DevisCreate = () => {
                             </div>
                           </td>
                           <td className="text-center">
-                            <select
-                              className="form-select form-select-sm"
-                              value={produit.unite}
-                              onChange={(e) =>
-                                updateProduitUnite(index, e.target.value)
-                              }
-                            >
-                              <option value="unité">Unité</option>
-                              <option value="kg">KG</option>
-                              <option value="m">Mètre</option>
-                              <option value="m²">Mètre²</option>
-                              <option value="L">Litre</option>
-                              <option value="heure">Heure</option>
-                              <option value="jour">Jour</option>
-                              <option value="lot">Lot</option>
-                            </select>
-                          </td>
-                          <td className="text-center">
                             <div className="input-group input-group-sm">
                               <input
                                 type="number"
@@ -866,7 +866,7 @@ const DevisCreate = () => {
           </div>
         </div>
 
-        <div className="col-lg-4 mt-4">
+        <div className="col-lg-12 mt-4">
           <div className="card">
             <div className="card-header">
               <h5 className="card-title mb-0">
@@ -921,7 +921,11 @@ const DevisCreate = () => {
                 >
                   {loading ? (
                     <>
-                      <span className="spinner-border spinner-border-sm me-2"></span>
+                      <span
+                        className="spinner-border spinner-border-sm me-2"
+                        role="status"
+                        aria-hidden="true"
+                      ></span>
                       Création en cours...
                     </>
                   ) : (
@@ -937,11 +941,10 @@ const DevisCreate = () => {
                   onClick={() => {
                     setSelectedProduits([]);
                     setFormData({
-                      client_id: formData.client_id,
-                      mode_reglement: formData.mode_reglement,
+                      client_id: "",
+                      mode_reglement: "espèces",
                       remise: 0,
                       notes: "",
-
                       date_creation: new Date().toISOString().split("T")[0],
                     });
                   }}

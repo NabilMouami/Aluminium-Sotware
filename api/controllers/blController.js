@@ -144,16 +144,26 @@ const getBonById = async (req, res) => {
   try {
     const { id } = req.params;
 
+    console.log("Fetching bon with ID:", id);
+
+    // TEST: Vérifiez d'abord ce que Sequelize récupère
     const bon = await BonLivraison.findByPk(id, {
       include: [
         {
           model: Client,
-          as: "client", // Add this line
-          attributes: ["id", "nom_complete", "telephone", "address", "ville"],
+          as: "client",
+          attributes: [
+            "id",
+            "nom_complete",
+            "telephone",
+            "address",
+            "ville",
+            "reference",
+          ],
         },
         {
           model: Produit,
-          as: "produits", // Add this line
+          as: "produits",
           through: {
             attributes: [
               "quantite",
@@ -162,11 +172,18 @@ const getBonById = async (req, res) => {
               "total_ligne",
             ],
           },
-          attributes: ["id", "reference", "designation", "qty", "prix_achat"],
+          attributes: [
+            "id",
+            "reference",
+            "designation",
+            "qty",
+            "prix_achat",
+            "prix_vente",
+          ],
         },
         {
           model: Advancement,
-          as: "advancements", // Add this line if you want to include advancements
+          as: "advancements",
           attributes: [
             "id",
             "amount",
@@ -187,28 +204,100 @@ const getBonById = async (req, res) => {
       });
     }
 
-    // Optional: Calculate total advancements and remaining amount
-    const bonJSON = bon.toJSON();
-    let totalAdvancements = 0;
-    if (bonJSON.advancements && bonJSON.advancements.length > 0) {
-      totalAdvancements = bonJSON.advancements.reduce((sum, advance) => {
-        return sum + (parseFloat(advance.amount) || 0);
-      }, 0);
+    // DEBUG: Affichez la structure
+    console.log("Bon récupéré:", bon.id);
+    console.log("Bon client:", bon.client ? "Oui" : "Non");
+    console.log("Bon produits:", bon.produits ? bon.produits.length : 0);
+    console.log(
+      "Bon advancements:",
+      bon.advancements ? bon.advancements.length : "Pas d'association",
+    );
+
+    // SI advancements est vide, cherchez-les manuellement
+    let advancementsArray = [];
+    if (!bon.advancements || bon.advancements.length === 0) {
+      console.log("Chercher advancements manuellement...");
+
+      // Option 1: Avec le nom de champ actuel
+      advancementsArray = await Advancement.findAll({
+        where: { bonLivraisonId: id },
+        attributes: [
+          "id",
+          "amount",
+          "paymentDate",
+          "paymentMethod",
+          "reference",
+          "notes",
+          "createdAt",
+        ],
+        order: [["paymentDate", "ASC"]],
+      });
+
+      // Option 2: Si Option 1 ne fonctionne pas, essayez l'autre nom
+      if (advancementsArray.length === 0) {
+        console.log("Essayer avec bon_livraison_id...");
+        advancementsArray = await Advancement.findAll({
+          where: { bon_livraison_id: id },
+          attributes: [
+            "id",
+            "amount",
+            "paymentDate",
+            "paymentMethod",
+            "reference",
+            "notes",
+            "createdAt",
+          ],
+          order: [["paymentDate", "ASC"]],
+        });
+      }
+
+      console.log(
+        "Advancements trouvés manuellement:",
+        advancementsArray.length,
+      );
+    } else {
+      advancementsArray = bon.advancements;
     }
 
-    const montantTTC = parseFloat(bonJSON.montant_ttc) || 0;
-    const remainingAmount = montantTTC - totalAdvancements;
+    // Calculer les totaux
+    const totalAdvancements = advancementsArray.reduce((sum, advance) => {
+      return sum + (parseFloat(advance.amount) || 0);
+    }, 0);
 
-    res.json({
+    const montantTTC = parseFloat(bon.montant_ttc) || 0;
+    const remainingAmount = Math.max(montantTTC - totalAdvancements, 0);
+
+    // Préparer la réponse
+    const response = {
       success: true,
       bon: {
-        ...bonJSON,
+        ...bon.toJSON(),
+        advancements: advancementsArray,
         totalAdvancements: totalAdvancements.toFixed(2),
-        remainingAmount:
-          remainingAmount > 0 ? remainingAmount.toFixed(2) : "0.00",
-        isFullyPaid: remainingAmount <= 0,
+        remainingAmount: remainingAmount.toFixed(2),
+        isFullyPaid: remainingAmount === 0,
+        paymentStatus:
+          remainingAmount === 0
+            ? "Payé"
+            : totalAdvancements > 0
+              ? "Partiellement payé"
+              : "Non payé",
+        paymentPercentage:
+          montantTTC > 0
+            ? ((totalAdvancements / montantTTC) * 100).toFixed(2)
+            : "0.00",
       },
-    });
+      debug: {
+        bonId: id,
+        advancementsCount: advancementsArray.length,
+        fieldUsed:
+          advancementsArray.length > 0
+            ? "Trouvés avec requête manuelle"
+            : "Aucun trouvé",
+      },
+    };
+
+    res.json(response);
   } catch (error) {
     console.error("Erreur récupération bon:", error);
     res.status(500).json({
@@ -217,8 +306,7 @@ const getBonById = async (req, res) => {
       error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
-};
-// Créer un nouveau bon de livraison
+}; // Créer un nouveau bon de livraison
 const createBon = async (req, res) => {
   let transaction;
 
@@ -230,7 +318,7 @@ const createBon = async (req, res) => {
       remise = 0,
       notes = "",
       date_livraison,
-      advancements = [], // Array of advancements from request
+      advancements = [],
     } = req.body;
 
     console.log("Bon Livr Items:" + JSON.stringify(req.body));
@@ -280,7 +368,6 @@ const createBon = async (req, res) => {
 
       montant_ht += total_ligne;
 
-      // Stocker les données du produit vérifié
       produitsVerifies.push({
         produit,
         item,
@@ -294,7 +381,8 @@ const createBon = async (req, res) => {
     const remiseValue = parseFloat(remise) || 0;
     montant_ht -= remiseValue;
 
-    const montant_ttc = montant_ht;
+    // CALCUL DU MONTANT TTC (CORRIGÉ)
+    const montant_ttc = montant_ht; // HT = TTC (si pas de TVA)
 
     // Créer le bon de livraison
     const bonLivraison = await BonLivraison.create(
@@ -304,7 +392,8 @@ const createBon = async (req, res) => {
         mode_reglement: mode_reglement || "espèces",
         remise: remiseValue,
         montant_ht,
-        montant_ttc,
+        montant_ttc, // Montant total du bon
+        montant_restant: montant_ttc, // Montant restant à payer initial
         notes,
         date_livraison: date_livraison ? new Date(date_livraison) : null,
         date_creation: new Date(),
@@ -318,11 +407,11 @@ const createBon = async (req, res) => {
       const { produit, item, prix_unitaire, remise_ligne, total_ligne } =
         produitVerifie;
 
-      // Créer l'association - FIXED: Use correct field names from your associations
+      // Créer l'association
       await BonLivraisonProduit.create(
         {
-          bon_livraison_id: bonLivraison.id, // Changed from bonLivraisonId
-          produit_id: item.produitId, // Changed from produitId
+          bon_livraison_id: bonLivraison.id,
+          produit_id: item.produitId,
           quantite: item.quantite,
           prix_unitaire,
           remise_ligne,
@@ -335,12 +424,13 @@ const createBon = async (req, res) => {
       produit.qty -= item.quantite;
       await produit.save({ transaction });
     }
-    // Create advancements if provided
+
+    // Gestion des acomptes (CORRIGÉ)
     const createdAdvancements = [];
     let totalAdvancements = 0;
 
     if (advancements && advancements.length > 0) {
-      // Validate advancements
+      // Valider les acomptes
       for (const advance of advancements) {
         if (!advance.amount || advance.amount <= 0) {
           throw new Error("Le montant d'acompte doit être positif");
@@ -350,7 +440,7 @@ const createBon = async (req, res) => {
         }
       }
 
-      // Create advancements
+      // Créer les acomptes
       for (const advance of advancements) {
         const newAdvancement = await Advancement.create(
           {
@@ -368,19 +458,23 @@ const createBon = async (req, res) => {
         totalAdvancements += parseFloat(advance.amount);
       }
 
-      // Update bonLivraison status based on advancements
-      let newStatus = "brouillon";
-      if (totalAdvancements >= bonLivraison.montant_ttc) {
-        newStatus = "payé";
+      // Calculer le montant restant après acomptes
+      const montantRestant = montant_ttc - totalAdvancements;
+
+      // Mettre à jour le montant restant
+
+      // Mettre à jour le statut
+      if (totalAdvancements >= montant_ttc) {
+        bonLivraison.status = "payé";
+        bonLivraison.montant_restant = 0;
       } else if (totalAdvancements > 0) {
-        newStatus = "partiellement payé";
+        bonLivraison.status = "partiellement_payée";
+      } else {
+        bonLivraison.status = "brouillon";
       }
 
-      // Update status if changed
-      if (newStatus !== bonLivraison.status) {
-        bonLivraison.status = newStatus;
-        await bonLivraison.save({ transaction });
-      }
+      // Sauvegarder les modifications
+      await bonLivraison.save({ transaction });
     }
 
     // Commit transaction
@@ -429,7 +523,7 @@ const createBon = async (req, res) => {
       advancements: createdAdvancements,
     });
   } catch (error) {
-    // Rollback transaction only if it exists and hasn't been committed
+    // Rollback transaction
     if (transaction && !transaction.finished) {
       await transaction.rollback();
     }
@@ -442,38 +536,163 @@ const createBon = async (req, res) => {
     });
   }
 };
-
 // Mettre à jour un bon de livraison
-// Update Bon de Livraison
 const updateBon = async (req, res) => {
   let transaction;
 
   try {
     const { id } = req.params;
-    const { produits, mode_reglement, remise, notes, date_livraison, status } =
-      req.body;
+    const {
+      produits,
+      mode_reglement,
+      remise,
+      notes,
+      date_livraison,
+      status,
+      advancements,
+    } = req.body;
 
     transaction = await sequelize.transaction();
 
-    const bonLivraison = await BonLivraison.findByPk(id, { transaction });
+    const bonLivraison = await BonLivraison.findByPk(id, {
+      include: [
+        {
+          model: Advancement,
+          as: "advancements",
+        },
+      ],
+      transaction,
+    });
 
     if (!bonLivraison) {
       throw new Error("Bon de livraison non trouvé");
     }
 
-    if (["livré", "annulé"].includes(bonLivraison.status)) {
-      throw new Error(`Impossible de modifier un bon ${bonLivraison.status}`);
+    // === RÉCUPÉRER LES PRODUITS POUR RECALCULER LE SOUS-TOTAL ===
+    // CORRECTION: Utiliser le bon nom de colonne (bon_livraison_id au lieu de bonLivraisonId)
+    const produitsActuels = await BonLivraisonProduit.findAll({
+      where: { bon_livraison_id: id },
+      transaction,
+    });
+
+    // Calculer le sous-total actuel
+    let sousTotal = 0;
+    produitsActuels.forEach((item) => {
+      sousTotal += parseFloat(item.total_ligne) || 0;
+    });
+
+    // Appliquer la remise
+    const remiseValue =
+      parseFloat(remise) || parseFloat(bonLivraison.remise) || 0;
+
+    // RECALCULER LES MONTANTS
+    let montant_ht = Math.max(0, sousTotal - remiseValue);
+    let montant_ttc = montant_ht; // TTC = HT quand pas de TVA
+
+    // Mettre à jour les montants avec la nouvelle remise
+    bonLivraison.remise = remiseValue;
+    bonLivraison.montant_ht = montant_ht;
+    bonLivraison.montant_ttc = montant_ttc;
+
+    // Gestion des acomptes
+    if (advancements && Array.isArray(advancements)) {
+      console.log("Processing advancements for bon livraison:", advancements);
+
+      let totalAdvancements = 0;
+      const existingAdvancements = await Advancement.findAll({
+        where: { bon_livraison_id: id },
+        transaction,
+      });
+
+      // Map des advancements existants par leur ID
+      const existingAdvancementsMap = {};
+      existingAdvancements.forEach((adv) => {
+        existingAdvancementsMap[adv.id] = adv;
+      });
+
+      // Traiter chaque advancement
+      for (const advancementData of advancements) {
+        const {
+          id: advancementId,
+          amount,
+          paymentDate,
+          paymentMethod,
+          reference,
+          notes: advancementNotes,
+        } = advancementData;
+
+        // Valider le montant
+        if (!amount || amount <= 0) {
+          throw new Error(`Le montant de l'acompte doit être positif`);
+        }
+
+        // Si l'acompte a un ID, c'est une mise à jour
+        if (advancementId && existingAdvancementsMap[advancementId]) {
+          const existingAdvancement = existingAdvancementsMap[advancementId];
+
+          // Mettre à jour l'acompte existant
+          await existingAdvancement.update(
+            {
+              amount,
+              paymentDate: new Date(paymentDate),
+              paymentMethod,
+              reference: reference || null,
+              notes: advancementNotes || null,
+            },
+            { transaction },
+          );
+
+          // Marquer comme traité
+          delete existingAdvancementsMap[advancementId];
+        } else {
+          // C'est un nouvel acompte
+          await Advancement.create(
+            {
+              bon_livraison_id: id,
+              amount,
+              paymentDate: new Date(paymentDate),
+              paymentMethod,
+              reference: reference || null,
+              notes: advancementNotes || null,
+            },
+            { transaction },
+          );
+        }
+
+        totalAdvancements += parseFloat(amount);
+      }
+
+      // Supprimer les advancements qui ne sont plus dans la liste
+      const advancementsToDelete = Object.values(existingAdvancementsMap);
+      for (const advancementToDelete of advancementsToDelete) {
+        await advancementToDelete.destroy({ transaction });
+      }
+
+      // METTRE À JOUR LE STATUT DE PAIEMENT AVEC LES NOUVEAUX MONTANTS
+      if (totalAdvancements >= montant_ttc) {
+        bonLivraison.status = "payé";
+        bonLivraison.montant_restant = 0;
+      } else if (totalAdvancements > 0) {
+        bonLivraison.status = "partiellement_payée";
+        bonLivraison.montant_restant = montant_ttc - totalAdvancements;
+      } else {
+        bonLivraison.status = status || bonLivraison.status;
+        bonLivraison.montant_restant = montant_ttc;
+      }
     }
 
+    // Gestion des produits (si modification des produits)
     if (Array.isArray(produits) && produits.length > 0) {
+      // CORRECTION: Utiliser le bon nom de colonne
       const oldProduits = await BonLivraisonProduit.findAll({
-        where: { bonLivraisonId: id },
+        where: { bon_livraison_id: id },
         transaction,
       });
 
       // Restore stock from old products
       for (const oldItem of oldProduits) {
-        const produit = await Produit.findByPk(oldItem.produitId, {
+        const produit = await Produit.findByPk(oldItem.produit_id, {
+          // CORRECTION: produit_id au lieu de produitId
           transaction,
         });
         if (produit) {
@@ -483,12 +702,13 @@ const updateBon = async (req, res) => {
       }
 
       // Remove old products
+      // CORRECTION: Utiliser le bon nom de colonne
       await BonLivraisonProduit.destroy({
-        where: { bonLivraisonId: id },
+        where: { bon_livraison_id: id },
         transaction,
       });
 
-      let montant_ht = 0;
+      let montant_ht_new = 0;
 
       // Add new products
       for (const item of produits) {
@@ -513,12 +733,13 @@ const updateBon = async (req, res) => {
           2,
         );
 
-        montant_ht += total_ligne;
+        montant_ht_new += total_ligne;
 
+        // CORRECTION: Utiliser les bons noms de colonnes
         await BonLivraisonProduit.create(
           {
-            bonLivraisonId: id,
-            produitId: item.produitId,
+            bon_livraison_id: id,
+            produit_id: item.produitId,
             quantite,
             prix_unitaire,
             remise_ligne,
@@ -532,43 +753,42 @@ const updateBon = async (req, res) => {
         await produit.save({ transaction });
       }
 
-      // Calculate discounts
-      const remiseValue =
-        remise !== undefined
-          ? parseFloat(remise)
-          : parseFloat(bonLivraison.remise || 0);
-
-      // Apply discount
-      montant_ht = Math.max(montant_ht - remiseValue, 0);
+      // Recalculer avec la remise
+      montant_ht_new = Math.max(0, montant_ht_new - remiseValue);
 
       // Update bon amounts
-      // If you want to add TVA later, you can add these fields:
-      // const tva = 0; // Or get from bonLivraison.tva if it exists
-      // const montant_tva = (montant_ht * tva) / 100;
-      // const montant_ttc = montant_ht + montant_tva;
-
-      // For now, without TVA:
-      bonLivraison.montant_ht = montant_ht;
-      bonLivraison.montant_ttc = montant_ht; // TTC = HT when no TVA
+      bonLivraison.montant_ht = montant_ht_new;
+      bonLivraison.montant_ttc = montant_ht_new;
       bonLivraison.remise = remiseValue;
     }
 
-    // Update other fields if provided
+    // METTRE À JOUR LA DATE DE LIVRAISON
+    if (date_livraison !== undefined) {
+      bonLivraison.date_livraison = date_livraison
+        ? new Date(date_livraison)
+        : null;
+    }
+
+    // Mettre à jour les autres champs
     if (mode_reglement !== undefined)
       bonLivraison.mode_reglement = mode_reglement;
     if (notes !== undefined) bonLivraison.notes = notes;
-    if (date_livraison) bonLivraison.date_livraison = new Date(date_livraison);
-    if (status) bonLivraison.status = status;
 
-    console.log("Status Bon Livr:", status);
+    // Ne pas écraser le statut si il a été mis à jour automatiquement par les advancements
+    if (status && !advancements) {
+      bonLivraison.status = status;
+    }
 
     await bonLivraison.save({ transaction });
     await transaction.commit();
 
-    // Get updated bon with related data
+    // Récupérer le bon mis à jour avec toutes les relations
     const updatedBon = await BonLivraison.findByPk(id, {
       include: [
-        { model: Client, as: "client" },
+        {
+          model: Client,
+          as: "client",
+        },
         {
           model: Produit,
           as: "produits",
@@ -581,13 +801,41 @@ const updateBon = async (req, res) => {
             ],
           },
         },
+        {
+          model: Advancement,
+          as: "advancements",
+          attributes: [
+            "id",
+            "amount",
+            "paymentDate",
+            "paymentMethod",
+            "reference",
+            "notes",
+            "createdAt",
+          ],
+          order: [["paymentDate", "ASC"]],
+        },
       ],
     });
+
+    // Calculer le total des acomptes
+    const totalAdvancements = updatedBon.advancements.reduce(
+      (sum, adv) => sum + parseFloat(adv.amount || 0),
+      0,
+    );
+
+    const montantTTC = parseFloat(updatedBon.montant_ttc) || 0;
+    const remainingAmount = Math.max(0, montantTTC - totalAdvancements);
 
     return res.json({
       success: true,
       message: "Bon de livraison mis à jour avec succès",
-      bon: updatedBon,
+      bon: {
+        ...updatedBon.toJSON(),
+        totalAdvancements: totalAdvancements.toFixed(2),
+        remainingAmount: remainingAmount.toFixed(2),
+        isFullyPaid: remainingAmount === 0,
+      },
     });
   } catch (error) {
     if (transaction && !transaction.finished) await transaction.rollback();
@@ -608,7 +856,7 @@ const updateStatus = async (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
 
-    const validStatus = ["brouillon", "validé", "livré", "annulé", "facturé"];
+    const validStatus = ["brouillon", "validé", "livré", "annulée", "facturé"];
 
     if (!validStatus.includes(status)) {
       return res.status(400).json({
@@ -627,7 +875,7 @@ const updateStatus = async (req, res) => {
     }
 
     // Si on annule le bon, restaurer le stock
-    if (status === "annulé" && bonLivraison.status !== "annulé") {
+    if (status === "annulée" && bonLivraison.status !== "annulée") {
       const produits = await BonLivraisonProduit.findAll({
         where: { bonLivraisonId: id },
         transaction,
@@ -641,7 +889,7 @@ const updateStatus = async (req, res) => {
     }
 
     // Si on passe de annulé à un autre status, diminuer le stock
-    if (bonLivraison.status === "annulé" && status !== "annulé") {
+    if (bonLivraison.status === "annulée" && status !== "annulée") {
       const produits = await BonLivraisonProduit.findAll({
         where: { bonLivraisonId: id },
         transaction,
@@ -708,21 +956,23 @@ const deleteBon = async (req, res) => {
       throw new Error(`Impossible de supprimer un bon ${bonLivraison.status}`);
     }
 
-    // Restaurer le stock
+    // Restaurer le stock - CORRECTED COLUMN NAME
     const produits = await BonLivraisonProduit.findAll({
-      where: { bonLivraisonId: id },
+      where: { bon_livraison_id: id }, // Changed from bonLivraisonId to bon_livraison_id
       transaction,
     });
 
     for (const item of produits) {
-      const produit = await Produit.findByPk(item.produitId, { transaction });
-      produit.qty += item.quantite;
-      await produit.save({ transaction });
+      const produit = await Produit.findByPk(item.produit_id, { transaction }); // Also check if this should be produit_id
+      if (produit) {
+        produit.qty += item.quantite;
+        await produit.save({ transaction });
+      }
     }
 
-    // Supprimer les associations
+    // Supprimer les associations - CORRECTED COLUMN NAME
     await BonLivraisonProduit.destroy({
-      where: { bonLivraisonId: id },
+      where: { bon_livraison_id: id }, // Changed from bonLivraisonId to bon_livraison_id
       transaction,
     });
 
@@ -745,7 +995,6 @@ const deleteBon = async (req, res) => {
     });
   }
 };
-
 // Obtenir les statistiques
 const getStats = async (req, res) => {
   try {
@@ -857,7 +1106,7 @@ const getBonsByClient = async (req, res) => {
       if (totalAdvancements >= montantTTC) {
         paymentStatus = "payé";
       } else if (totalAdvancements > 0) {
-        paymentStatus = "partiellement_payé";
+        paymentStatus = "partiellement_payée";
       }
 
       // Nombre de produits

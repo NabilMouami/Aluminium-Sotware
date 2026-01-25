@@ -16,12 +16,14 @@ import {
   FiTag,
   FiClipboard,
   FiUser,
+  FiRefreshCw,
 } from "react-icons/fi";
 import { config_url } from "@/utils/config";
 import Swal from "sweetalert2";
 import { Input, InputGroup, InputGroupText, Label, Badge } from "reactstrap";
 import withReactContent from "sweetalert2-react-content";
 import { Link } from "react-router-dom";
+import BonAvoirDetailsModal from "./BonAvoirDetailsModal"; // Import the modal
 
 const MySwal = withReactContent(Swal);
 
@@ -57,6 +59,8 @@ const BonAvoirTable = () => {
     },
   ]);
   const [loading, setLoading] = useState(true);
+  const [selectedBonAvoir, setSelectedBonAvoir] = useState(null); // Add this state
+  const [showModal, setShowModal] = useState(false); // Add this state
 
   useEffect(() => {
     fetchBonsAvoir();
@@ -113,6 +117,18 @@ const BonAvoirTable = () => {
             return sum + (parseInt(produit.BonAvoirProduit?.quantite) || 0);
           }, 0);
 
+          // Calculate total amount from products if not provided
+          let montant_total = parseFloat(bon.montant_total) || 0;
+          if (montant_total === 0 && produits.length > 0) {
+            montant_total = produits.reduce((sum, produit) => {
+              const quantite = parseInt(produit.BonAvoirProduit?.quantite) || 0;
+              const prix_unitaire =
+                parseFloat(produit.BonAvoirProduit?.prix_unitaire) || 0;
+              const remise = parseFloat(produit.BonAvoirProduit?.remise) || 0;
+              return sum + (prix_unitaire * quantite - remise);
+            }, 0);
+          }
+
           // Format client info
           const clientInfo = bon.client
             ? `${bon.client.nom_complete}`
@@ -130,8 +146,9 @@ const BonAvoirTable = () => {
             num_bon_avoir: bon.num_bon_avoir,
             client_name: clientInfo,
             client_phone: bon.client?.telephone || "",
+            client_address: bon.client?.address || "",
             bon_livraison_ref: bonLivraisonInfo,
-            montant_total: parseFloat(bon.montant_total) || 0,
+            montant_total: montant_total,
             motif: bon.motif,
             status: bon.status,
             date_creation: new Date(bon.date_creation || bon.createdAt),
@@ -175,7 +192,7 @@ const BonAvoirTable = () => {
 
   const getStatusColor = (status) => {
     const colors = {
-      brouillon: "secondary",
+      brouillon: "warning",
       valide: "primary",
       utilise: "success",
       annule: "danger",
@@ -256,56 +273,10 @@ const BonAvoirTable = () => {
     }
   };
 
+  // Updated handleViewBon to use modal
   const handleViewBon = (bon) => {
-    // Show details in a modal or navigate to details page
-    MySwal.fire({
-      title: `Bon d'Avoir ${bon.num_bon_avoir}`,
-      html: `
-        <div class="text-start">
-          <div class="mb-3">
-            <strong>Client:</strong> ${bon.client_name}<br/>
-            <strong>Téléphone:</strong> ${bon.client_phone || "N/A"}
-          </div>
-          
-          <div class="mb-3">
-            <strong>Bon de Livraison:</strong> ${bon.bon_livraison_ref}<br/>
-            <strong>Motif:</strong> <span class="badge bg-${getMotifColor(bon.motif)}">${getMotifText(bon.motif)}</span><br/>
-            <strong>Statut:</strong> <span class="badge bg-${getStatusColor(bon.status)}">${getStatusText(bon.status)}</span>
-          </div>
-          
-          <div class="mb-3">
-            <strong>Montant total:</strong> ${bon.montant_total.toFixed(2)} DH<br/>
-            <strong>Date création:</strong> ${bon.date_creation_string}<br/>
-            ${bon.utilise_le ? `<strong>Utilisé le:</strong> ${bon.utilise_le}<br/>` : ""}
-          </div>
-          
-          <div class="mb-3">
-            <strong>Produits (${bon.produits_count}):</strong>
-            <ul class="mb-0">
-              ${bon.produits
-                .map(
-                  (p) => `
-                <li>${p.reference} - ${p.designation} (${p.BonAvoirProduit.quantite} x ${p.BonAvoirProduit.prix_unitaire} DH)</li>
-              `,
-                )
-                .join("")}
-            </ul>
-          </div>
-          
-          ${bon.notes ? `<div><strong>Notes:</strong> ${bon.notes}</div>` : ""}
-        </div>
-      `,
-      showConfirmButton: true,
-      confirmButtonText: "Fermer",
-      showCancelButton: true,
-      cancelButtonText: "Voir détails",
-      reverseButtons: true,
-    }).then((result) => {
-      if (result.dismiss === Swal.DismissReason.cancel) {
-        // Navigate to details page
-        window.location.href = `/bon-avoirs/${bon.id}`;
-      }
-    });
+    setSelectedBonAvoir(bon);
+    setShowModal(true);
   };
 
   const handleValiderBon = async (bonId) => {
@@ -324,8 +295,8 @@ const BonAvoirTable = () => {
       try {
         const token =
           localStorage.getItem("token") || sessionStorage.getItem("token");
-        await axios.put(
-          `${config_url}/api/bon-avoirs/${bonId}/valider`,
+        await axios.patch(
+          `${config_url}/api/bon-avoirs/${bonId}/validate`,
           {},
           {
             headers: { Authorization: `Bearer ${token}` },
@@ -365,8 +336,8 @@ const BonAvoirTable = () => {
       try {
         const token =
           localStorage.getItem("token") || sessionStorage.getItem("token");
-        await axios.put(
-          `${config_url}/api/bon-avoirs/${bonId}/annuler`,
+        await axios.patch(
+          `${config_url}/api/bon-avoirs/${bonId}/cancel`,
           {},
           {
             headers: { Authorization: `Bearer ${token}` },
@@ -388,6 +359,26 @@ const BonAvoirTable = () => {
         topTost(errorMsg, "error");
       }
     }
+  };
+
+  // Handle updates from modal
+  const handleUpdate = (updatedBonAvoir) => {
+    setBons((prev) =>
+      prev.map((bon) =>
+        bon.id === updatedBonAvoir.id ? updatedBonAvoir : bon,
+      ),
+    );
+    topTost("Bon d'avoir mis à jour avec succès!", "success");
+  };
+
+  // Handle validate from modal
+  const handleValidate = (bonAvoir) => {
+    setBons((prev) =>
+      prev.map((bon) =>
+        bon.id === bonAvoir.id ? { ...bon, status: "valide" } : bon,
+      ),
+    );
+    topTost("Bon d'avoir validé avec succès!", "success");
   };
 
   const columns = [
@@ -428,15 +419,24 @@ const BonAvoirTable = () => {
     {
       accessorKey: "num_bon_avoir",
       header: () => "N° Bon Avoir",
-      cell: ({ getValue }) => (
-        <span className="font-mono fw-bold">{getValue()}</span>
+      cell: ({ getValue, row }) => (
+        <span
+          className="font-mono fw-bold"
+          style={{ cursor: "pointer", color: "#007bff" }}
+          onClick={() => handleViewBon(row.original)}
+        >
+          {getValue()}
+        </span>
       ),
     },
     {
       accessorKey: "client_name",
       header: () => "Client",
-      cell: ({ getValue }) => (
-        <div>
+      cell: ({ getValue, row }) => (
+        <div
+          style={{ cursor: "pointer" }}
+          onClick={() => handleViewBon(row.original)}
+        >
           <FiUser className="me-1" />
           <span>{getValue()}</span>
         </div>
@@ -665,13 +665,27 @@ const BonAvoirTable = () => {
           </div>
 
           <div>
-            <Link to="/bon-avoirs/create">
+            <Link to="/bon-avoir/create">
               <button className="btn btn-sm btn-success">
                 <FiPlusCircle className="me-2" />
                 Créer Nouveau Bon d'Avoir
               </button>
             </Link>
           </div>
+
+          {/* Refresh Button */}
+          <button
+            className="btn btn-sm btn-outline-info"
+            onClick={fetchBonsAvoir}
+            disabled={loading}
+          >
+            <FiRefreshCw
+              className={
+                loading ? "spinner-border spinner-border-sm me-1" : "me-1"
+              }
+            />
+            {loading ? "Chargement..." : "Actualiser"}
+          </button>
         </div>
 
         {/* Statistics Cards */}
@@ -758,7 +772,7 @@ const BonAvoirTable = () => {
               : "Aucun résultat ne correspond à vos filtres"}
           </p>
           {bons.length === 0 && (
-            <Link to="/bon-avoirs/create">
+            <Link to="/bon-avoir/create">
               <button className="btn btn-primary mt-2">
                 <FiPlusCircle className="me-2" />
                 Créer votre premier bon d'avoir
@@ -767,6 +781,15 @@ const BonAvoirTable = () => {
           )}
         </div>
       )}
+
+      {/* Add the modal here */}
+      <BonAvoirDetailsModal
+        isOpen={showModal}
+        toggle={() => setShowModal(!showModal)}
+        bonAvoir={selectedBonAvoir}
+        onUpdate={handleUpdate}
+        onValidate={handleValidate}
+      />
     </>
   );
 };

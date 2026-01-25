@@ -600,6 +600,8 @@ const FactureTable = () => {
           clientId: factureData.client_id,
           totalHT: parseFloat(factureData.montant_ht) || 0,
           tva: parseFloat(factureData.tva) || 0,
+          remise_total: parseFloat(factureData.remise_total) || 0,
+
           montantTVA: parseFloat(factureData.montant_tva) || 0,
           totalTTC: parseFloat(factureData.montant_ttc) || 0,
           paidAmount: parseFloat(factureData.montant_paye) || 0,

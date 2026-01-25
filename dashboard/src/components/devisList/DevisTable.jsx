@@ -12,11 +12,6 @@ import {
   FiPlusCircle,
   FiTrash,
   FiFileText,
-  FiCheckCircle,
-  FiXCircle,
-  FiClock,
-  FiSend,
-  FiEdit,
   FiRefreshCw,
 } from "react-icons/fi";
 import { config_url } from "@/utils/config";
@@ -36,7 +31,8 @@ const statusOptions = [
   { value: "accepté", label: "Accepté" },
   { value: "refusé", label: "Refusé" },
   { value: "expiré", label: "Expiré" },
-  { value: "transformé_en_commande", label: "Transformé en Commande" },
+  { value: "transformé_en_facture", label: "Transformé en Facture" },
+  { value: "transformé_en_bl", label: "Transformé en BL" },
   { value: "en_attente", label: "En Attente" },
 ];
 
@@ -171,6 +167,9 @@ const ListDevis = () => {
       refusé: "bg-danger text-white",
       expiré: "bg-dark text-white",
       transformé_en_commande: "bg-info text-white",
+      transformé_en_bl: "bg-info text-white",
+      transformé_en_facture: "bg-red text-white",
+
       en_attente: "bg-warning text-dark",
     };
     return colors[status] || "bg-secondary text-white";
@@ -183,10 +182,26 @@ const ListDevis = () => {
       accepté: "Accepté",
       refusé: "Refusé",
       expiré: "Expiré",
-      transformé_en_commande: "Transformé en Commande",
+      transformé_en_bl: "Transformé en Bon Livraison",
+      transformé_en_facture: "Transformé en Facture",
       en_attente: "En Attente",
     };
     return texts[status] || status;
+  };
+
+  const handleDevisUpdated = (updatedDevis) => {
+    setDevisList((prev) =>
+      prev.map((item) =>
+        item.id === updatedDevis.id ? { ...item, ...updatedDevis } : item,
+      ),
+    );
+
+    // Also update filtered list (important!)
+    setFilteredDevis((prev) =>
+      prev.map((item) =>
+        item.id === updatedDevis.id ? { ...item, ...updatedDevis } : item,
+      ),
+    );
   };
 
   const handleDeleteDevis = async (devisId) => {
@@ -315,76 +330,6 @@ const ListDevis = () => {
     }
   };
 
-  const handleSendDevis = async (devisId) => {
-    const result = await MySwal.fire({
-      title: "Envoyer ce devis ?",
-      text: "Voulez-vous marquer ce devis comme 'envoyé' au client ?",
-      icon: "question",
-      showCancelButton: true,
-      confirmButtonColor: "#3085d6",
-      cancelButtonColor: "#d33",
-      confirmButtonText: "Oui, envoyer",
-      cancelButtonText: "Annuler",
-    });
-
-    if (result.isConfirmed) {
-      await handleUpdateStatus(devisId, "envoyé");
-    }
-  };
-
-  const handleConvertToBL = async (devisId) => {
-    const result = await MySwal.fire({
-      title: "Convertir en Bon de Livraison ?",
-      text: "Voulez-vous convertir ce devis en bon de livraison ?",
-      icon: "question",
-      showCancelButton: true,
-      confirmButtonColor: "#3085d6",
-      cancelButtonColor: "#d33",
-      confirmButtonText: "Oui, convertir",
-      cancelButtonText: "Annuler",
-    });
-
-    if (result.isConfirmed) {
-      try {
-        const token =
-          localStorage.getItem("token") || sessionStorage.getItem("token");
-        const response = await axios.post(
-          `${config_url}/api/devis/${devisId}/convert-to-bl`,
-          {},
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          },
-        );
-
-        if (response.data.success) {
-          // Update devis status
-          await handleUpdateStatus(devisId, "transformé_en_commande");
-
-          topTost("Devis converti en bon de livraison avec succès", "success");
-
-          // Optionally redirect to the new BL
-          MySwal.fire({
-            title: "Conversion réussie !",
-            text: "Voulez-vous voir le bon de livraison créé ?",
-            icon: "success",
-            showCancelButton: true,
-            confirmButtonText: "Voir le BL",
-            cancelButtonText: "Rester ici",
-          }).then((result) => {
-            if (result.isConfirmed && response.data.bonLivraison) {
-              window.location.href = `/bon-livraisons/${response.data.bonLivraison.id}`;
-            }
-          });
-        }
-      } catch (error) {
-        console.error("Error converting devis:", error);
-        const errorMsg =
-          error.response?.data?.message || "Erreur lors de la conversion";
-        topTost(errorMsg, "error");
-      }
-    }
-  };
-
   const columns = [
     {
       accessorKey: "id",
@@ -449,15 +394,6 @@ const ListDevis = () => {
       ),
     },
     {
-      accessorKey: "total_products",
-      header: () => "Produits",
-      cell: ({ getValue, row }) => (
-        <span>
-          {getValue} produit{getValue !== 1 ? "s" : ""}
-        </span>
-      ),
-    },
-    {
       accessorKey: "status",
       header: () => "Statut",
       cell: ({ getValue }) => {
@@ -479,9 +415,6 @@ const ListDevis = () => {
       header: () => "Actions",
       cell: ({ row }) => {
         const devis = row.original;
-        const isConvertible = devis.status === "accepté";
-        const isSendable =
-          devis.status === "brouillon" || devis.status === "en_attente";
 
         return (
           <div className="hstack d-flex gap-2 justify-content-center">
@@ -492,26 +425,6 @@ const ListDevis = () => {
             >
               <FiEye />
             </button>
-
-            {isSendable && (
-              <button
-                className="btn btn-sm btn-outline-info"
-                onClick={() => handleSendDevis(devis.id)}
-                title="Envoyer devis"
-              >
-                <FiSend />
-              </button>
-            )}
-
-            {isConvertible && (
-              <button
-                className="btn btn-sm btn-outline-success"
-                onClick={() => handleConvertToBL(devis.id)}
-                title="Convertir en BL"
-              >
-                <FiCheckCircle />
-              </button>
-            )}
 
             {["brouillon", "refusé", "expiré"].includes(devis.status) && (
               <button
@@ -548,17 +461,27 @@ const ListDevis = () => {
 
   // Quick stats for dashboard
   const getStats = () => {
-    const totalDevis = devisList.length;
-    const totalAmount = devisList.reduce(
-      (sum, devis) => sum + devis.montant_ttc,
-      0,
-    );
-    const acceptedDevis = devisList.filter(
-      (d) => d.status === "accepté",
-    ).length;
-    const pendingDevis = devisList.filter(
-      (d) => d.status === "brouillon" || d.status === "en_attente",
-    ).length;
+    const totalDevis = devisList?.length ?? 0;
+
+    let totalAmount = 0;
+    let acceptedDevis = 0;
+    let pendingDevis = 0;
+
+    if (Array.isArray(devisList)) {
+      devisList.forEach((devis) => {
+        const montant = Number(devis?.montant_ttc);
+        if (!isNaN(montant)) {
+          totalAmount += montant;
+        }
+
+        if (devis?.status === "accepté") {
+          acceptedDevis++;
+        }
+        if (devis?.status === "brouillon" || devis?.status === "en_attente") {
+          pendingDevis++;
+        }
+      });
+    }
 
     return {
       totalDevis,
@@ -567,52 +490,10 @@ const ListDevis = () => {
       pendingDevis,
     };
   };
-
   const stats = getStats();
 
   return (
     <>
-      <div className="mb-4">
-        <div className="row g-3">
-          <div className="col-md-3">
-            <div className="card border-primary border-top-0 border-start-0 border-end-0 border-top-3">
-              <div className="card-body">
-                <h5 className="card-title text-muted">Total Devis</h5>
-                <h2 className="mb-0">{stats.totalDevis}</h2>
-                <small className="text-muted">Tous statuts</small>
-              </div>
-            </div>
-          </div>
-          <div className="col-md-3">
-            <div className="card border-success border-top-0 border-start-0 border-end-0 border-top-3">
-              <div className="card-body">
-                <h5 className="card-title text-muted">Montant Total</h5>
-                <h2 className="mb-0">{stats.totalAmount} Dh</h2>
-                <small className="text-muted">Valeur totale</small>
-              </div>
-            </div>
-          </div>
-          <div className="col-md-3">
-            <div className="card border-info border-top-0 border-start-0 border-end-0 border-top-3">
-              <div className="card-body">
-                <h5 className="card-title text-muted">Acceptés</h5>
-                <h2 className="mb-0">{stats.acceptedDevis}</h2>
-                <small className="text-muted">Devis acceptés</small>
-              </div>
-            </div>
-          </div>
-          <div className="col-md-3">
-            <div className="card border-warning border-top-0 border-start-0 border-end-0 border-top-3">
-              <div className="card-body">
-                <h5 className="card-title text-muted">En attente</h5>
-                <h2 className="mb-0">{stats.pendingDevis}</h2>
-                <small className="text-muted">À traiter</small>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
       <div
         className="mb-3 d-flex align-items-center flex-wrap gap-3"
         style={{
@@ -682,6 +563,47 @@ const ListDevis = () => {
         </div>
       </div>
 
+      <div className="mb-4">
+        <div className="row g-3">
+          <div className="col-md-3">
+            <div className="card border-primary border-top-0 border-start-0 border-end-0 border-top-3">
+              <div className="card-body">
+                <h5 className="card-title text-muted">Total Devis</h5>
+                <h2 className="mb-0">{stats.totalDevis}</h2>
+                <small className="text-muted">Tous statuts</small>
+              </div>
+            </div>
+          </div>
+          <div className="col-md-3">
+            <div className="card border-success border-top-0 border-start-0 border-end-0 border-top-3">
+              <div className="card-body">
+                <h5 className="card-title text-muted">Montant Total</h5>
+                <h2 className="mb-0">{stats.totalAmount} Dh</h2>
+                <small className="text-muted">Valeur totale</small>
+              </div>
+            </div>
+          </div>
+          <div className="col-md-3">
+            <div className="card border-info border-top-0 border-start-0 border-end-0 border-top-3">
+              <div className="card-body">
+                <h5 className="card-title text-muted">Acceptés</h5>
+                <h2 className="mb-0">{stats.acceptedDevis}</h2>
+                <small className="text-muted">Devis acceptés</small>
+              </div>
+            </div>
+          </div>
+          <div className="col-md-3">
+            <div className="card border-warning border-top-0 border-start-0 border-end-0 border-top-3">
+              <div className="card-body">
+                <h5 className="card-title text-muted">En attente</h5>
+                <h2 className="mb-0">{stats.pendingDevis}</h2>
+                <small className="text-muted">À traiter</small>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="mt-4">
         {loading ? (
           <div className="text-center py-5">
@@ -713,6 +635,7 @@ const ListDevis = () => {
         onUpdateStatus={(devisId, newStatus) =>
           handleUpdateStatus(devisId, newStatus)
         }
+        onDevisUpdated={handleDevisUpdated} // ← new prop name (clearer)
       />
     </>
   );

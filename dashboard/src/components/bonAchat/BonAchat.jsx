@@ -11,16 +11,8 @@ import {
   FiCalendar,
   FiPlusCircle,
   FiTrash,
-  FiCheck,
-  FiX,
-  FiTruck,
   FiBox,
   FiUser,
-  FiPackage,
-  FiCreditCard,
-  FiDollarSign,
-  FiPercent,
-  FiClipboard,
   FiRefreshCw,
 } from "react-icons/fi";
 import { config_url } from "@/utils/config";
@@ -28,6 +20,7 @@ import Swal from "sweetalert2";
 import { Input, InputGroup, InputGroupText, Label, Badge } from "reactstrap";
 import withReactContent from "sweetalert2-react-content";
 import { Link } from "react-router-dom";
+import BonAchatDetailsModal from "./BonAchatDetailsModal";
 
 const MySwal = withReactContent(Swal);
 
@@ -56,11 +49,13 @@ const typeAchatOptions = [
 const BonAchatTable = () => {
   const [bons, setBons] = useState([]);
   const [filteredBons, setFilteredBons] = useState([]);
-  const [fornisseurs, setfornisseurs] = useState([]);
+  const [fornisseurs, setFornisseurs] = useState([]);
   const [selectedStatus, setSelectedStatus] = useState("all");
   const [selectedTypeAchat, setSelectedTypeAchat] = useState("all");
-  const [selectedfornisseur, setSelectedfornisseur] = useState("all");
+  const [selectedFornisseur, setSelectedFornisseur] = useState("all");
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [selectedBonAchat, setSelectedBonAchat] = useState(null);
+  const [showModal, setShowModal] = useState(false);
   const [dateRange, setDateRange] = useState([
     {
       startDate: subDays(new Date(), 30),
@@ -72,7 +67,7 @@ const BonAchatTable = () => {
 
   useEffect(() => {
     fetchBonsAchat();
-    fetchfornisseurs();
+    fetchFornisseurs();
   }, []);
 
   // Filter bons based on selected filters
@@ -90,9 +85,9 @@ const BonAchatTable = () => {
     }
 
     // Filter by fornisseur
-    if (selectedfornisseur !== "all") {
+    if (selectedFornisseur !== "all") {
       result = result.filter(
-        (bon) => bon.fornisseur_id === parseInt(selectedfornisseur),
+        (bon) => bon.fornisseur_id === parseInt(selectedFornisseur),
       );
     }
 
@@ -111,7 +106,7 @@ const BonAchatTable = () => {
     }
 
     setFilteredBons(result);
-  }, [selectedStatus, selectedTypeAchat, selectedfornisseur, dateRange, bons]);
+  }, [selectedStatus, selectedTypeAchat, selectedFornisseur, dateRange, bons]);
 
   const fetchBonsAchat = async () => {
     try {
@@ -126,10 +121,52 @@ const BonAchatTable = () => {
 
       if (response.data.success && response.data.bons) {
         const formattedData = response.data.bons.map((bon) => {
-          // Calculate reception percentage and totals
-          const totalQuantite = bon.totalQuantite || 0;
-          const totalQuantiteRecue = bon.totalQuantiteRecue || 0;
-          const pourcentageReception = bon.pourcentageReception || 0;
+          // Calculate totals based on products
+          let totalQuantite = 0;
+          let totalQuantiteRecue = 0;
+          let montant_ht = 0;
+
+          if (bon.produits && bon.produits.length > 0) {
+            bon.produits.forEach((prod) => {
+              const quantite = parseFloat(prod.BonAchatProduit?.quantite || 0);
+              totalQuantite += quantite;
+
+              // If there's a received quantity field, use it
+              const quantiteRecue = parseFloat(
+                prod.BonAchatProduit?.quantite_recue || 0,
+              );
+              totalQuantiteRecue += quantiteRecue;
+
+              // Calculate line total
+              const prix_unitaire = parseFloat(
+                prod.BonAchatProduit?.prix_unitaire || 0,
+              );
+              const remise_ligne = parseFloat(
+                prod.BonAchatProduit?.remise_ligne || 0,
+              );
+              const total_ligne = prix_unitaire * quantite - remise_ligne;
+              montant_ht += total_ligne;
+            });
+          } else {
+            // Fallback to API values
+            totalQuantite = bon.totalQuantite || 0;
+            totalQuantiteRecue = bon.totalQuantiteRecue || 0;
+            montant_ht = parseFloat(bon.montant_ht) || 0;
+          }
+
+          // Calculate reception percentage
+          const pourcentageReception =
+            totalQuantite > 0
+              ? Math.round((totalQuantiteRecue / totalQuantite) * 100)
+              : 0;
+
+          // Determine reception status
+          const statutReception =
+            pourcentageReception === 0
+              ? "non_reçu"
+              : pourcentageReception === 100
+                ? "reçu"
+                : "partiellement_reçu";
 
           // Format dates
           const dateCreation = bon.date_creation || bon.createdAt;
@@ -140,15 +177,15 @@ const BonAchatTable = () => {
             id: bon.id,
             num_bon_achat: bon.num_bon_achat,
             fornisseur_name:
-              bon.fornisseur?.nom_complete || "fornisseur inconnu",
+              bon.fornisseur?.nom_complete || "Fournisseur inconnu",
             fornisseur_phone: bon.fornisseur?.telephone || "",
             fornisseur_id: bon.fornisseur_id,
-            type_achat: bon.type_achat,
-            montant_ht: parseFloat(bon.montant_ht) || 0,
-            montant_ttc: parseFloat(bon.montant_ttc) || 0,
+            type_achat: bon.type_achat || "autre",
+            montant_ht: montant_ht,
+            montant_ttc: parseFloat(bon.montant_ttc) || montant_ht,
             tva: parseFloat(bon.tva) || 0,
-            status: bon.status,
-            mode_reglement: bon.mode_reglement,
+            status: bon.status || "brouillon",
+            mode_reglement: bon.mode_reglement || "espèces",
             date_creation: new Date(dateCreation),
             date_creation_string: format(
               new Date(dateCreation),
@@ -165,7 +202,7 @@ const BonAchatTable = () => {
             totalQuantite,
             totalQuantiteRecue,
             pourcentageReception,
-            statutReception: bon.statutReception || "non_reçu",
+            statutReception,
             facture_fornisseur: bon.facture_fornisseur,
             delai_livraison: bon.delai_livraison,
             produits: bon.produits || [],
@@ -191,22 +228,24 @@ const BonAchatTable = () => {
     }
   };
 
-  const fetchfornisseurs = async () => {
+  const fetchFornisseurs = async () => {
     try {
       const token =
         localStorage.getItem("token") || sessionStorage.getItem("token");
-      const response = await axios.get(`${config_url}/api/fornisseurs`, {
+      const response = await axios.get(`${config_url}/api/fournisseurs`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      const fornisseurOptions = (response.data?.fornisseurs || []).map(
-        (fornisseur) => ({
-          value: fornisseur.id,
-          label: `${fornisseur.nom_complete}`,
-        }),
-      );
+      const fornisseurOptions = (
+        response.data?.fournisseurs ||
+        response.data?.fornisseurs ||
+        []
+      ).map((fornisseur) => ({
+        value: fornisseur.id,
+        label: `${fornisseur.nom_complete}`,
+      }));
 
-      setfornisseurs(fornisseurOptions);
+      setFornisseurs(fornisseurOptions);
     } catch (error) {
       console.error("Error fetching fornisseurs:", error);
     }
@@ -217,12 +256,30 @@ const BonAchatTable = () => {
     setShowDatePicker(false);
   };
 
+  // Handle updates
+  const handleUpdate = (updatedBonAchat) => {
+    setBons((prev) =>
+      prev.map((bon) =>
+        bon.id === updatedBonAchat.id ? updatedBonAchat : bon,
+      ),
+    );
+    topTost("Bon d'achat mis à jour avec succès!", "success");
+  };
+
+  // Handle stock reception
+  const handleStockReceived = (bonAchat) => {
+    setBons((prev) =>
+      prev.map((bon) => (bon.id === bonAchat.id ? bonAchat : bon)),
+    );
+    topTost("Stock réceptionné avec succès!", "success");
+  };
+
   const getStatusColor = (status) => {
     const colors = {
-      brouillon: "secondary",
+      brouillon: "warning",
       commandé: "primary",
-      partiellement_reçu: "warning",
-      reçu: "info",
+      partiellement_reçu: "info",
+      reçu: "success",
       partiellement_payé: "warning",
       payé: "success",
       annulé: "danger",
@@ -265,12 +322,6 @@ const BonAchatTable = () => {
     return colors[type] || "secondary";
   };
 
-  const getReceptionColor = (pourcentage) => {
-    if (pourcentage === 0) return "danger";
-    if (pourcentage < 100) return "warning";
-    return "success";
-  };
-
   const handleDeleteBon = async (bonId, num_bon_achat) => {
     const result = await MySwal.fire({
       title: "Supprimer ce Bon d'Achat?",
@@ -287,7 +338,7 @@ const BonAchatTable = () => {
       try {
         const token =
           localStorage.getItem("token") || sessionStorage.getItem("token");
-        await axios.delete(`${config_url}/api/bon-achat/${bonId}`, {
+        await axios.delete(`${config_url}/api/bon-achats/${bonId}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
 
@@ -313,183 +364,9 @@ const BonAchatTable = () => {
   };
 
   const handleViewBon = (bon) => {
-    MySwal.fire({
-      title: `Bon d'Achat ${bon.num_bon_achat}`,
-      html: `
-        <div class="text-start">
-          <div class="mb-3">
-            <strong>fornisseur:</strong> ${bon.fornisseur_name}<br/>
-            <strong>Téléphone:</strong> ${bon.fornisseur_phone || "N/A"}
-          </div>
-          
-          <div class="mb-3">
-            <strong>Type d'achat:</strong> <span class="badge bg-${getTypeAchatColor(bon.type_achat)}">${getTypeAchatText(bon.type_achat)}</span><br/>
-            <strong>Statut:</strong> <span class="badge bg-${getStatusColor(bon.status)}">${getStatusText(bon.status)}</span><br/>
-            <strong>Mode règlement:</strong> ${bon.mode_reglement}
-          </div>
-          
-          <div class="mb-3">
-            <strong>Montant HT:</strong> ${bon.montant_ht.toFixed(2)} DH<br/>
-            <strong>TVA:</strong> ${bon.tva.toFixed(2)} DH<br/>
-            <strong>Total TTC:</strong> <strong class="text-primary">${bon.montant_ttc.toFixed(2)} DH</strong>
-          </div>
-          
-          <div class="mb-3">
-            <strong>Réception:</strong> 
-            <div class="progress mt-1" style="height: 20px;">
-              <div class="progress-bar bg-${getReceptionColor(bon.pourcentageReception)}" 
-                   role="progressbar" 
-                   style="width: ${bon.pourcentageReception}%">
-                ${bon.pourcentageReception}%
-              </div>
-            </div>
-            <small class="text-muted">${bon.totalQuantiteRecue} / ${bon.totalQuantite} unités reçues</small>
-          </div>
-          
-          <div class="mb-3">
-            <strong>Dates:</strong><br/>
-            <small>Création: ${bon.date_creation_string}</small><br/>
-            ${bon.date_reception ? `<small>Réception: ${bon.date_reception}</small><br/>` : ""}
-            ${bon.date_paiement ? `<small>Paiement: ${bon.date_paiement}</small><br/>` : ""}
-            ${bon.delai_livraison ? `<small>Délai livraison: ${bon.delai_livraison} jours</small><br/>` : ""}
-          </div>
-          
-          <div class="mb-3">
-            <strong>Produits (${bon.produits_count}):</strong>
-            <ul class="mb-0" style="max-height: 150px; overflow-y: auto;">
-              ${bon.produits
-                .map(
-                  (p) => `
-                <li>${p.reference} - ${p.designation} 
-                (${p.BonAchatProduit?.quantite || 0} x ${p.BonAchatProduit?.prix_unitaire || 0} DH)
-                ${p.BonAchatProduit?.quantite_recue ? `- Reçu: ${p.BonAchatProduit.quantite_recue}` : ""}
-                </li>
-              `,
-                )
-                .join("")}
-            </ul>
-          </div>
-          
-          ${bon.facture_fornisseur ? `<div><strong>Facture fornisseur:</strong> ${bon.facture_fornisseur}</div>` : ""}
-          ${bon.notes ? `<div class="mt-2"><strong>Notes:</strong> ${bon.notes}</div>` : ""}
-        </div>
-      `,
-      showConfirmButton: true,
-      confirmButtonText: "Fermer",
-      showCancelButton: true,
-      cancelButtonText: "Voir détails",
-      reverseButtons: true,
-      width: "600px",
-    }).then((result) => {
-      if (result.dismiss === Swal.DismissReason.cancel) {
-        window.location.href = `/bon-achat/${bon.id}`;
-      }
-    });
-  };
-
-  const handleMarquerRecu = async (bonId) => {
-    const result = await MySwal.fire({
-      title: "Enregistrer la réception",
-      text: "Souhaitez-vous enregistrer la réception des produits?",
-      icon: "question",
-      showCancelButton: true,
-      confirmButtonColor: "#3085d6",
-      cancelButtonColor: "#6c757d",
-      confirmButtonText: "Oui, enregistrer",
-      cancelButtonText: "Annuler",
-    });
-
-    if (result.isConfirmed) {
-      window.location.href = `/bon-achat/${bonId}/reception`;
-    }
-  };
-
-  const handleMarquerPaye = async (bonId) => {
-    const result = await MySwal.fire({
-      title: "Marquer comme payé",
-      text: "Êtes-vous sûr de vouloir marquer ce bon d'achat comme payé?",
-      icon: "question",
-      showCancelButton: true,
-      confirmButtonColor: "#3085d6",
-      cancelButtonColor: "#6c757d",
-      confirmButtonText: "Oui, marquer payé",
-      cancelButtonText: "Annuler",
-    });
-
-    if (result.isConfirmed) {
-      try {
-        const token =
-          localStorage.getItem("token") || sessionStorage.getItem("token");
-        await axios.put(
-          `${config_url}/api/bon-achat/${bonId}/paye`,
-          {},
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          },
-        );
-
-        // Update local state
-        setBons((prev) =>
-          prev.map((bon) =>
-            bon.id === bonId
-              ? {
-                  ...bon,
-                  status: "payé",
-                  date_paiement: format(new Date(), "dd/MM/yyyy"),
-                }
-              : bon,
-          ),
-        );
-
-        topTost("Bon d'achat marqué comme payé avec succès!", "success");
-      } catch (error) {
-        console.error("Error marking as paid:", error);
-        const errorMsg =
-          error.response?.data?.message || "Erreur lors du marquage comme payé";
-        topTost(errorMsg, "error");
-      }
-    }
-  };
-
-  const handleAnnulerBon = async (bonId) => {
-    const result = await MySwal.fire({
-      title: "Annuler ce Bon d'Achat?",
-      text: "Le bon d'achat sera annulé et le stock ajusté si nécessaire.",
-      icon: "warning",
-      showCancelButton: true,
-      confirmButtonColor: "#d33",
-      cancelButtonColor: "#3085d6",
-      confirmButtonText: "Oui, annuler",
-      cancelButtonText: "Annuler",
-    });
-
-    if (result.isConfirmed) {
-      try {
-        const token =
-          localStorage.getItem("token") || sessionStorage.getItem("token");
-        await axios.put(
-          `${config_url}/api/bon-achat/${bonId}/annuler`,
-          {},
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          },
-        );
-
-        // Update local state
-        setBons((prev) =>
-          prev.map((bon) =>
-            bon.id === bonId ? { ...bon, status: "annulé" } : bon,
-          ),
-        );
-
-        topTost("Bon d'achat annulé avec succès!", "success");
-      } catch (error) {
-        console.error("Annulation error:", error);
-        const errorMsg =
-          error.response?.data?.message || "Erreur lors de l'annulation";
-        topTost(errorMsg, "error");
-      }
-    }
+    // Instead of showing Swal, open the modal
+    setSelectedBonAchat(bon);
+    setShowModal(true);
   };
 
   const columns = [
@@ -536,9 +413,12 @@ const BonAchatTable = () => {
     },
     {
       accessorKey: "fornisseur_name",
-      header: () => "fornisseur",
-      cell: ({ getValue }) => (
-        <div>
+      header: () => "Fournisseur",
+      cell: ({ getValue, row }) => (
+        <div
+          onClick={() => handleViewBon(row.original)}
+          style={{ cursor: "pointer" }}
+        >
           <FiUser className="me-1" />
           <span>{getValue()}</span>
         </div>
@@ -553,54 +433,7 @@ const BonAchatTable = () => {
         </span>
       ),
     },
-    {
-      accessorKey: "type_achat",
-      header: () => "Type",
-      cell: ({ getValue }) => {
-        const type = getValue();
-        return (
-          <Badge color={getTypeAchatColor(type)} className="text-capitalize">
-            <FiBox className="me-1" />
-            {getTypeAchatText(type)}
-          </Badge>
-        );
-      },
-    },
-    {
-      accessorKey: "status",
-      header: () => "Statut",
-      cell: ({ getValue }) => {
-        const status = getValue();
-        return (
-          <Badge color={getStatusColor(status)} className="text-capitalize">
-            {getStatusText(status)}
-          </Badge>
-        );
-      },
-    },
-    {
-      accessorKey: "pourcentageReception",
-      header: () => "Réception",
-      cell: ({ getValue, row }) => {
-        const pourcentage = getValue();
-        return (
-          <div>
-            <div className="progress" style={{ height: "20px" }}>
-              <div
-                className={`progress-bar bg-${getReceptionColor(pourcentage)}`}
-                role="progressbar"
-                style={{ width: `${pourcentage}%` }}
-              >
-                {pourcentage}%
-              </div>
-            </div>
-            <small className="text-muted">
-              {row.original.totalQuantiteRecue}/{row.original.totalQuantite}
-            </small>
-          </div>
-        );
-      },
-    },
+
     {
       accessorKey: "date_creation_string",
       header: () => "Date Création",
@@ -632,38 +465,6 @@ const BonAchatTable = () => {
             >
               <FiEye />
             </button>
-
-            {["brouillon", "commandé", "partiellement_reçu"].includes(
-              bon.status,
-            ) && (
-              <button
-                className="btn btn-sm btn-outline-info"
-                onClick={() => handleMarquerRecu(bon.id)}
-                title="Enregistrer réception"
-              >
-                <FiTruck />
-              </button>
-            )}
-
-            {["reçu", "partiellement_reçu"].includes(bon.status) && (
-              <button
-                className="btn btn-sm btn-outline-success"
-                onClick={() => handleMarquerPaye(bon.id)}
-                title="Marquer comme payé"
-              >
-                <FiCreditCard />
-              </button>
-            )}
-
-            {["brouillon", "commandé"].includes(bon.status) && (
-              <button
-                className="btn btn-sm btn-outline-danger"
-                onClick={() => handleAnnulerBon(bon.id)}
-                title="Annuler"
-              >
-                <FiX />
-              </button>
-            )}
 
             <button
               className="btn btn-sm btn-outline-dark"
@@ -747,56 +548,18 @@ const BonAchatTable = () => {
     <>
       <div className="mb-3" style={{ marginTop: "60px" }}>
         <div className="d-flex align-items-center flex-wrap gap-3 mb-3">
-          {/* Status Filter */}
-          <InputGroup size="sm" className="w-auto shadow-sm rounded">
-            <InputGroupText className="bg-white border-0">
-              <FiFilter className="text-primary fs-6" />
-            </InputGroupText>
-            <Input
-              type="select"
-              value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value)}
-              className="border-0 bg-white"
-            >
-              {statusOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </Input>
-          </InputGroup>
-
-          {/* Type Achat Filter */}
-          <InputGroup size="sm" className="w-auto shadow-sm rounded">
-            <InputGroupText className="bg-white border-0">
-              <FiBox className="text-primary fs-6" />
-            </InputGroupText>
-            <Input
-              type="select"
-              value={selectedTypeAchat}
-              onChange={(e) => setSelectedTypeAchat(e.target.value)}
-              className="border-0 bg-white"
-            >
-              {typeAchatOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </Input>
-          </InputGroup>
-
-          {/* fornisseur Filter */}
+          {/* Fornisseur Filter */}
           <InputGroup size="sm" className="w-auto shadow-sm rounded">
             <InputGroupText className="bg-white border-0">
               <FiUser className="text-primary fs-6" />
             </InputGroupText>
             <Input
               type="select"
-              value={selectedfornisseur}
-              onChange={(e) => setSelectedfornisseur(e.target.value)}
+              value={selectedFornisseur}
+              onChange={(e) => setSelectedFornisseur(e.target.value)}
               className="border-0 bg-white"
             >
-              <option value="all">Tous les fornisseurs</option>
+              <option value="all">Tous les fournisseurs</option>
               {fornisseurs.map((fornisseur) => (
                 <option key={fornisseur.value} value={fornisseur.value}>
                   {fornisseur.label}
@@ -901,54 +664,6 @@ const BonAchatTable = () => {
             </div>
           </div>
         </div>
-
-        {/* Status Distribution */}
-        <div className="row g-3 mb-4">
-          <div className="col-md-8">
-            <div className="card">
-              <div className="card-header">
-                <h6 className="mb-0">Répartition par Statut</h6>
-              </div>
-              <div className="card-body">
-                <div className="d-flex flex-wrap gap-2">
-                  {Object.entries(stats.statsByStatus).map(
-                    ([status, count]) => (
-                      <div
-                        key={status}
-                        className="d-flex align-items-center me-3"
-                      >
-                        <Badge color={getStatusColor(status)} className="me-2">
-                          {getStatusText(status)}
-                        </Badge>
-                        <span className="fw-bold">{count}</span>
-                      </div>
-                    ),
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="col-md-4">
-            <div className="card">
-              <div className="card-header">
-                <h6 className="mb-0">Répartition par Type</h6>
-              </div>
-              <div className="card-body">
-                <div className="d-flex flex-wrap gap-2">
-                  {Object.entries(stats.statsByType).map(([type, count]) => (
-                    <div key={type} className="d-flex align-items-center me-3">
-                      <Badge color={getTypeAchatColor(type)} className="me-2">
-                        {getTypeAchatText(type)}
-                      </Badge>
-                      <span className="fw-bold">{count}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
 
       {loading ? (
@@ -964,6 +679,14 @@ const BonAchatTable = () => {
             data={filteredBons}
             columns={columns}
             enableRowSelection={true}
+          />
+
+          <BonAchatDetailsModal
+            isOpen={showModal}
+            toggle={() => setShowModal(!showModal)}
+            bonAchat={selectedBonAchat}
+            onUpdate={handleUpdate}
+            onReceiveStock={handleStockReceived}
           />
         </div>
       ) : (

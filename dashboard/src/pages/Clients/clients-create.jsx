@@ -14,32 +14,68 @@ function ClientsCreate() {
   const [address, setAddress] = useState("");
   const [telephone, setTelephone] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errors, setErrors] = useState({});
+
+  const validateForm = () => {
+    const newErrors = {};
+
+    if (!nom_complete.trim()) {
+      newErrors.nom_complete = "Nom complet is required";
+    } else if (nom_complete.length < 2 || nom_complete.length > 200) {
+      newErrors.nom_complete =
+        "Nom complet must be between 2 and 200 characters";
+    }
+
+    if (!telephone.trim()) {
+      newErrors.telephone = "Telephone is required";
+    } else if (!/^[0-9+\-\s()]{8,20}$/.test(telephone)) {
+      newErrors.telephone = "Invalid telephone format";
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (!validateForm()) {
+      topTost("Please fix the errors in the form", "error");
+      return;
+    }
+
     setIsSubmitting(true);
+    setErrors({});
 
     try {
       const clientData = {
-        nom_complete,
-        reference,
-        ville,
-        address,
-        telephone,
+        nom_complete: nom_complete.trim(),
+        reference: reference.trim(),
+        ville: ville.trim(),
+        address: address.trim(),
+        telephone: telephone.trim(),
       };
 
-      // Get token from localStorage or wherever you store it
+      console.log("Sending data:", clientData); // Debug log
+
+      // Get token
       const token =
         localStorage.getItem("token") || sessionStorage.getItem("token");
+
+      if (!token) {
+        throw new Error("Authentication token not found");
+      }
 
       const response = await axios.post(
         `${config_url}/api/clients`,
         clientData,
       );
 
+      console.log("Response:", response.data); // Debug log
+
       MySwal.fire({
         title: "Success!",
-        text: "Client created successfully",
+        text: response.data.message || "Client created successfully",
         icon: "success",
         confirmButtonText: "OK",
       }).then(() => {
@@ -52,18 +88,33 @@ function ClientsCreate() {
       });
     } catch (error) {
       console.error("Error creating client:", error);
+      console.error("Error response:", error.response); // Debug log
 
-      // Handle validation errors
+      // Handle validation errors from server
       if (error.response?.data?.errors) {
+        const serverErrors = {};
+        error.response.data.errors.forEach((err) => {
+          serverErrors[err.field] = err.message;
+        });
+        setErrors(serverErrors);
+
         const errorMessages = error.response.data.errors
           .map((err) => err.message)
           .join(", ");
         topTost(errorMessages, "error");
-      } else {
+      } else if (error.response?.data?.message) {
+        topTost(error.response.data.message, "error");
+      } else if (error.message === "Network Error") {
         topTost(
-          error.response?.data?.message || "Error creating client",
+          "Cannot connect to server. Please check your connection.",
           "error",
         );
+      } else if (error.response?.status === 401) {
+        topTost("Authentication required. Please login again.", "error");
+        // Redirect to login
+        window.location.href = "/login";
+      } else {
+        topTost("Error creating client. Please try again.", "error");
       }
     } finally {
       setIsSubmitting(false);
@@ -91,26 +142,36 @@ function ClientsCreate() {
                   </label>
                   <input
                     type="text"
-                    className="form-control"
+                    className={`form-control ${errors.nom_complete ? "is-invalid" : ""}`}
                     placeholder="Entrez le nom complet du client"
                     value={nom_complete}
-                    onChange={(e) => setNomComplete(e.target.value)}
+                    onChange={(e) => {
+                      setNomComplete(e.target.value);
+                      if (errors.nom_complete)
+                        setErrors((prev) => ({
+                          ...prev,
+                          nom_complete: undefined,
+                        }));
+                    }}
                     required
                     minLength="2"
                     maxLength="200"
                   />
+                  {errors.nom_complete && (
+                    <div className="invalid-feedback d-block">
+                      {errors.nom_complete}
+                    </div>
+                  )}
                 </div>
+
                 <div className="mb-4">
-                  <label className="form-label">
-                    Refrence (Code) <span className="text-danger">*</span>
-                  </label>
+                  <label className="form-label">Refrence (Code)</label>
                   <input
                     type="text"
                     className="form-control"
                     placeholder="Entrez le Refrence ou Code du client"
                     value={reference}
                     onChange={(e) => setReference(e.target.value)}
-                    required
                     minLength="2"
                     maxLength="200"
                   />
@@ -122,14 +183,17 @@ function ClientsCreate() {
                   </label>
                   <input
                     type="tel"
-                    className="form-control"
+                    className={`form-control ${errors.telephone ? "is-invalid" : ""}`}
                     placeholder="Ex: +212 6XX-XXXXXX ou 06XXXXXXXX"
                     value={telephone}
                     onChange={handleTelephoneChange}
                     required
-                    pattern="^[0-9+\-\s()]{8,20}$"
-                    title="Format de téléphone: 8-20 chiffres, peut contenir +, -, espaces, parentheses"
                   />
+                  {errors.telephone && (
+                    <div className="invalid-feedback d-block">
+                      {errors.telephone}
+                    </div>
+                  )}
                   <small className="text-muted">
                     Format: 8-20 chiffres, peut contenir +, -, espaces
                   </small>
@@ -145,7 +209,6 @@ function ClientsCreate() {
                     onChange={(e) => setVille(e.target.value)}
                     maxLength="100"
                   />
-                  <small className="text-muted">Maximum 100 caractères</small>
                 </div>
 
                 <div className="mb-4">
@@ -158,7 +221,6 @@ function ClientsCreate() {
                     rows="3"
                     maxLength="500"
                   />
-                  <small className="text-muted">Maximum 500 caractères</small>
                 </div>
 
                 <button

@@ -111,7 +111,6 @@ app.use((req, res) => {
     await db.sequelize.authenticate();
     console.log("DB connected");
 
-    await db.sequelize.sync({ alter: true });
     console.log("Database models synchronized");
 
     // 🔥 SEED ADMIN USER HERE

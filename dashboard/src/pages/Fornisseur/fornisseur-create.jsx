@@ -47,7 +47,7 @@ function FornisseurCreate() {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
-        }
+        },
       );
 
       MySwal.fire({
@@ -75,18 +75,18 @@ function FornisseurCreate() {
       } else if (error.response?.data?.field === "reference") {
         topTost(
           "Cette référence est déjà utilisée par un autre fournisseur",
-          "error"
+          "error",
         );
       } else if (error.response?.data?.field === "telephone") {
         topTost(
           "Ce numéro de téléphone est déjà utilisé par un autre fournisseur",
-          "error"
+          "error",
         );
       } else {
         topTost(
           error.response?.data?.message ||
             "Erreur lors de la création du fournisseur",
-          "error"
+          "error",
         );
       }
     } finally {
@@ -245,65 +245,6 @@ function FornisseurCreate() {
               </div>
             </div>
           </form>
-
-          {/* Instructions panel */}
-          <div className="col-xl-3">
-            <div className="card">
-              <div className="card-header">
-                <h5 className="card-title mb-0">
-                  <FiHash className="me-2" />
-                  Informations
-                </h5>
-              </div>
-              <div className="card-body">
-                <h6 className="mb-3">Champs obligatoires:</h6>
-                <ul className="list-unstyled mb-4">
-                  <li className="mb-2">
-                    <small className="text-muted d-flex align-items-center">
-                      <FiUser size={12} className="me-2" />
-                      <strong>Nom Complet:</strong> 2-200 caractères
-                    </small>
-                  </li>
-                  <li className="mb-2">
-                    <small className="text-muted d-flex align-items-center">
-                      <FiPhone size={12} className="me-2" />
-                      <strong>Téléphone:</strong> Unique, 8-20 chiffres
-                    </small>
-                  </li>
-                </ul>
-
-                <h6 className="mb-3">Champs optionnels:</h6>
-                <ul className="list-unstyled">
-                  <li className="mb-2">
-                    <small className="text-muted d-flex align-items-center">
-                      <FiHash size={12} className="me-2" />
-                      <strong>Référence:</strong> Unique si renseignée
-                    </small>
-                  </li>
-                  <li className="mb-2">
-                    <small className="text-muted d-flex align-items-center">
-                      <FiMapPin size={12} className="me-2" />
-                      <strong>Ville:</strong> Max 100 caractères
-                    </small>
-                  </li>
-                  <li>
-                    <small className="text-muted d-flex align-items-center">
-                      <FiHome size={12} className="me-2" />
-                      <strong>Adresse:</strong> Max 500 caractères
-                    </small>
-                  </li>
-                </ul>
-
-                <div className="mt-4 p-3 bg-light rounded">
-                  <small className="text-muted">
-                    <strong>Note:</strong> Les champs marqués d'un astérisque
-                    (*) sont obligatoires. Le téléphone doit être unique dans le
-                    système.
-                  </small>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
     </>

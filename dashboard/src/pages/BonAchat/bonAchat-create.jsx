@@ -458,8 +458,8 @@ const BonAchatCreate = () => {
         </button>
       </PageHeader>
 
-      <div className="row">
-        <div className="col-lg-8 mt-4">
+      <div className="col">
+        <div className="col-lg-12 mt-4">
           <div className="card">
             <div className="card-header">
               <h5 className="card-title mb-0">
@@ -779,7 +779,7 @@ const BonAchatCreate = () => {
           </div>
         </div>
 
-        <div className="col-lg-4 mt-4">
+        <div className="col-lg-12 mt-4">
           <div className="card">
             <div className="card-header">
               <h5 className="card-title mb-0">

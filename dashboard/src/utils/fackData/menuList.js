@@ -152,27 +152,6 @@ export const menuList = [
       },
     ],
   },
-  {
-    id: 7,
-    name: "authentication",
-    path: "#",
-    icon: "feather-power",
-
-    dropdownMenu: [
-      {
-        id: 1,
-        name: "Users",
-        path: "/users",
-        subdropdownMenu: false,
-      },
-      {
-        id: 7,
-        name: "Create User",
-        path: "/users/create",
-        subdropdownMenu: false,
-      },
-    ],
-  },
 
   {
     id: 8,
@@ -234,6 +213,27 @@ export const menuList = [
         id: 2,
         name: "Creer Produit",
         path: "/produits/create",
+        subdropdownMenu: false,
+      },
+    ],
+  },
+  {
+    id: 11,
+    name: "authentication",
+    path: "#",
+    icon: "feather-power",
+
+    dropdownMenu: [
+      {
+        id: 1,
+        name: "Users",
+        path: "/users",
+        subdropdownMenu: false,
+      },
+      {
+        id: 7,
+        name: "Create User",
+        path: "/users/create",
         subdropdownMenu: false,
       },
     ],

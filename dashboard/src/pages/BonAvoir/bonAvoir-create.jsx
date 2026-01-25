@@ -5,14 +5,11 @@ import Select from "react-select";
 import AsyncSelect from "react-select/async";
 import PageHeader from "@/components/shared/pageHeader/PageHeader";
 import {
-  FiPackage,
   FiUser,
   FiShoppingCart,
   FiPlus,
   FiMinus,
-  FiTrash2,
   FiSearch,
-  FiPercent,
   FiDollarSign,
   FiCalendar,
   FiFileText,
@@ -41,7 +38,7 @@ const BonAvoirCreate = () => {
   const [allProduits, setAllProduits] = useState([]);
   const [selectedProduits, setSelectedProduits] = useState([]);
   const [loadingProduits, setLoadingProduits] = useState(true);
-  const [showBonLivraisonDetails, setShowBonLivraisonDetails] = useState(false);
+  const [showBonLivraisonDetails, setShowBonLivraisonDetails] = useState(true);
   const [selectedBonLivraison, setSelectedBonLivraison] = useState(null);
   const [bonLivraisonProduits, setBonLivraisonProduits] = useState([]);
 
@@ -91,19 +88,25 @@ const BonAvoirCreate = () => {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      const clientOptions = (response.data?.clients || []).map((client) => ({
-        value: client.id,
-        label: `${client.nom_complete} ${client.telephone ? `- ${client.telephone}` : ""}`,
-        ...client,
-      }));
-
+      const clientOptions = (response.data?.clients || []).map((client) => {
+        const refPart = client.reference ? `(${client.reference}) ` : "";
+        return {
+          value: client.id,
+          label: `${refPart}${client.nom_complete}${client.telephone ? ` - ${client.telephone}` : ""}`,
+          searchText: [
+            client.nom_complete?.toLowerCase() || "",
+            client.telephone?.toLowerCase() || "",
+            client.reference?.toLowerCase() || "",
+          ].join(" "),
+          ...client,
+        };
+      });
       setClients(clientOptions);
     } catch (error) {
       console.error("Error fetching clients:", error);
       topTost("Erreur lors du chargement des clients", "error");
     }
   };
-
   const fetchBonsLivraisonClient = async (clientId) => {
     try {
       const token =
@@ -595,8 +598,8 @@ const BonAvoirCreate = () => {
         </button>
       </PageHeader>
 
-      <div className="row">
-        <div className="col-lg-8 mt-4">
+      <div className="col">
+        <div className="col-lg-12 mt-4">
           <div className="card">
             <div className="card-header">
               <h5 className="card-title mb-0">
@@ -625,18 +628,25 @@ const BonAvoirCreate = () => {
                         })
                       }
                       isSearchable
+                      required
                       noOptionsMessage={() => "Aucun client trouvé"}
+                      // ─── Add this ───────────────────────────────────────
+                      filterOption={(option, rawInput) => {
+                        if (!rawInput) return true;
+                        const search = rawInput.toLowerCase().trim();
+                        return option.data.searchText.includes(search);
+                      }}
+                      // ─────────────────────────────────────────────────────
+
                       styles={{
                         control: (base) => ({
                           ...base,
                           minHeight: "45px",
                           borderColor: "#dee2e6",
-                          "&:hover": {
-                            borderColor: "#405189",
-                          },
+                          "&:hover": { borderColor: "#405189" },
                         }),
                       }}
-                    />
+                    />{" "}
                     <small className="text-muted">
                       Optionnel si vous sélectionnez un bon de livraison
                     </small>
@@ -1109,7 +1119,7 @@ const BonAvoirCreate = () => {
           </div>
         </div>
 
-        <div className="col-lg-4 mt-4">
+        <div className="col-lg-12 mt-4">
           <div className="card">
             <div className="card-header">
               <h5 className="card-title mb-0">
@@ -1220,31 +1230,6 @@ const BonAvoirCreate = () => {
                     ? "Chargement..."
                     : "Actualiser les produits"}
                 </button>
-              </div>
-            </div>
-            <div className="card-footer">
-              <small className="text-muted">
-                <FiCheck className="me-1" />
-                Le bon d'avoir créé pourra être utilisé sur de futures factures
-              </small>
-            </div>
-          </div>
-
-          <div className="card mt-3">
-            <div className="card-body">
-              <h6 className="card-title">
-                <FiClipboard className="me-2" />
-                Informations
-              </h6>
-              <div className="alert alert-light mb-0">
-                <p className="mb-1">
-                  <strong>Bon d'avoir:</strong> Document commercial qui atteste
-                  qu'un client a un crédit chez vous.
-                </p>
-                <p className="mb-0">
-                  <strong>Utilisation:</strong> Peut être utilisé pour régler de
-                  futures factures ou obtenir un remboursement.
-                </p>
               </div>
             </div>
           </div>

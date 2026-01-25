@@ -76,7 +76,7 @@ Fornisseur.init(
         },
       },
     ],
-  }
+  },
 );
 
 module.exports = Fornisseur;

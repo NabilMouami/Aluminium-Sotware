@@ -12,12 +12,13 @@ import {
   FiPrinter,
   FiDownload,
   FiSave,
-  FiFileText,
+  FiCheckCircle,
+  FiTruck,
+  FiPackage,
   FiUser,
   FiShoppingCart,
+  FiFileText,
 } from "react-icons/fi";
-import Select from "react-select";
-
 import axios from "axios";
 import { config_url } from "@/utils/config";
 import topTost from "@/utils/topTost";
@@ -28,19 +29,15 @@ import withReactContent from "sweetalert2-react-content";
 
 const MySwal = withReactContent(Swal);
 
-// Devis status options
+// Bon Achat status options
 const statusOptions = [
   { value: "brouillon", label: "Brouillon" },
-  { value: "envoyé", label: "Envoyé" },
-  { value: "accepté", label: "Accepté" },
-  { value: "refusé", label: "Refusé" },
-  { value: "expiré", label: "Expiré" },
-  { value: "transformé_en_facture", label: "Transformé en Facture" },
-  { value: "transformé_en_bl", label: "Transformé en BL" },
-  { value: "en_attente", label: "En Attente" },
+  { value: "en_cours", label: "En cours" },
+  { value: "reçu", label: "Reçu" },
+  { value: "annulé", label: "Annulé" },
+  { value: "partiellement_reçu", label: "Partiellement reçu" },
 ];
 
-// Move totalToFrenchText outside and make it synchronous
 const totalToFrenchText = (amount) => {
   if (amount === 0) return "Zéro dirham";
 
@@ -80,6 +77,7 @@ const totalToFrenchText = (amount) => {
     "quatre-vingt",
     "quatre-vingt",
   ];
+
   const convertLessThanOneThousand = (num) => {
     if (num === 0) return "";
 
@@ -122,7 +120,6 @@ const totalToFrenchText = (amount) => {
 
     return result;
   };
-
   const convertNumberToWords = (num) => {
     if (num === 0) return "zéro";
 
@@ -183,54 +180,46 @@ const totalToFrenchText = (amount) => {
   return text.charAt(0).toUpperCase() + text.slice(1);
 };
 
-const DevisDetailsModal = ({
+const BonAchatDetailsModal = ({
   isOpen,
   toggle,
-  devis,
+  bonAchat,
   onUpdate,
-  onConvertToBL,
-  onDevisUpdated,
+  onReceiveStock,
 }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isReceiving, setIsReceiving] = useState(false);
   const [formData, setFormData] = useState({
     status: "brouillon",
     notes: "",
-    conditions_reglement: "",
-    objet: "",
-    conditions_generales: "",
+    mode_reglement: "espèces",
   });
   const [totalText, setTotalText] = useState("");
-  const [isCalculatingTotal, setIsCalculatingTotal] = useState(false);
 
-  // Initialize form data when devis changes
+  // Initialize form data when bonAchat changes
   useEffect(() => {
-    if (devis) {
-      console.log("Initializing form with devis:", devis);
+    if (bonAchat) {
+      console.log("Initializing form with bonAchat:", bonAchat);
       setFormData({
-        status: devis.status || "brouillon",
-        notes: devis.notes || "",
-        conditions_reglement: devis.conditions_reglement || "",
-        objet: devis.objet || "",
-        conditions_generales: devis.conditions_generales || "",
+        status: bonAchat.status || "brouillon",
+        notes: bonAchat.notes || "",
+        mode_reglement: bonAchat.mode_reglement || "espèces",
       });
     }
-  }, [devis]);
+  }, [bonAchat]);
 
   // Calculate total in French text
   useEffect(() => {
     const calculateTotalText = () => {
-      if (devis) {
-        const total = parseFloat(devis.montant_ttc) || 0;
+      if (bonAchat) {
+        const total = parseFloat(bonAchat.montant_ttc) || 0;
         if (total > 0) {
-          setIsCalculatingTotal(true);
           try {
             const text = totalToFrenchText(total);
             setTotalText(text);
           } catch (error) {
             console.error("Error converting total to French text:", error);
             setTotalText(`${total.toFixed(2)} dirhams`);
-          } finally {
-            setIsCalculatingTotal(false);
           }
         } else {
           setTotalText("Zéro dirham");
@@ -238,39 +227,33 @@ const DevisDetailsModal = ({
       }
     };
 
-    if (devis) {
+    if (bonAchat) {
       calculateTotalText();
     }
-  }, [devis]);
+  }, [bonAchat]);
 
-  if (!devis) return null;
+  if (!bonAchat) return null;
 
   const getStatusBadge = (status) => {
     switch (status) {
       case "brouillon":
         return "warning";
-      case "envoyé":
+      case "en_cours":
         return "primary";
-      case "accepté":
+      case "reçu":
         return "success";
-      case "refusé":
+      case "annulé":
         return "danger";
-      case "expiré":
-        return "dark";
-      case "transformé_en_commande":
+      case "partiellement_reçu":
         return "info";
-      case "transformé_en_facture":
-        return "info";
-      case "transformé_en_bl":
-        return "info";
-      case "en_attente":
-        return "secondary";
       default:
         return "secondary";
     }
   };
 
-  const total = parseFloat(devis.montant_ttc) || 0;
+  const total = parseFloat(bonAchat.montant_ttc) || 0;
+  const totalQuantite = bonAchat.totalQuantite || 0;
+  const totalQuantiteRecue = bonAchat.totalQuantiteRecue || 0;
 
   const handleInputChange = (field, value) => {
     setFormData((prev) => ({
@@ -286,9 +269,7 @@ const DevisDetailsModal = ({
       const updateData = {
         status: formData.status,
         notes: formData.notes,
-        conditions_reglement: formData.conditions_reglement,
-        objet: formData.objet,
-        conditions_generales: formData.conditions_generales,
+        mode_reglement: formData.mode_reglement,
       };
 
       console.log("Sending update data to backend:", updateData);
@@ -296,7 +277,7 @@ const DevisDetailsModal = ({
       const token =
         localStorage.getItem("token") || sessionStorage.getItem("token");
       const response = await axios.put(
-        `${config_url}/api/devis/${devis.id}`,
+        `${config_url}/api/bon-achats/${bonAchat.id}`,
         updateData,
         {
           headers: { Authorization: `Bearer ${token}` },
@@ -304,126 +285,74 @@ const DevisDetailsModal = ({
       );
 
       console.log("Update response from backend:", response.data);
-      // ─── Most important part ────────────────────────────────
-      if (onDevisUpdated && response.data?.devis) {
-        // Pass the fresh devis object returned by the server
-        onDevisUpdated(response.data.devis);
-      } else if (onDevisUpdated) {
-        // Fallback: merge what we sent + id + maybe updatedAt
-        onDevisUpdated({
-          ...devis, // old values
-          ...updateData, // new values
-          updatedAt: new Date().toISOString(), // optional
-        });
-      }
-      topTost("Devis mis à jour avec succès!", "success");
+
+      topTost("Bon d'achat mis à jour avec succès!", "success");
 
       if (onUpdate) {
-        onUpdate(response.data.devis || response.data);
+        onUpdate(response.data.bon || response.data);
       }
 
       toggle();
     } catch (error) {
-      console.error("Error updating devis:", error);
+      console.error("Error updating bon achat:", error);
       const errorMessage =
         error.response?.data?.message ||
-        "Erreur lors de la mise à jour du devis";
+        "Erreur lors de la mise à jour du bon d'achat";
       topTost(errorMessage, "error");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // In DevisDetailsModal – handleUpdateStatus
-  const handleUpdateStatus = async (newStatus) => {
-    try {
-      setIsSubmitting(true);
-      const token =
-        localStorage.getItem("token") || sessionStorage.getItem("token");
-
-      const response = await axios.patch(
-        `${config_url}/api/devis/${devis.id}/status`,
-        { status: newStatus },
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
-
-      if (response.data.success) {
-        setFormData((prev) => ({ ...prev, status: newStatus }));
-        topTost(`Statut → ${getStatusLabel(newStatus)}`, "success");
-
-        // Propagate update
-        if (onDevisUpdated && response.data.devis) {
-          onDevisUpdated(response.data.devis);
-        } else if (onDevisUpdated) {
-          onDevisUpdated({ ...devis, status: newStatus });
-        }
-      }
-    } catch (err) {
-      topTost("Erreur lors de la mise à jour du statut", "error");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleConvertToBL = async () => {
+  const handleReceiveStock = async () => {
     const result = await MySwal.fire({
-      title: "Convertir en Bon de Livraison ?",
-      text: "Voulez-vous convertir ce devis en bon de livraison ? Cette action créera un nouveau bon de livraison.",
+      title: "Réceptionner le stock ?",
+      text: "Voulez-vous marquer ce bon d'achat comme reçu et augmenter le stock des produits ?",
       icon: "question",
       showCancelButton: true,
       confirmButtonColor: "#3085d6",
       cancelButtonColor: "#d33",
-      confirmButtonText: "Oui, convertir",
+      confirmButtonText: "Oui, réceptionner",
       cancelButtonText: "Annuler",
     });
 
     if (result.isConfirmed) {
-      try {
-        setIsSubmitting(true);
-        const token =
-          localStorage.getItem("token") || sessionStorage.getItem("token");
-        const response = await axios.post(
-          `${config_url}/api/devis/${devis.id}/convert-to-bl`,
-          {},
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          },
-        );
+      await updateStockStatus();
+    }
+  };
 
-        if (response.data.success) {
-          // Update devis status
-          await handleUpdateStatus("transformé_en_commande");
+  const updateStockStatus = async (status = "reçu") => {
+    try {
+      setIsReceiving(true);
+      const token =
+        localStorage.getItem("token") || sessionStorage.getItem("token");
+      const response = await axios.patch(
+        `${config_url}/api/bon-achats/${bonAchat.id}/receive`,
+        { status },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
 
-          topTost("Devis converti en bon de livraison avec succès", "success");
+      if (response.data.success) {
+        setFormData((prev) => ({ ...prev, status }));
+        topTost(`Stock réceptionné avec succès!`, "success");
 
-          // Optionally redirect to the new BL
-          MySwal.fire({
-            title: "Conversion réussie !",
-            text: "Voulez-vous voir le bon de livraison créé ?",
-            icon: "success",
-            showCancelButton: true,
-            confirmButtonText: "Voir le BL",
-            cancelButtonText: "Rester ici",
-          }).then((result) => {
-            if (result.isConfirmed && response.data.bonLivraison) {
-              window.location.href = `/bon-livraisons/${response.data.bonLivraison.id}`;
-            }
-          });
-
-          if (onConvertToBL) {
-            onConvertToBL(response.data.bonLivraison);
-          }
-
-          toggle();
+        if (onReceiveStock) {
+          onReceiveStock(response.data.bonAchat || response.data);
         }
-      } catch (error) {
-        console.error("Error converting devis:", error);
-        const errorMsg =
-          error.response?.data?.message || "Erreur lors de la conversion";
-        topTost(errorMsg, "error");
-      } finally {
-        setIsSubmitting(false);
+
+        if (onUpdate) {
+          onUpdate(response.data.bonAchat || response.data);
+        }
       }
+    } catch (error) {
+      console.error("Error receiving stock:", error);
+      const errorMsg =
+        error.response?.data?.message || "Erreur lors de la réception du stock";
+      topTost(errorMsg, "error");
+    } finally {
+      setIsReceiving(false);
     }
   };
 
@@ -432,7 +361,7 @@ const DevisDetailsModal = ({
   };
 
   const handlePrint = () => {
-    if (!devis) return;
+    if (!bonAchat) return;
 
     const formatDate = (dateStr) => {
       if (!dateStr) return "";
@@ -440,20 +369,19 @@ const DevisDetailsModal = ({
       return d.toLocaleDateString("fr-FR");
     };
 
-    const issueDate = devis.date_creation
-      ? new Date(devis.date_creation)
+    const issueDate = bonAchat.date_creation
+      ? new Date(bonAchat.date_creation)
       : new Date();
 
     const printWindow = window.open("", "_blank");
 
-    // Calculate total text for print
     const printTotalText = totalToFrenchText(total);
 
     const printContent = `
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Devis ${devis.num_devis}</title>
+  <title>Bon d'Achat ${bonAchat.num_bon_achat}</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -529,17 +457,18 @@ const DevisDetailsModal = ({
 </head>
 <body>
   <div class="header">
-    <h2 style="margin: 0;">Devis</h2>
+    <h2 style="margin: 0;">Bon d'Achat</h2>
     <p style="margin: 5px 0;">ALUMINIUM OULAD BRAHIM</p>
     <p style="margin: 0;">Tél: +212 661-431237</p>
   </div>
 
   <div class="invoice-info">
     <div class="info-block">
-      <p><strong>Nom Client:</strong> ${devis.client_name || devis.client?.nom_complete || "Client inconnu"}</p>
+      <p><strong>Fournisseur:</strong> ${bonAchat.fornisseur?.nom_complete || "Fournisseur inconnu"}</p>
+      <p><strong>Téléphone:</strong> ${bonAchat.fornisseur?.telephone || "Non spécifié"}</p>
     </div>
     <div class="info-block" style="text-align:right;">
-      <p><strong>N° Devis:</strong> ${devis.num_devis}</p>
+      <p><strong>N° Bon d'Achat:</strong> ${bonAchat.num_bon_achat}</p>
       <p><strong>Date création:</strong> ${formatDate(issueDate)}</p>
     </div>
   </div>
@@ -552,19 +481,21 @@ const DevisDetailsModal = ({
         <th>Designation</th>
         <th>Qté</th>
         <th>Prix U.</th>
-        <th>Total</th>
+        <th>Remise Ligne</th>
+        <th>Total Ligne</th>
       </tr>
     </thead>
     <tbody>
-      ${(devis.produits || [])
+      ${(bonAchat.produits || [])
         .map(
           (prod) => `
         <tr>
           <td>${prod.reference || "N/A"}</td>
           <td>${prod.designation || "Produit"}</td>
-          <td>${parseFloat(prod.DevisProduit?.quantite || 0).toFixed(2)}</td>
-          <td>${parseFloat(prod.DevisProduit?.prix_unitaire || 0).toFixed(2)} Dh</td>
-          <td>${parseFloat(prod.DevisProduit?.total_ligne || 0).toFixed(2)} Dh</td>
+          <td>${parseFloat(prod.BonAchatProduit?.quantite || 0).toFixed(2)}</td>
+          <td>${parseFloat(prod.BonAchatProduit?.prix_unitaire || 0).toFixed(2)} Dh</td>
+          <td>${parseFloat(prod.BonAchatProduit?.remise_ligne || 0).toFixed(2)} Dh</td>
+          <td>${parseFloat(prod.BonAchatProduit?.total_ligne || 0).toFixed(2)} Dh</td>
         </tr>
       `,
         )
@@ -574,10 +505,10 @@ const DevisDetailsModal = ({
 
   <div class="totals">
     ${
-      parseFloat(devis.remise) > 0
+      parseFloat(bonAchat.remise) > 0
         ? `
-      <p><strong>Sous-total:</strong> ${(total + parseFloat(devis.remise)).toFixed(2)} Dh</p>
-      <p><strong>Remise globale:</strong> -${parseFloat(devis.remise).toFixed(2)} Dh</p>
+      <p><strong>Sous-total:</strong> ${(total + parseFloat(bonAchat.remise)).toFixed(2)} Dh</p>
+      <p><strong>Remise globale:</strong> -${parseFloat(bonAchat.remise).toFixed(2)} Dh</p>
     `
         : ""
     }
@@ -585,10 +516,10 @@ const DevisDetailsModal = ({
       <strong>Total a Payer:</strong> ${total.toFixed(2)} Dh
     </p>
 
-     <p style="font-size:10px; font-style:italic;">
-    Arrêté le présent devis à la somme de :
-    <strong>${printTotalText}</strong>
-  </p>
+    <p style="font-size:10px; font-style:italic;">
+      Arrêté le présent bon d'achat à la somme de :
+      <strong>${printTotalText}</strong>
+    </p>
   </div>
 
 </body>
@@ -625,33 +556,32 @@ const DevisDetailsModal = ({
         return new Date(date).toLocaleDateString("fr-FR");
       };
 
-      const issueDate = devis.date_creation
-        ? new Date(devis.date_creation)
+      const issueDate = bonAchat.date_creation
+        ? new Date(bonAchat.date_creation)
         : new Date();
 
-      const remise = parseFloat(devis.remise) || 0;
+      const remise = parseFloat(bonAchat.remise) || 0;
       const sousTotal = total + remise;
 
-      // Calculate total text for PDF
       const pdfTotalText = totalToFrenchText(total);
 
       pdfContainer.innerHTML = `
       <div style="text-align:center; border-bottom:2px solid #333; padding-bottom:10px; margin-bottom:15px;">
-        <h1 style="margin:0; color:#2c5aa0;">Devis</h1>
+        <h1 style="margin:0; color:#2c5aa0;">Bon d'Achat</h1>
         <h3 style="margin:5px 0;">ALUMINIUM OULAD BRAHIM</h3>
         <p style="font-size:10px;">Tél: +212 661-431237</p>
       </div>
 
       <div style="display:flex; justify-content:space-between; margin-bottom:20px;">
         <div>
-          <h4 style="margin-bottom:5px;">Client</h4>
-          <p><strong>Nom client:</strong> ${devis.client_name || devis.client?.nom_complete || "Client inconnu"}</p>
+          <h4 style="margin-bottom:5px;">Fournisseur</h4>
+          <p><strong>Nom:</strong> ${bonAchat.fornisseur?.nom_complete || "Fournisseur inconnu"}</p>
+          <p><strong>Téléphone:</strong> ${bonAchat.fornisseur?.telephone || "Non spécifié"}</p>
         </div>
         <div>
-          <h4 style="margin-bottom:5px;">Informations du Devis</h4>
-          <p><strong>N°:</strong> ${devis.num_devis}</p>
+          <h4 style="margin-bottom:5px;">Informations du Bon d'Achat</h4>
+          <p><strong>N°:</strong> ${bonAchat.num_bon_achat}</p>
           <p><strong>Date création:</strong> ${formatDate(issueDate)}</p>
-    
         </div>
       </div>
 
@@ -662,19 +592,21 @@ const DevisDetailsModal = ({
             <th style="padding:6px; border:1px solid #2c5aa0;">Désignation</th>
             <th style="padding:6px; border:1px solid #2c5aa0;">Qté</th>
             <th style="padding:6px; border:1px solid #2c5aa0;">Prix U.</th>
+            <th style="padding:6px; border:1px solid #2c5aa0;">Remise</th>
             <th style="padding:6px; border:1px solid #2c5aa0;">Total</th>
           </tr>
         </thead>
         <tbody>
-          ${(devis.produits || [])
+          ${(bonAchat.produits || [])
             .map(
               (prod, i) => `
             <tr style="${i % 2 === 0 ? "background:#f9f9f9;" : ""}">
               <td style="border:1px solid #ddd; padding:5px;">${prod.reference || "N/A"}</td>
               <td style="border:1px solid #ddd; padding:5px;">${prod.designation || "Produit"}</td>
-              <td style="border:1px solid #ddd; padding:5px; text-align:center;">${parseFloat(prod.DevisProduit?.quantite || 0).toFixed(2)}</td>
-              <td style="border:1px solid #ddd; padding:5px; text-align:right;">${parseFloat(prod.DevisProduit?.prix_unitaire || 0).toFixed(2)} Dh</td>
-              <td style="border:1px solid #ddd; padding:5px; text-align:right; font-weight:bold;">${parseFloat(prod.DevisProduit?.total_ligne || 0).toFixed(2)} Dh</td>
+              <td style="border:1px solid #ddd; padding:5px; text-align:center;">${parseFloat(prod.BonAchatProduit?.quantite || 0).toFixed(2)}</td>
+              <td style="border:1px solid #ddd; padding:5px; text-align:right;">${parseFloat(prod.BonAchatProduit?.prix_unitaire || 0).toFixed(2)} Dh</td>
+              <td style="border:1px solid #ddd; padding:5px; text-align:right;">${parseFloat(prod.BonAchatProduit?.remise_ligne || 0).toFixed(2)} Dh</td>
+              <td style="border:1px solid #ddd; padding:5px; text-align:right; font-weight:bold;">${parseFloat(prod.BonAchatProduit?.total_ligne || 0).toFixed(2)} Dh</td>
             </tr>
           `,
             )
@@ -695,7 +627,7 @@ const DevisDetailsModal = ({
           Total a Payer: ${total.toFixed(2)} Dh
         </p>
         <p style="font-size:10px; font-style:italic;">
-          Arrêté le présent devis à la somme de : <strong>${pdfTotalText}</strong>
+          Arrêté le présent bon d'achat à la somme de : <strong>${pdfTotalText}</strong>
         </p>
       </div>
     `;
@@ -733,7 +665,7 @@ const DevisDetailsModal = ({
         }
       }
 
-      pdf.save(`Devis-${devis.num_devis}.pdf`);
+      pdf.save(`Bon-Achat-${bonAchat.num_bon_achat}.pdf`);
       topTost("PDF téléchargé avec succès!", "success");
     } catch (err) {
       console.error("Erreur PDF:", err);
@@ -741,116 +673,66 @@ const DevisDetailsModal = ({
     }
   };
 
-  const canEdit = ["brouillon", "en_attente", "refusé", "expiré"].includes(
-    devis.status,
+  const canReceive = ["brouillon", "en_cours", "partiellement_reçu"].includes(
+    bonAchat.status,
   );
-
-  const formatDate = (dateInput) => {
-    if (!dateInput) return "";
-
-    const d = new Date(dateInput);
-
-    return d.toLocaleString("fr-FR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
-
-  // Get date from bon
-  const issueDate = devis.date_creation
-    ? new Date(devis.date_creation)
-    : new Date();
+  const canEdit = ["brouillon", "en_cours"].includes(bonAchat.status);
 
   return (
     <Modal isOpen={isOpen} toggle={toggle} size="xl">
       <ModalHeader toggle={toggle}>
         <div className="d-flex align-items-center">
-          <FiFileText className="me-2" />
-          Devis #{devis.num_devis}
-          <Badge color={getStatusBadge(formData.status)} className="ms-2">
-            {getStatusLabel(formData.status)}
-          </Badge>
+          <FiPackage className="me-2" />
+          Bon d'Achat #{bonAchat.num_bon_achat}
         </div>
       </ModalHeader>
 
       <ModalBody>
         <div className="row">
-          {/* Client Information */}
+          {/* Fournisseur Information */}
           <div className="col-md-6">
             <div className="mb-3">
               <h6>
                 <FiUser className="me-2" />
-                Client
+                Fournisseur
               </h6>
               <div className="p-3 bg-light rounded">
                 <p>
                   <strong>Nom:</strong>{" "}
-                  {devis.client_name ||
-                    devis.client?.nom_complete ||
-                    "Client inconnu"}
+                  {bonAchat.fornisseur?.nom_complete || "Fournisseur inconnu"}
                 </p>
                 <p>
                   <strong>Téléphone:</strong>{" "}
-                  {devis.client_phone ||
-                    devis.client?.telephone ||
-                    "Non spécifié"}
-                </p>
-                <p>
-                  <strong>Adresse:</strong>{" "}
-                  {devis.client?.address || "Non spécifiée"}
+                  {bonAchat.fornisseur?.telephone || "Non spécifié"}
                 </p>
               </div>
             </div>
           </div>
 
-          {/* Devis Information */}
+          {/* Bon Achat Information */}
           <div className="col-md-6">
             <div className="mb-3">
               <h6>
                 <FiFileText className="me-2" />
-                Informations du Devis
+                Informations du Bon d'Achat
               </h6>
               <div className="p-3 bg-light rounded">
                 <p>
-                  <strong>Date création:</strong> {formatDate(issueDate)}{" "}
+                  <strong>Date création:</strong>{" "}
+                  {new Date(
+                    bonAchat.date_creation || bonAchat.createdAt,
+                  ).toLocaleDateString("fr-FR")}
                 </p>
-
                 <p>
-                  <strong>Mode règlement:</strong>{" "}
-                  {devis.mode_reglement || "Non spécifié"}
+                  <strong>Quantité totale:</strong> {totalQuantite} unités
+                </p>
+                <p>
+                  <strong>Quantité reçue:</strong> {totalQuantiteRecue} unités
                 </p>
               </div>
             </div>
           </div>
 
-          {/* Status and Editable Fields */}
-          <div className="col-md-4">
-            <div className="form-group mb-3">
-              <label className="form-label">Statut *</label>
-
-              <div className="select-wrapper">
-                <Select
-                  value={statusOptions.find(
-                    (opt) => opt.value === formData.status,
-                  )}
-                  onChange={(opt) => handleInputChange("status", opt.value)}
-                  options={statusOptions}
-                  styles={{
-                    dropdownIndicator: (base, state) => ({
-                      ...base,
-                      transform: state.selectProps.menuIsOpen
-                        ? "rotate(180deg)"
-                        : null,
-                      transition: "transform 0.25s ease",
-                    }),
-                  }}
-                />
-              </div>
-            </div>
-          </div>
           <div className="col-12">
             <div className="form-group mb-3">
               <label className="form-label">Notes</label>
@@ -860,6 +742,7 @@ const DevisDetailsModal = ({
                 value={formData.notes}
                 onChange={(e) => handleInputChange("notes", e.target.value)}
                 placeholder="Notes supplémentaires..."
+                disabled={!canEdit}
               />
             </div>
           </div>
@@ -876,37 +759,46 @@ const DevisDetailsModal = ({
                   <tr>
                     <th>Code</th>
                     <th>Désignation</th>
-                    <th>Quantité</th>
+                    <th>Stock Actuel</th>
+                    <th>Quantité Achetée</th>
                     <th>Prix Unitaire</th>
                     <th>Remise Ligne</th>
                     <th>Total Ligne</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {(devis.produits || []).map((prod, index) => (
+                  {(bonAchat.produits || []).map((prod, index) => (
                     <tr key={prod.id || index}>
                       <td>{prod.reference || "N/A"}</td>
                       <td>{prod.designation || "Produit"}</td>
-                      <td>
-                        {parseFloat(prod.DevisProduit?.quantite || 0).toFixed(
-                          2,
-                        )}
+                      <td
+                        className={
+                          parseFloat(prod.qty) < 0 ? "text-danger" : ""
+                        }
+                      >
+                        {parseFloat(prod.qty || 0).toFixed(2)} unités
+                      </td>
+                      <td className="text-primary fw-bold">
+                        {parseFloat(
+                          prod.BonAchatProduit?.quantite || 0,
+                        ).toFixed(2)}{" "}
+                        unités
                       </td>
                       <td>
                         {parseFloat(
-                          prod.DevisProduit?.prix_unitaire || 0,
+                          prod.BonAchatProduit?.prix_unitaire || 0,
                         ).toFixed(2)}{" "}
                         Dh
                       </td>
                       <td>
                         {parseFloat(
-                          prod.DevisProduit?.remise_ligne || 0,
+                          prod.BonAchatProduit?.remise_ligne || 0,
                         ).toFixed(2)}{" "}
                         Dh
                       </td>
-                      <td>
+                      <td className="fw-bold">
                         {parseFloat(
-                          prod.DevisProduit?.total_ligne || 0,
+                          prod.BonAchatProduit?.total_ligne || 0,
                         ).toFixed(2)}{" "}
                         Dh
                       </td>
@@ -922,22 +814,17 @@ const DevisDetailsModal = ({
             <div className="bg-light p-3 rounded mt-3">
               <div className="row">
                 <div className="col-md-6">
-                  <h6>Résumé du Devis</h6>
+                  <h6>Résumé du Bon d'Achat</h6>
                   <p>
-                    <strong>N° Devis:</strong> {devis.num_devis}
+                    <strong>N° Bon d'Achat:</strong> {bonAchat.num_bon_achat}
                   </p>
                   <p>
-                    <strong>Client:</strong>{" "}
-                    {devis.client_name ||
-                      devis.client?.nom_complete ||
-                      "Client inconnu"}
+                    <strong>Fournisseur:</strong>{" "}
+                    {bonAchat.fornisseur?.nom_complete || "Fournisseur inconnu"}
                   </p>
                   <p>
-                    <strong>Produits:</strong> {devis.produits?.length || 0}{" "}
+                    <strong>Produits:</strong> {bonAchat.produits?.length || 0}{" "}
                     article(s)
-                  </p>
-                  <p>
-                    <strong>Statut:</strong> {getStatusLabel(formData.status)}
                   </p>
                 </div>
                 <div className="col-md-6 text-end">
@@ -945,14 +832,14 @@ const DevisDetailsModal = ({
                   <div className="d-flex justify-content-between">
                     <span>Montant HT:</span>
                     <span>
-                      {parseFloat(devis.montant_ht || 0).toFixed(2)} Dh
+                      {parseFloat(bonAchat.montant_ht || 0).toFixed(2)} Dh
                     </span>
                   </div>
-                  {parseFloat(devis.remise) > 0 && (
+                  {parseFloat(bonAchat.remise) > 0 && (
                     <div className="d-flex justify-content-between text-danger">
                       <span>Remise globale:</span>
                       <span>
-                        -{parseFloat(devis.remise || 0).toFixed(2)} Dh
+                        -{parseFloat(bonAchat.remise || 0).toFixed(2)} Dh
                       </span>
                     </div>
                   )}
@@ -960,23 +847,18 @@ const DevisDetailsModal = ({
                     <span>Total a Payer:</span>
                     <span>{total.toFixed(2)} Dh</span>
                   </div>
-                  {isCalculatingTotal ? (
+                  {totalText && (
                     <div
                       className="text-start mt-2"
                       style={{ fontSize: "0.85em", fontStyle: "italic" }}
                     >
-                      <small>Calcul en cours...</small>
-                    </div>
-                  ) : totalText ? (
-                    <div
-                      className="text-start mt-2"
-                      style={{ fontSize: "0.85em", fontStyle: "italic" }}
-                    >
-                      <small>Arrêté le présent devis à la somme de :</small>
+                      <small>
+                        Arrêté le présent bon d'achat à la somme de :
+                      </small>
                       <br />
                       <strong>{totalText}</strong>
                     </div>
-                  ) : null}
+                  )}
                 </div>
               </div>
             </div>
@@ -1011,15 +893,17 @@ const DevisDetailsModal = ({
               Fermer
             </Button>
 
-            <Button
-              onClick={handleSubmit}
-              color="primary"
-              disabled={isSubmitting}
-              className="mt-4"
-            >
-              <FiSave className="me-2" />
-              {isSubmitting ? "Enregistrement..." : "Enregistrer"}
-            </Button>
+            {canEdit && (
+              <Button
+                onClick={handleSubmit}
+                color="primary"
+                disabled={isSubmitting}
+                className="mt-4"
+              >
+                <FiSave className="me-2" />
+                {isSubmitting ? "Enregistrement..." : "Enregistrer"}
+              </Button>
+            )}
           </div>
         </div>
       </ModalFooter>
@@ -1027,4 +911,4 @@ const DevisDetailsModal = ({
   );
 };
 
-export default DevisDetailsModal;
+export default BonAchatDetailsModal;

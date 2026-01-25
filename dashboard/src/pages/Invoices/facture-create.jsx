@@ -95,19 +95,25 @@ const FactureCreate = () => {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      const clientOptions = (response.data?.clients || []).map((client) => ({
-        value: client.id,
-        label: `${client.nom_complete} ${client.telephone ? `- ${client.telephone}` : ""}`,
-        ...client,
-      }));
-
+      const clientOptions = (response.data?.clients || []).map((client) => {
+        const refPart = client.reference ? `(${client.reference}) ` : "";
+        return {
+          value: client.id,
+          label: `${refPart}${client.nom_complete}${client.telephone ? ` - ${client.telephone}` : ""}`,
+          searchText: [
+            client.nom_complete?.toLowerCase() || "",
+            client.telephone?.toLowerCase() || "",
+            client.reference?.toLowerCase() || "",
+          ].join(" "),
+          ...client,
+        };
+      });
       setClients(clientOptions);
     } catch (error) {
       console.error("Error fetching clients:", error);
       topTost("Erreur lors du chargement des clients", "error");
     }
   };
-
   const fetchAllProduits = async () => {
     try {
       setLoadingProduits(true);
@@ -452,38 +458,62 @@ const FactureCreate = () => {
   };
 
   const calculateTotals = () => {
-    // Calculer le total HT de tous les produits (après remises lignes)
+    // Calculate total HT from products (after line discounts)
     const totalHT = selectedProduits.reduce(
       (sum, p) => sum + (p.total_ligne || 0),
       0,
     );
 
-    // Calculer la remise totale selon le type (montant ou pourcentage)
+    // Calculate total discount based on type (amount or percentage)
     let remiseMontant = 0;
     const remiseValeur = parseFloat(formData.remise_total) || 0;
 
     if (formData.remise_total_type === "pourcentage" && remiseValeur > 0) {
-      // Si pourcentage, calculer le montant de la remise
       remiseMontant = (totalHT * remiseValeur) / 100;
     } else {
-      // Si montant, utiliser directement la valeur
       remiseMontant = remiseValeur;
     }
 
-    // Limiter la remise au montant HT maximum
+    // Limit discount to maximum HT amount
     if (remiseMontant > totalHT) {
       remiseMontant = totalHT;
     }
 
     const montantHTAfterRemise = Math.max(totalHT - remiseMontant, 0);
 
-    // Calculer la TVA sur le montant HT après remise
+    // Calculate VAT on HT after discount
     const tauxTVA = parseFloat(formData.tva) || 0;
     const montantTVA = (montantHTAfterRemise * tauxTVA) / 100;
 
     const montantTTC = montantHTAfterRemise + montantTVA;
-    const totalAdvancements = calculateTotalAdvancements();
-    const remaining = montantTTC - totalAdvancements;
+
+    // Calculate advancements, separating acomptes from other payments
+    const totalAdvancements = advancements.reduce((total, advance) => {
+      return total + (parseFloat(advance.amount) || 0);
+    }, 0);
+
+    // Calculate total acomptes (advances)
+    const totalAcomptes = advancements.reduce((total, advance) => {
+      if (advance.type === "acompte") {
+        return total + (parseFloat(advance.amount) || 0);
+      }
+      return total;
+    }, 0);
+
+    // Calculate total other payments
+    const totalOtherPayments = advancements.reduce((total, advance) => {
+      if (advance.type !== "acompte") {
+        return total + (parseFloat(advance.amount) || 0);
+      }
+      return total;
+    }, 0);
+
+    // For TTC calculation: subtotal is initial TTC minus acomptes
+    // Acomptes are considered as advance payments that reduce the total
+    const ttcAfterAcomptes = Math.max(montantTTC - totalAcomptes, 0);
+
+    // Remaining after all payments (including acomptes)
+    const remaining = Math.max(montantTTC - totalAdvancements, 0);
 
     return {
       totalHT: totalHT.toFixed(2),
@@ -493,10 +523,12 @@ const FactureCreate = () => {
       montantTVA: montantTVA.toFixed(2),
       montantTTC: montantTTC.toFixed(2),
       totalAdvancements: totalAdvancements.toFixed(2),
-      remaining: remaining.toFixed(2),
+      totalAcomptes: totalAcomptes.toFixed(2),
+      totalOtherPayments: totalOtherPayments.toFixed(2),
+      ttcAfterAcomptes: ttcAfterAcomptes.toFixed(2), // TTC after acomptes applied
+      remaining: remaining.toFixed(2), // Final remaining after all payments
     };
   };
-
   const totals = calculateTotals();
 
   const handleSubmit = async (e) => {
@@ -704,15 +736,6 @@ const FactureCreate = () => {
     });
   };
 
-  const createFromBonLivraison = () => {
-    if (!formData.client_id) {
-      topTost("Veuillez d'abord sélectionner un client", "warning");
-      return;
-    }
-
-    setShowBonLivraisonSelection(true);
-  };
-
   const handleBonLivraisonSelect = (selectedOption) => {
     if (!selectedOption) {
       setFormData((prev) => ({ ...prev, bon_livraison_id: "" }));
@@ -763,24 +786,9 @@ const FactureCreate = () => {
         </button>
       </PageHeader>
 
-      <div className="row">
-        <div className="col-lg-8 mt-4">
+      <div className="col">
+        <div className="col-lg-12 mt-4">
           <div className="card">
-            <div className="card-header d-flex justify-content-between align-items-center">
-              <h5 className="card-title mb-0">
-                <FiFileText className="me-2" />
-                Informations de la Facture
-              </h5>
-              <button
-                type="button"
-                className="btn btn-sm btn-outline-info"
-                onClick={createFromBonLivraison}
-                disabled={!formData.client_id}
-              >
-                <FiList className="me-1" />
-                Créer depuis BL
-              </button>
-            </div>
             <div className="card-body">
               <form id="factureForm" onSubmit={handleSubmit}>
                 <div className="row g-3">
@@ -801,20 +809,25 @@ const FactureCreate = () => {
                         setFormData({
                           ...formData,
                           client_id: selectedOption?.value || "",
-                          bon_livraison_id: "", // Reset BL selection
                         })
                       }
                       isSearchable
                       required
                       noOptionsMessage={() => "Aucun client trouvé"}
+                      // ─── Add this ───────────────────────────────────────
+                      filterOption={(option, rawInput) => {
+                        if (!rawInput) return true;
+                        const search = rawInput.toLowerCase().trim();
+                        return option.data.searchText.includes(search);
+                      }}
+                      // ─────────────────────────────────────────────────────
+
                       styles={{
                         control: (base) => ({
                           ...base,
                           minHeight: "45px",
                           borderColor: "#dee2e6",
-                          "&:hover": {
-                            borderColor: "#405189",
-                          },
+                          "&:hover": { borderColor: "#405189" },
                         }),
                       }}
                     />
@@ -1426,7 +1439,7 @@ const FactureCreate = () => {
           </div>
         </div>
 
-        <div className="col-lg-4 mt-4">
+        <div className="col-lg-12 mt-4">
           <div className="card">
             <div className="card-header">
               <h5 className="card-title mb-0">
@@ -1493,15 +1506,46 @@ const FactureCreate = () => {
 
               <hr />
 
+              {/* In the Récapitulatif Facture section */}
               {advancements.length > 0 && (
                 <>
                   <div className="mb-3">
+                    {totals.totalAcomptes !== "0.00" && (
+                      <div className="d-flex justify-content-between mb-2">
+                        <span className="text-info">Total acomptes:</span>
+                        <strong className="text-info">
+                          -{totals.totalAcomptes} DH
+                        </strong>
+                      </div>
+                    )}
+
+                    {totals.totalOtherPayments !== "0.00" && (
+                      <div className="d-flex justify-content-between mb-2">
+                        <span className="text-success">Autres paiements:</span>
+                        <strong className="text-success">
+                          {totals.totalOtherPayments} DH
+                        </strong>
+                      </div>
+                    )}
+
                     <div className="d-flex justify-content-between mb-2">
                       <span className="text-primary">Total paiements:</span>
                       <strong className="text-primary">
                         {totals.totalAdvancements} DH
                       </strong>
                     </div>
+
+                    {totals.totalAcomptes !== "0.00" && (
+                      <div className="d-flex justify-content-between mb-2">
+                        <span className="text-warning">
+                          TTC après acomptes:
+                        </span>
+                        <strong className="text-warning">
+                          {totals.ttcAfterAcomptes} DH
+                        </strong>
+                      </div>
+                    )}
+
                     <div className="d-flex justify-content-between mb-2">
                       <span className="text-warning">Reste à payer:</span>
                       <strong className="text-warning">
@@ -1513,6 +1557,21 @@ const FactureCreate = () => {
                 </>
               )}
 
+              <div className="d-flex justify-content-between align-items-center mb-4">
+                <h5 className="mb-0">
+                  {totals.totalAcomptes !== "0.00"
+                    ? "Total TTC initial:"
+                    : "Total TTC:"}
+                </h5>
+                <h3 className="mb-0 text-primary">
+                  {totals.montantTTC} DH
+                  {totals.totalAcomptes !== "0.00" && (
+                    <small className="text-muted d-block fs-6">
+                      → {totals.ttcAfterAcomptes} DH après acomptes
+                    </small>
+                  )}
+                </h3>
+              </div>
               <div className="d-flex justify-content-between align-items-center mb-4">
                 <h5 className="mb-0">Total TTC:</h5>
                 <h3 className="mb-0 text-primary">{totals.montantTTC} DH</h3>
@@ -1589,15 +1648,6 @@ const FactureCreate = () => {
                 <FiCheck className="me-1" />
                 TVA appliquée sur le total HT après remise
               </small>
-            </div>
-          </div>
-
-          <div className="card mt-3">
-            <div className="card-body">
-              <h6 className="card-title">
-                <FiCreditCard className="me-2" />
-                Mode de Règlement
-              </h6>
             </div>
           </div>
 

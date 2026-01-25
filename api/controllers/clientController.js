@@ -2,32 +2,58 @@ const { Client } = require("../models");
 
 // Create a new client
 const createClient = async (req, res) => {
+  console.log("=== CREATE CLIENT START ===");
+  console.log("Request Body:", JSON.stringify(req.body, null, 2));
+
   try {
     const { nom_complete, reference, ville, address, telephone } = req.body;
 
     // Validation
     if (!nom_complete || !telephone) {
+      console.log("Validation failed - missing fields");
+      console.log("nom_complete:", nom_complete);
+      console.log("telephone:", telephone);
       return res.status(400).json({
         message: "Nom complet and telephone are required",
+        received: { nom_complete, telephone },
       });
     }
 
+    console.log("Checking for existing client with telephone:", telephone);
+
     // Check if telephone already exists
-    const existingClient = await Client.findOne({ where: { telephone } });
+    const existingClient = await Client.findOne({
+      where: { telephone },
+      logging: console.log, // This will log the SQL query
+    });
+
+    console.log("Existing client check result:", existingClient);
+
     if (existingClient) {
+      console.log("Telephone already exists:", telephone);
       return res.status(409).json({
         message: "Telephone number already in use",
       });
     }
 
+    console.log("Creating new client...");
+
     // Create client
-    const client = await Client.create({
-      nom_complete,
-      reference,
-      ville,
-      address,
-      telephone,
-    });
+    const client = await Client.create(
+      {
+        nom_complete,
+        reference,
+        ville,
+        address,
+        telephone,
+      },
+      {
+        logging: console.log, // This will log the SQL query
+      },
+    );
+
+    console.log("Client created successfully:", client.id);
+    console.log("Client data:", JSON.stringify(client, null, 2));
 
     return res.status(201).json({
       message: "Client created successfully",
@@ -43,7 +69,14 @@ const createClient = async (req, res) => {
       },
     });
   } catch (err) {
-    console.error(err);
+    console.error("=== ERROR IN CREATE CLIENT ===");
+    console.error("Error name:", err.name);
+    console.error("Error message:", err.message);
+    console.error("Error stack:", err.stack);
+
+    if (err.errors) {
+      console.error("Sequelize errors:", JSON.stringify(err.errors, null, 2));
+    }
 
     // Handle Sequelize validation errors
     if (err.name === "SequelizeValidationError") {
@@ -57,13 +90,30 @@ const createClient = async (req, res) => {
       });
     }
 
+    // Handle unique constraint errors
+    if (err.name === "SequelizeUniqueConstraintError") {
+      return res.status(409).json({
+        message: "Client with this telephone already exists",
+      });
+    }
+
+    // Handle database connection errors
+    if (err.name === "SequelizeConnectionError") {
+      return res.status(500).json({
+        message: "Database connection error",
+        error: "Cannot connect to database",
+      });
+    }
+
     return res.status(500).json({
       message: "Server error",
       error: err.message,
+      stack: process.env.NODE_ENV === "development" ? err.stack : undefined,
     });
+  } finally {
+    console.log("=== CREATE CLIENT END ===");
   }
 };
-
 // Get all clients
 const getAllClients = async (req, res) => {
   try {

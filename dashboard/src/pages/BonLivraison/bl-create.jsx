@@ -5,12 +5,10 @@ import Select from "react-select";
 import AsyncSelect from "react-select/async";
 import PageHeader from "@/components/shared/pageHeader/PageHeader";
 import {
-  FiPackage,
   FiUser,
   FiShoppingCart,
   FiPlus,
   FiMinus,
-  FiTrash2,
   FiSearch,
   FiPercent,
   FiDollarSign,
@@ -22,16 +20,12 @@ import {
   FiCheck,
   FiCreditCard as FiCard,
   FiDollarSign as FiCash,
-  FiChevronDown,
-  FiChevronUp,
   FiXCircle,
   FiRefreshCw,
 } from "react-icons/fi";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
 import api from "@/utils/axiosConfig";
-import { format } from "date-fns";
-import { fr } from "date-fns/locale";
 
 const MySwal = withReactContent(Swal);
 
@@ -68,12 +62,19 @@ const BonLivraisonCreate = () => {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      const clientOptions = (response.data?.clients || []).map((client) => ({
-        value: client.id,
-        label: `${client.nom_complete} ${client.telephone ? `- ${client.telephone}` : ""}`,
-        ...client,
-      }));
-
+      const clientOptions = (response.data?.clients || []).map((client) => {
+        const refPart = client.reference ? `(${client.reference}) ` : "";
+        return {
+          value: client.id,
+          label: `${refPart}${client.nom_complete}${client.telephone ? ` - ${client.telephone}` : ""}`,
+          searchText: [
+            client.nom_complete?.toLowerCase() || "",
+            client.telephone?.toLowerCase() || "",
+            client.reference?.toLowerCase() || "",
+          ].join(" "),
+          ...client,
+        };
+      });
       setClients(clientOptions);
     } catch (error) {
       console.error("Error fetching clients:", error);
@@ -334,22 +335,37 @@ const BonLivraisonCreate = () => {
     const newAdvancements = [...advancements];
     newAdvancements.splice(index, 1);
     setAdvancements(newAdvancements);
+    topTost("Acompte supprimé", "info");
   };
 
   const updateAdvancement = (index, field, value) => {
     const newAdvancements = [...advancements];
     newAdvancements[index][field] = value;
 
+    // Validation du montant de l'acompte
     if (field === "amount") {
       const amount = parseFloat(value) || 0;
-      const totalTTC = parseFloat(totals.montantTTC);
-      const remaining = totalTTC - calculateTotalAdvancements() + amount;
+      const totalTTC = parseFloat(calculateTotals().montantTTC);
+      const totalAdvancements = calculateTotalAdvancements();
 
-      if (remaining < 0) {
+      // Vérifier si le nouvel acompte ne dépasse pas le total TTC
+      if (amount > totalTTC) {
         topTost(
-          "Le total des acomptes ne peut pas dépasser le montant TTC",
+          "Le montant d'un acompte ne peut pas dépasser le montant total",
           "warning",
         );
+        // Réinitialiser à 0
+        newAdvancements[index].amount = 0;
+      } else if (
+        totalAdvancements - parseFloat(advancements[index].amount) + amount >
+        totalTTC
+      ) {
+        topTost(
+          "Le total des acomptes ne peut pas dépasser le montant total",
+          "warning",
+        );
+        // Réinitialiser à la valeur précédente
+        newAdvancements[index].amount = advancements[index].amount;
       }
     }
 
@@ -379,11 +395,39 @@ const BonLivraisonCreate = () => {
       montantTTC: montantTTC.toFixed(2),
       remise: remise.toFixed(2),
       totalAdvancements: totalAdvancements.toFixed(2),
-      remaining: remaining.toFixed(2),
+      remaining: remaining > 0 ? remaining.toFixed(2) : "0.00",
     };
   };
 
-  const totals = calculateTotals();
+  const validateAdvancements = () => {
+    const totalTTC = parseFloat(calculateTotals().montantTTC);
+    const totalAdvancements = calculateTotalAdvancements();
+
+    if (totalAdvancements > totalTTC) {
+      return {
+        valid: false,
+        message: "Le total des acomptes ne peut pas dépasser le montant total",
+      };
+    }
+
+    for (const advance of advancements) {
+      const amount = parseFloat(advance.amount) || 0;
+      if (amount <= 0) {
+        return {
+          valid: false,
+          message: "Tous les acomptes doivent avoir un montant positif",
+        };
+      }
+      if (!advance.paymentMethod) {
+        return {
+          valid: false,
+          message: "Méthode de paiement requise pour tous les acomptes",
+        };
+      }
+    }
+
+    return { valid: true, message: "" };
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -398,6 +442,7 @@ const BonLivraisonCreate = () => {
       return;
     }
 
+    // Vérifier le stock
     for (const produit of selectedProduits) {
       if (produit.quantite > produit.qty) {
         topTost(
@@ -408,30 +453,16 @@ const BonLivraisonCreate = () => {
       }
     }
 
-    const totalAdvancements = calculateTotalAdvancements();
-    const totalTTC = parseFloat(totals.montantTTC);
-
-    if (totalAdvancements > totalTTC) {
-      topTost(
-        "Le total des acomptes ne peut pas dépasser le montant TTC",
-        "error",
-      );
+    // Valider les acomptes
+    const advancementValidation = validateAdvancements();
+    if (!advancementValidation.valid) {
+      topTost(advancementValidation.message, "error");
       return;
     }
 
-    for (const advance of advancements) {
-      if (!advance.amount || parseFloat(advance.amount) <= 0) {
-        topTost("Tous les acomptes doivent avoir un montant positif", "error");
-        return;
-      }
-      if (!advance.paymentMethod) {
-        topTost("Méthode de paiement requise pour tous les acomptes", "error");
-        return;
-      }
-    }
-
+    // Préparer les données des acomptes
     const advancementsData = advancements.map((advance) => ({
-      amount: parseFloat(advance.amount),
+      amount: parseFloat(advance.amount) || 0,
       paymentMethod: advance.paymentMethod,
       reference: advance.reference || null,
       notes: advance.notes || null,
@@ -439,6 +470,19 @@ const BonLivraisonCreate = () => {
         advance.paymentDate || new Date().toISOString().split("T")[0],
     }));
 
+    // Calculer le statut de paiement
+    const totals = calculateTotals();
+    const totalTTC = parseFloat(totals.montantTTC);
+    const totalAdvancements = calculateTotalAdvancements();
+
+    let paymentStatus = "brouillon";
+    if (totalAdvancements >= totalTTC) {
+      paymentStatus = "payé";
+    } else if (totalAdvancements > 0) {
+      paymentStatus = "partiellement_payée";
+    }
+
+    // Préparer le payload
     const payload = {
       clientId: formData.clientId,
       mode_reglement: formData.mode_reglement,
@@ -454,13 +498,7 @@ const BonLivraisonCreate = () => {
       advancements: advancementsData.length > 0 ? advancementsData : undefined,
     };
 
-    let paymentStatus = "brouillon";
-    if (totalAdvancements >= totalTTC) {
-      paymentStatus = "payé";
-    } else if (totalAdvancements > 0) {
-      paymentStatus = "partiellement payé";
-    }
-
+    // Confirmation
     const result = await MySwal.fire({
       title: "Créer le bon de livraison ?",
       html: `
@@ -505,10 +543,14 @@ const BonLivraisonCreate = () => {
               <p><strong>Montant TTC:</strong> ${
                 response.data.bon.montant_ttc
               } DH</p>
-              <p><strong>Acomptes:</strong> ${
+              <p><strong>Acomptes versés:</strong> ${
                 response.data.totalAdvancements || 0
               } DH</p>
-              <p><strong>Statut:</strong> ${response.data.bon.statut}</p>
+              <p><strong>Montant restant:</strong> ${
+                response.data.bon.montant_restant ||
+                response.data.bon.montant_ttc
+              } DH</p>
+              <p><strong>Statut:</strong> ${response.data.bon.status}</p>
             </div>
           `,
           confirmButtonText: "Voir le bon",
@@ -518,6 +560,7 @@ const BonLivraisonCreate = () => {
           if (result.isConfirmed) {
             window.location.href = `/bon-livraisons/${response.data.bon.id}`;
           } else {
+            // Réinitialiser le formulaire
             setSelectedProduits([]);
             setAdvancements([]);
             setShowAdvancements(false);
@@ -557,6 +600,22 @@ const BonLivraisonCreate = () => {
     });
   };
 
+  const handleResetForm = () => {
+    setSelectedProduits([]);
+    setAdvancements([]);
+    setShowAdvancements(false);
+    setFormData({
+      clientId: formData.clientId,
+      mode_reglement: formData.mode_reglement,
+      remise: 0,
+      notes: "",
+      date_livraison: new Date().toISOString().split("T")[0],
+    });
+    topTost("Formulaire réinitialisé", "info");
+  };
+
+  const totals = calculateTotals();
+
   return (
     <div className="main-content">
       <PageHeader
@@ -578,8 +637,8 @@ const BonLivraisonCreate = () => {
         </button>
       </PageHeader>
 
-      <div className="row">
-        <div className="col-lg-8 mt-4">
+      <div className="col">
+        <div className="col-lg-12 mt-4">
           <div className="card">
             <div className="card-header">
               <h5 className="card-title mb-0">
@@ -610,14 +669,17 @@ const BonLivraisonCreate = () => {
                       isSearchable
                       required
                       noOptionsMessage={() => "Aucun client trouvé"}
+                      filterOption={(option, rawInput) => {
+                        if (!rawInput) return true;
+                        const search = rawInput.toLowerCase().trim();
+                        return option.data.searchText.includes(search);
+                      }}
                       styles={{
                         control: (base) => ({
                           ...base,
                           minHeight: "45px",
                           borderColor: "#dee2e6",
-                          "&:hover": {
-                            borderColor: "#405189",
-                          },
+                          "&:hover": { borderColor: "#405189" },
                         }),
                       }}
                     />
@@ -743,6 +805,7 @@ const BonLivraisonCreate = () => {
                                           type="number"
                                           step="0.01"
                                           min="0"
+                                          max={totals.montantTTC}
                                           className="form-control"
                                           value={advance.amount}
                                           onChange={(e) =>
@@ -847,7 +910,7 @@ const BonLivraisonCreate = () => {
                                   </div>
                                 </div>
                               ))}
-                              <div className="d-flex justify-content-between">
+                              <div className="d-flex justify-content-between align-items-center">
                                 <button
                                   type="button"
                                   className="btn btn-sm btn-outline-primary"
@@ -856,10 +919,22 @@ const BonLivraisonCreate = () => {
                                   <FiPlus className="me-1" />
                                   Ajouter un autre acompte
                                 </button>
-                                <small className="text-muted">
-                                  Total acomptes:{" "}
-                                  <strong>{totals.totalAdvancements} DH</strong>
-                                </small>
+                                <div className="text-end">
+                                  <small className="text-muted d-block">
+                                    Total acomptes:{" "}
+                                    <strong>
+                                      {totals.totalAdvancements} DH
+                                    </strong>
+                                  </small>
+                                  <small className="text-muted d-block">
+                                    Montant total:{" "}
+                                    <strong>{totals.montantTTC} DH</strong>
+                                  </small>
+                                  <small className="text-success d-block">
+                                    Reste à payer:{" "}
+                                    <strong>{totals.remaining} DH</strong>
+                                  </small>
+                                </div>
                               </div>
                             </>
                           )}
@@ -1121,7 +1196,7 @@ const BonLivraisonCreate = () => {
           </div>
         </div>
 
-        <div className="col-lg-4 mt-4">
+        <div className="col-lg-12 mt-4">
           <div className="card">
             <div className="card-header">
               <h5 className="card-title mb-0">
@@ -1164,6 +1239,10 @@ const BonLivraisonCreate = () => {
                   <span>Montant HT:</span>
                   <strong>{totals.montantHT} DH</strong>
                 </div>
+                <div className="d-flex justify-content-between mb-2">
+                  <span>Montant TTC:</span>
+                  <strong>{totals.montantTTC} DH</strong>
+                </div>
               </div>
 
               <hr />
@@ -1174,12 +1253,12 @@ const BonLivraisonCreate = () => {
                     <div className="d-flex justify-content-between mb-2">
                       <span className="text-primary">Total acomptes:</span>
                       <strong className="text-primary">
-                        {totals.totalAdvancements} DH
+                        -{totals.totalAdvancements} DH
                       </strong>
                     </div>
-                    <div className="d-flex justify-content-between mb-2">
+                    <div className="d-flex justify-content-between mb-3">
                       <span className="text-success">Reste à payer:</span>
-                      <strong className="text-success">
+                      <strong className="text-success fs-5">
                         {totals.remaining} DH
                       </strong>
                     </div>
@@ -1189,15 +1268,28 @@ const BonLivraisonCreate = () => {
               )}
 
               <div className="d-flex justify-content-between align-items-center mb-4">
-                <h5 className="mb-0">Total TTC:</h5>
-                <h3 className="mb-0 text-primary">{totals.montantTTC} DH</h3>
+                <div>
+                  <h5 className="mb-0">Total à payer:</h5>
+                  {advancements.length > 0 && (
+                    <small className="text-muted">
+                      Après déduction des acomptes
+                    </small>
+                  )}
+                </div>
+                <h3 className="mb-0 text-primary">
+                  {advancements.length > 0
+                    ? totals.remaining
+                    : totals.montantTTC}{" "}
+                  DH
+                </h3>
               </div>
 
               {advancements.length > 0 && (
-                <div className="alert alert-info mb-3">
+                <div
+                  className={`alert ${parseFloat(totals.remaining) === 0 ? "alert-success" : parseFloat(totals.remaining) === parseFloat(totals.montantTTC) ? "alert-warning" : "alert-info"} mb-3`}
+                >
                   <strong>Statut paiement: </strong>
-                  {parseFloat(totals.totalAdvancements) >=
-                  parseFloat(totals.montantTTC)
+                  {parseFloat(totals.remaining) === 0
                     ? "Payé"
                     : parseFloat(totals.totalAdvancements) > 0
                       ? "Partiellement payé"
@@ -1227,18 +1319,7 @@ const BonLivraisonCreate = () => {
                 <button
                   type="button"
                   className="btn btn-outline-secondary"
-                  onClick={() => {
-                    setSelectedProduits([]);
-                    setAdvancements([]);
-                    setShowAdvancements(false);
-                    setFormData({
-                      clientId: formData.clientId,
-                      mode_reglement: formData.mode_reglement,
-                      remise: 0,
-                      notes: "",
-                      date_livraison: new Date().toISOString().split("T")[0],
-                    });
-                  }}
+                  onClick={handleResetForm}
                   disabled={
                     selectedProduits.length === 0 && advancements.length === 0
                   }

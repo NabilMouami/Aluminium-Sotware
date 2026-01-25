@@ -637,6 +637,8 @@ const updateDevis = async (req, res) => {
     const { id } = req.params;
     const { produits, mode_reglement, remise, notes, status } = req.body;
 
+    console.log("Req Body: " + JSON.stringify(req.body));
+
     const devis = await Devis.findByPk(id, {
       transaction,
       include: [
@@ -666,20 +668,6 @@ const updateDevis = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: "Devis non trouvé",
-      });
-    }
-
-    // Check if quote can be modified
-    if (
-      devis.status === "accepté" ||
-      devis.status === "transformé_en_commande" ||
-      devis.status === "transformé_en_facture" ||
-      devis.status === "transformé_en_bl"
-    ) {
-      await transaction.rollback();
-      return res.status(400).json({
-        success: false,
-        message: `Impossible de modifier un devis ${devis.status}`,
       });
     }
 
@@ -1027,15 +1015,6 @@ const convertToBonLivraison = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: "Devis non trouvé",
-      });
-    }
-
-    // Check if quote is accepted
-    if (devis.status !== "accepté") {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Seuls les devis acceptés peuvent être transformés en bon de livraison",
       });
     }
 

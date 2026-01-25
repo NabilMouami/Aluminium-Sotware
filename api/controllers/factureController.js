@@ -1118,13 +1118,31 @@ const addPaymentToFacture = async (req, res) => {
 };
 
 // Annuler une facture
+// Annuler une facture
 const cancelFacture = async (req, res) => {
   const transaction = await sequelize.transaction();
 
   try {
     const { id } = req.params;
 
-    const facture = await Facture.findByPk(id, { transaction });
+    const facture = await Facture.findByPk(id, {
+      transaction,
+      include: [
+        {
+          model: Produit,
+          as: "produits", // Changed from "Produits" to "produits"
+          through: {
+            attributes: [
+              "quantite",
+              "prix_unitaire",
+              "remise_ligne",
+              "unite",
+              "description",
+            ],
+          },
+        },
+      ],
+    });
 
     if (!facture) {
       return res.status(404).json({
@@ -1141,6 +1159,40 @@ const cancelFacture = async (req, res) => {
       });
     }
 
+    // Restituer les quantités de produits
+    if (facture.produits && facture.produits.length > 0) {
+      // Changed from Produits to produits
+      for (const produit of facture.produits) {
+        // Get the quantity from the through table
+        const factureProduit = produit.FactureProduit; // This should be available from the include
+        const quantiteVendue = factureProduit ? factureProduit.quantite : 0;
+
+        if (quantiteVendue > 0) {
+          // If facture was created from BonLivraison, don't restore stock
+          if (!facture.bon_livraison_id) {
+            // Augmenter la quantité en stock
+            await Produit.update(
+              {
+                qty: sequelize.literal(`qty + ${quantiteVendue}`),
+              },
+              {
+                where: { id: produit.id },
+                transaction,
+              },
+            );
+
+            console.log(
+              `Produit ${produit.reference} (ID: ${produit.id}) : +${quantiteVendue} unités restituées`,
+            );
+          } else {
+            console.log(
+              `Produit ${produit.reference} (ID: ${produit.id}) : Non restitué (facture créée depuis bon de livraison)`,
+            );
+          }
+        }
+      }
+    }
+
     // Si des paiements ont été effectués, créer un avoir
     if (facture.montant_paye > 0) {
       // Créer un avoir (negative advancement)
@@ -1151,7 +1203,7 @@ const cancelFacture = async (req, res) => {
           paymentDate: new Date(),
           reference: `AVOIR-${facture.num_facture}`,
           notes: `Avoir suite à annulation de la facture ${facture.num_facture}`,
-          factureId: id,
+          facture_id: id,
         },
         { transaction },
       );
@@ -1177,7 +1229,9 @@ const cancelFacture = async (req, res) => {
 
     res.json({
       success: true,
-      message: "Facture annulée avec succès",
+      message: facture.bon_livraison_id
+        ? "Facture annulée avec succès (pas de restitution de stock - facture créée depuis bon de livraison)."
+        : "Facture annulée avec succès. Les quantités de produits ont été restituées au stock.",
       facture,
     });
   } catch (error) {
@@ -1197,7 +1251,23 @@ const deleteFacture = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const facture = await Facture.findByPk(id, { transaction });
+    const facture = await Facture.findByPk(id, {
+      transaction,
+      include: [
+        {
+          model: Produit,
+          as: "produits", // Changed from "Produits" to "produits"
+          through: {
+            attributes: [
+              "quantite",
+              "prix_unitaire",
+              "remise_ligne",
+              "description",
+            ],
+          },
+        },
+      ],
+    });
 
     if (!facture) {
       return res.status(404).json({
@@ -1214,15 +1284,48 @@ const deleteFacture = async (req, res) => {
       throw new Error("Impossible de supprimer une facture avec des paiements");
     }
 
+    // Restituer les quantités de produits avant suppression
+    if (facture.produits && facture.produits.length > 0) {
+      // Changed from Produits to produits
+      for (const produit of facture.produits) {
+        const factureProduit = produit.FactureProduit;
+        const quantiteVendue = factureProduit ? factureProduit.quantite : 0;
+
+        if (quantiteVendue > 0) {
+          // If facture was created from BonLivraison, don't restore stock
+          if (!facture.bon_livraison_id) {
+            // Augmenter la quantité en stock
+            await Produit.update(
+              {
+                qty: sequelize.literal(`qty + ${quantiteVendue}`),
+              },
+              {
+                where: { id: produit.id },
+                transaction,
+              },
+            );
+
+            console.log(
+              `Produit ${produit.reference} (ID: ${produit.id}) : +${quantiteVendue} unités restituées`,
+            );
+          } else {
+            console.log(
+              `Produit ${produit.reference} (ID: ${produit.id}) : Non restitué (facture créée depuis bon de livraison)`,
+            );
+          }
+        }
+      }
+    }
+
     // Supprimer les associations produits
     await FactureProduit.destroy({
-      where: { factureId: id },
+      where: { facture_id: id },
       transaction,
     });
 
     // Supprimer les paiements associés
     await Advancement.destroy({
-      where: { factureId: id },
+      where: { facture_id: id },
       transaction,
     });
 
@@ -1245,7 +1348,9 @@ const deleteFacture = async (req, res) => {
 
     res.json({
       success: true,
-      message: "Facture supprimée avec succès",
+      message: facture.bon_livraison_id
+        ? "Facture supprimée avec succès (pas de restitution de stock - facture créée depuis bon de livraison)."
+        : "Facture supprimée avec succès. Les quantités de produits ont été restituées au stock.",
     });
   } catch (error) {
     await transaction.rollback();
@@ -1256,7 +1361,6 @@ const deleteFacture = async (req, res) => {
     });
   }
 };
-
 // Obtenir les statistiques des factures
 const getFactureStats = async (req, res) => {
   try {

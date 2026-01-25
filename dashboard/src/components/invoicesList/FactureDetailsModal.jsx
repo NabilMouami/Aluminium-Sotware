@@ -615,7 +615,7 @@ const FactureDetailsModal = ({
 <body>
   <div class="header">
     <h2 style="margin: 0;">Facture</h2>
-    <p style="margin: 5px 0;">Hassan - Aluminium-Inox</p>
+    <p style="margin: 5px 0;">ALUMINIUM OULAD BRAHIM</p>
     <p style="margin: 0;">Tél: +212 661-431237</p>
   </div>
 
@@ -665,6 +665,19 @@ const FactureDetailsModal = ({
       Arrêté le présent Facture à la somme de :
       <strong>${printTotalText}</strong>
     </p>
+
+
+      ${
+        facture.remise_total > 0
+          ? `
+    <p style="color:#dc3545;">
+      <strong>Remise:</strong> -${parseFloat(facture.remise_total).toFixed(2)} Dh
+    </p>
+    <p><strong>Total HT après remise:</strong> ${facture.totalHT.toFixed(2)} Dh</p>
+    `
+          : ""
+      }
+
 
     ${
       totalPayments > 0
@@ -724,7 +737,7 @@ const FactureDetailsModal = ({
       pdfContainer.innerHTML = `
       <div style="text-align:center; border-bottom:2px solid #333; padding-bottom:10px; margin-bottom:15px;">
         <h1 style="margin:0; color:#2c5aa0;">Facture</h1>
-        <h3 style="margin:5px 0;">Hassan - Aluminium-Inox</h3>
+        <h3 style="margin:5px 0;">ALUMINIUM OULAD BRAHIM</h3>
         <p style="font-size:10px;">Tél: +212 661-431237</p>
       </div>
 
@@ -792,6 +805,19 @@ const FactureDetailsModal = ({
         `
             : ""
         }
+
+        
+      ${
+        facture.remise_total > 0
+          ? `
+    <p style="color:#dc3545;">
+      <strong>Remise:</strong> -${parseFloat(facture.remise_total).toFixed(2)} Dh
+    </p>
+    <p><strong>Total HT après remise:</strong> ${facture.totalHT.toFixed(2)} Dh</p>
+    `
+          : ""
+      }
+
       </div>
     `;
 
@@ -835,6 +861,25 @@ const FactureDetailsModal = ({
       topTost("Erreur lors de la génération du PDF", "error");
     }
   };
+
+  const formatDate = (dateInput) => {
+    if (!dateInput) return "";
+
+    const d = new Date(dateInput);
+
+    return d.toLocaleString("fr-FR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  // Get date from bon
+  const issueDate = facture.date_creation
+    ? new Date(facture.date_creation)
+    : new Date();
 
   return (
     <Modal isOpen={isOpen} toggle={toggle} size="xl">
@@ -885,14 +930,7 @@ const FactureDetailsModal = ({
               </h6>
               <div className="p-3 bg-light rounded">
                 <p>
-                  <strong>Date création:</strong>{" "}
-                  {facture.createdAt
-                    ? format(facture.createdAt, "dd/MM/yyyy", { locale: fr })
-                    : "N/A"}
-                </p>
-                <p>
-                  <strong>Date facturation:</strong>{" "}
-                  {facture.invoiceDate || "N/A"}
+                  <strong>Date création:</strong> {formatDate(issueDate)}{" "}
                 </p>
               </div>
             </div>
