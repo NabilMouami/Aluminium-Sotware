@@ -1,23 +1,28 @@
 import React, { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import {
-  Modal,
-  ModalHeader,
-  ModalBody,
-  ModalFooter,
+  Container,
+  Row,
+  Col,
+  Card,
   Badge,
   Button,
+  Input,
+  Spinner,
+  Alert,
 } from "reactstrap";
 import {
-  FiX,
   FiPrinter,
   FiDownload,
   FiSave,
   FiFileText,
   FiUser,
   FiShoppingCart,
+  FiArrowLeft,
+  FiCalendar,
+  FiCreditCard,
 } from "react-icons/fi";
 import Select from "react-select";
-
 import axios from "axios";
 import { config_url } from "@/utils/config";
 import topTost from "@/utils/topTost";
@@ -25,8 +30,6 @@ import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
-
-const MySwal = withReactContent(Swal);
 
 // Devis status options
 const statusOptions = [
@@ -40,7 +43,7 @@ const statusOptions = [
   { value: "en_attente", label: "En Attente" },
 ];
 
-// Move totalToFrenchText outside and make it synchronous
+// Convert total to French text
 const totalToFrenchText = (amount) => {
   if (amount === 0) return "Zéro dirham";
 
@@ -80,6 +83,7 @@ const totalToFrenchText = (amount) => {
     "quatre-vingt",
     "quatre-vingt",
   ];
+
   const convertLessThanOneThousand = (num) => {
     if (num === 0) return "";
 
@@ -90,7 +94,7 @@ const totalToFrenchText = (amount) => {
       const h = Math.floor(num / 100);
       result += h === 1 ? "cent" : units[h] + " cent";
       num %= 100;
-      if (num === 0 && h > 1) result += "s"; // deux cents
+      if (num === 0 && h > 1) result += "s";
       if (num > 0) result += " ";
     }
 
@@ -116,7 +120,7 @@ const totalToFrenchText = (amount) => {
         } else if (u > 0) {
           result += "-" + units[u];
         }
-        if (t === 8 && u === 0) result += "s"; // quatre-vingts
+        if (t === 8 && u === 0) result += "s";
       }
     }
 
@@ -128,7 +132,7 @@ const totalToFrenchText = (amount) => {
 
     let result = "";
 
-    // Billions (not needed for our use case, but kept for completeness)
+    // Billions
     if (num >= 1000000000) {
       const billions = Math.floor(num / 1000000000);
       result += convertLessThanOneThousand(billions) + " milliard";
@@ -183,14 +187,12 @@ const totalToFrenchText = (amount) => {
   return text.charAt(0).toUpperCase() + text.slice(1);
 };
 
-const DevisDetailsModal = ({
-  isOpen,
-  toggle,
-  devis,
-  onUpdate,
-  onDevisUpdated,
-}) => {
-  const [isSubmitting, setIsSubmitting] = useState(false);
+const DevisDetailsPage = () => {
+  const { id } = useParams();
+  const navigate = useNavigate();
+
+  const [loading, setLoading] = useState(true);
+  const [devis, setDevis] = useState(null);
   const [formData, setFormData] = useState({
     status: "brouillon",
     notes: "",
@@ -200,20 +202,42 @@ const DevisDetailsModal = ({
   });
   const [totalText, setTotalText] = useState("");
   const [isCalculatingTotal, setIsCalculatingTotal] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
 
-  // Initialize form data when devis changes
+  // Fetch devis details
   useEffect(() => {
-    if (devis) {
-      console.log("Initializing form with devis:", devis);
-      setFormData({
-        status: devis.status || "brouillon",
-        notes: devis.notes || "",
-        conditions_reglement: devis.conditions_reglement || "",
-        objet: devis.objet || "",
-        conditions_generales: devis.conditions_generales || "",
-      });
+    if (id) {
+      fetchDevisDetails();
     }
-  }, [devis]);
+  }, [id]);
+
+  const fetchDevisDetails = async () => {
+    try {
+      setLoading(true);
+      const token =
+        localStorage.getItem("token") || sessionStorage.getItem("token");
+      const response = await axios.get(`${config_url}/api/devis/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const devisData = response.data.devis || response.data;
+      setDevis(devisData);
+
+      setFormData({
+        status: devisData.status || "brouillon",
+        notes: devisData.notes || "",
+        conditions_reglement: devisData.conditions_reglement || "",
+        objet: devisData.objet || "",
+        conditions_generales: devisData.conditions_generales || "",
+      });
+    } catch (error) {
+      console.error("Error fetching devis details:", error);
+      topTost("Erreur lors du chargement du devis", "error");
+      navigate("/devis");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Calculate total in French text
   useEffect(() => {
@@ -242,7 +266,31 @@ const DevisDetailsModal = ({
     }
   }, [devis]);
 
-  if (!devis) return null;
+  if (loading) {
+    return (
+      <Container className="py-5">
+        <div
+          className="d-flex justify-content-center align-items-center"
+          style={{ minHeight: "60vh" }}
+        >
+          <Spinner color="primary" />
+          <span className="ms-3">Chargement du devis...</span>
+        </div>
+      </Container>
+    );
+  }
+
+  if (!devis) {
+    return (
+      <Container className="py-5">
+        <Alert color="danger">Devis introuvable</Alert>
+        <Button color="primary" onClick={() => navigate("/devis/list")}>
+          <FiArrowLeft className="me-2" />
+          Retour à la liste
+        </Button>
+      </Container>
+    );
+  }
 
   const getStatusBadge = (status) => {
     switch (status) {
@@ -256,8 +304,6 @@ const DevisDetailsModal = ({
         return "danger";
       case "expiré":
         return "dark";
-      case "transformé_en_commande":
-        return "info";
       case "transformé_en_facture":
         return "info";
       case "transformé_en_bl":
@@ -269,6 +315,10 @@ const DevisDetailsModal = ({
     }
   };
 
+  const getStatusLabel = (status) => {
+    return statusOptions.find((opt) => opt.value === status)?.label || status;
+  };
+
   const total = parseFloat(devis.montant_ttc) || 0;
 
   const handleInputChange = (field, value) => {
@@ -276,65 +326,6 @@ const DevisDetailsModal = ({
       ...prev,
       [field]: value,
     }));
-  };
-
-  const handleSubmit = async () => {
-    setIsSubmitting(true);
-
-    try {
-      const updateData = {
-        status: formData.status,
-        notes: formData.notes,
-        conditions_reglement: formData.conditions_reglement,
-        objet: formData.objet,
-        conditions_generales: formData.conditions_generales,
-      };
-
-      console.log("Sending update data to backend:", updateData);
-
-      const token =
-        localStorage.getItem("token") || sessionStorage.getItem("token");
-      const response = await axios.put(
-        `${config_url}/api/devis/${devis.id}`,
-        updateData,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        },
-      );
-
-      console.log("Update response from backend:", response.data);
-      // ─── Most important part ────────────────────────────────
-      if (onDevisUpdated && response.data?.devis) {
-        // Pass the fresh devis object returned by the server
-        onDevisUpdated(response.data.devis);
-      } else if (onDevisUpdated) {
-        // Fallback: merge what we sent + id + maybe updatedAt
-        onDevisUpdated({
-          ...devis, // old values
-          ...updateData, // new values
-          updatedAt: new Date().toISOString(), // optional
-        });
-      }
-      topTost("Devis mis à jour avec succès!", "success");
-
-      if (onUpdate) {
-        onUpdate(response.data.devis || response.data);
-      }
-
-      toggle();
-    } catch (error) {
-      console.error("Error updating devis:", error);
-      const errorMessage =
-        error.response?.data?.message ||
-        "Erreur lors de la mise à jour du devis";
-      topTost(errorMessage, "error");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const getStatusLabel = (status) => {
-    return statusOptions.find((opt) => opt.value === status)?.label || status;
   };
 
   const handlePrint = () => {
@@ -350,10 +341,9 @@ const DevisDetailsModal = ({
       ? new Date(devis.date_creation)
       : new Date();
 
-    const printWindow = window.open("", "_blank");
-
-    // Calculate total text for print
     const printTotalText = totalToFrenchText(total);
+
+    const printWindow = window.open("", "_blank");
 
     const printContent = `
 <!DOCTYPE html>
@@ -437,7 +427,7 @@ const DevisDetailsModal = ({
   <div class="header">
     <h2 style="margin: 0;">Devis</h2>
     <p style="margin: 5px 0;">ALUMINIUM OULAD BRAHIM</p>
-    <p style="margin: 0;">Tél: +212 661-431237</p>
+    <p style="margin: 0;">Tél: +212 671953725</p>
   </div>
 
   <div class="invoice-info">
@@ -449,7 +439,6 @@ const DevisDetailsModal = ({
       <p><strong>Date création:</strong> ${formatDate(issueDate)}</p>
     </div>
   </div>
-
 
   <table class="table">
     <thead>
@@ -483,14 +472,13 @@ const DevisDetailsModal = ({
       <strong>Total a Payer:</strong> ${total.toFixed(2)} 
     </p>
 
-     <p style="font-size:10px; font-style:italic;">
-    <strong>${printTotalText}</strong>
-  </p>
+    <p style="font-size:10px; font-style:italic;">
+      <strong>${printTotalText}</strong>
+    </p>
   </div>
 
 </body>
-</html>
-`;
+</html>`;
 
     printWindow.document.write(printContent);
     printWindow.document.close();
@@ -526,16 +514,13 @@ const DevisDetailsModal = ({
         ? new Date(devis.date_creation)
         : new Date();
 
-      const sousTotal = total;
-
-      // Calculate total text for PDF
       const pdfTotalText = totalToFrenchText(total);
 
       pdfContainer.innerHTML = `
       <div style="text-align:center; border-bottom:2px solid #333; padding-bottom:10px; margin-bottom:15px;">
         <h1 style="margin:0; color:#2c5aa0;">Devis</h1>
         <h3 style="margin:5px 0;">ALUMINIUM OULAD BRAHIM</h3>
-        <p style="font-size:10px;">Tél: +212 661-431237</p>
+        <p style="font-size:10px;">Tél: +212 671953725</p>
       </div>
 
       <div style="display:flex; justify-content:space-between; margin-bottom:20px;">
@@ -547,7 +532,6 @@ const DevisDetailsModal = ({
           <h4 style="margin-bottom:5px;">Informations du Devis</h4>
           <p><strong>N°:</strong> ${devis.num_devis}</p>
           <p><strong>Date création:</strong> ${formatDate(issueDate)}</p>
-    
         </div>
       </div>
 
@@ -583,7 +567,7 @@ const DevisDetailsModal = ({
           Total a Payer: ${total.toFixed(2)} 
         </p>
         <p style="font-size:10px; font-style:italic;">
-        : <strong>${pdfTotalText}</strong>
+          : <strong>${pdfTotalText}</strong>
         </p>
       </div>
     `;
@@ -637,7 +621,6 @@ const DevisDetailsModal = ({
     if (!dateInput) return "";
 
     const d = new Date(dateInput);
-
     return d.toLocaleString("fr-FR", {
       day: "2-digit",
       month: "2-digit",
@@ -647,249 +630,275 @@ const DevisDetailsModal = ({
     });
   };
 
-  // Get date from bon
   const issueDate = devis.date_creation
     ? new Date(devis.date_creation)
     : new Date();
 
   return (
-    <Modal isOpen={isOpen} toggle={toggle} size="xl">
-      <ModalHeader toggle={toggle}>
-        <div className="d-flex align-items-center">
-          <FiFileText className="me-2" />
-          Devis #{devis.num_devis}
-          <Badge color={getStatusBadge(formData.status)} className="ms-2">
-            {getStatusLabel(formData.status)}
-          </Badge>
+    <Container className="py-4">
+      {/* Header with back button */}
+      <div className="d-flex justify-content-between align-items-center mb-4">
+        <div>
+          <Button
+            color="light"
+            className="mb-2"
+            onClick={() => navigate("/devis")}
+          >
+            <FiArrowLeft className="me-2" />
+            Retour à la liste
+          </Button>
+          <h2 className="mb-0">
+            <FiFileText className="me-2" />
+            Devis #{devis.num_devis}
+            <Badge color={getStatusBadge(formData.status)} className="ms-2">
+              {getStatusLabel(formData.status)}
+            </Badge>
+          </h2>
         </div>
-      </ModalHeader>
 
-      <ModalBody>
-        <div className="row">
-          {/* Client Information */}
-          <div className="col-md-6">
-            <div className="mb-3">
-              <h6>
-                <FiUser className="me-2" />
-                Client
-              </h6>
-              <div className="p-3 bg-light rounded">
+        <div className="d-flex gap-2">
+          <Button onClick={handlePrint} color="outline-primary">
+            <FiPrinter className="me-2" />
+            Imprimer
+          </Button>
+          <Button onClick={generateAndDownloadPDF} color="outline-secondary">
+            <FiDownload className="me-2" />
+            PDF
+          </Button>
+        </div>
+      </div>
+
+      <Row>
+        {/* Client Information */}
+        <Col md={6}>
+          <Card className="p-3 mb-4">
+            <h5>
+              <FiUser className="me-2" />
+              Informations Client
+            </h5>
+            <div className="p-2">
+              <p>
+                <strong>Nom:</strong>{" "}
+                {devis.client_name ||
+                  devis.client?.nom_complete ||
+                  "Client inconnu"}
+              </p>
+              <p>
+                <strong>Téléphone:</strong>{" "}
+                {devis.client_phone ||
+                  devis.client?.telephone ||
+                  "Non spécifié"}
+              </p>
+              {devis.client?.email && (
                 <p>
-                  <strong>Nom:</strong>{" "}
-                  {devis.client_name ||
-                    devis.client?.nom_complete ||
-                    "Client inconnu"}
+                  <strong>Email:</strong> {devis.client.email}
                 </p>
+              )}
+              {devis.client?.address && (
                 <p>
-                  <strong>Téléphone:</strong>{" "}
-                  {devis.client_phone ||
-                    devis.client?.telephone ||
-                    "Non spécifié"}
+                  <strong>Adresse:</strong> {devis.client.address}
                 </p>
-                <p>
-                  <strong>Adresse:</strong>{" "}
-                  {devis.client?.address || "Non spécifiée"}
-                </p>
-              </div>
+              )}
             </div>
-          </div>
+          </Card>
+        </Col>
 
-          {/* Devis Information */}
-          <div className="col-md-6">
-            <div className="mb-3">
-              <h6>
-                <FiFileText className="me-2" />
-                Informations du Devis
-              </h6>
-              <div className="p-3 bg-light rounded">
-                <p>
-                  <strong>Date création:</strong> {formatDate(issueDate)}{" "}
-                </p>
-
-                <p>
-                  <strong>Mode règlement:</strong>{" "}
-                  {devis.mode_reglement || "Non spécifié"}
-                </p>
-              </div>
+        {/* Devis Information */}
+        <Col md={6}>
+          <Card className="p-3 mb-4">
+            <h5>
+              <FiCalendar className="me-2" />
+              Informations du Devis
+            </h5>
+            <div className="p-2">
+              <p>
+                <strong>Date création:</strong> {formatDate(issueDate)}
+              </p>
             </div>
-          </div>
+          </Card>
+        </Col>
+      </Row>
 
-          {/* Status and Editable Fields */}
-          <div className="col-md-4">
-            <div className="form-group mb-3">
-              <label className="form-label">Statut *</label>
+      {/* Status and Notes - Editable when in edit mode */}
+      {isEditing && (
+        <Row className="mb-4">
+          <Col md={4}>
+            <Card className="p-3">
+              <label className="form-label">
+                <FiCreditCard className="me-2" />
+                Statut
+              </label>
+              <Select
+                value={statusOptions.find(
+                  (opt) => opt.value === formData.status,
+                )}
+                onChange={(opt) => handleInputChange("status", opt.value)}
+                options={statusOptions}
+                isDisabled={!isEditing}
+                styles={{
+                  control: (base) => ({
+                    ...base,
+                    borderColor: "#ced4da",
+                    "&:hover": {
+                      borderColor: "#80bdff",
+                    },
+                  }),
+                }}
+              />
+            </Card>
+          </Col>
 
-              <div className="select-wrapper">
-                <Select
-                  value={statusOptions.find(
-                    (opt) => opt.value === formData.status,
-                  )}
-                  onChange={(opt) => handleInputChange("status", opt.value)}
-                  options={statusOptions}
-                  styles={{
-                    dropdownIndicator: (base, state) => ({
-                      ...base,
-                      transform: state.selectProps.menuIsOpen
-                        ? "rotate(180deg)"
-                        : null,
-                      transition: "transform 0.25s ease",
-                    }),
-                  }}
-                />
-              </div>
-            </div>
-          </div>
-          <div className="col-12">
-            <div className="form-group mb-3">
+          <Col md={8}>
+            <Card className="p-3">
               <label className="form-label">Notes</label>
-              <textarea
-                className="form-control"
+              <Input
+                type="textarea"
                 rows="3"
                 value={formData.notes}
                 onChange={(e) => handleInputChange("notes", e.target.value)}
                 placeholder="Notes supplémentaires..."
+                disabled={!isEditing}
               />
-            </div>
-          </div>
+            </Card>
+          </Col>
+        </Row>
+      )}
 
-          {/* Products Section */}
-          <div className="col-12 mt-4">
-            <h6>
-              <FiShoppingCart className="me-2" />
-              Produits
-            </h6>
-            <div className="table-responsive">
-              <table className="table table-bordered">
-                <thead>
-                  <tr>
-                    <th>Code</th>
-                    <th>Désignation</th>
-                    <th>Quantité</th>
-                    <th>Prix Unitaire</th>
-                    <th>Total Ligne</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(devis.produits || []).map((prod, index) => (
-                    <tr key={prod.id || index}>
-                      <td>{prod.reference || "N/A"}</td>
-                      <td>{prod.designation || "Produit"}</td>
-                      <td>
-                        {parseFloat(prod.DevisProduit?.quantite || 0).toFixed(
-                          2,
-                        )}
-                      </td>
-                      <td>
-                        {parseFloat(
-                          prod.DevisProduit?.prix_unitaire || 0,
-                        ).toFixed(2)}{" "}
-                      </td>
-                      <td>
-                        {parseFloat(
-                          prod.DevisProduit?.total_ligne || 0,
-                        ).toFixed(2)}{" "}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+      {/* Products Section */}
+      <Card className="p-3 mb-4">
+        <h5>
+          <FiShoppingCart className="me-2" />
+          Produits
+        </h5>
+        <div className="table-responsive">
+          <table className="table table-bordered">
+            <thead>
+              <tr>
+                <th>Code</th>
+                <th>Désignation</th>
+                <th>Quantité</th>
+                <th>Prix Unitaire</th>
+                <th>Total Ligne</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(devis.produits || []).map((prod, index) => (
+                <tr key={prod.id || index}>
+                  <td>{prod.reference || "N/A"}</td>
+                  <td>{prod.designation || "Produit"}</td>
+                  <td>
+                    {parseFloat(prod.DevisProduit?.quantite || 0).toFixed(2)}
+                  </td>
+                  <td>
+                    {parseFloat(prod.DevisProduit?.prix_unitaire || 0).toFixed(
+                      2,
+                    )}{" "}
+                  </td>
+                  <td>
+                    {parseFloat(prod.DevisProduit?.total_ligne || 0).toFixed(
+                      2,
+                    )}{" "}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
 
-          {/* Summary Section */}
-          <div className="col-12">
-            <div className="bg-light p-3 rounded mt-3">
-              <div className="row">
-                <div className="col-md-6">
-                  <h6>Résumé du Devis</h6>
-                  <p>
-                    <strong>N° Devis:</strong> {devis.num_devis}
-                  </p>
-                  <p>
-                    <strong>Client:</strong>{" "}
-                    {devis.client_name ||
-                      devis.client?.nom_complete ||
-                      "Client inconnu"}
-                  </p>
-                  <p>
-                    <strong>Produits:</strong> {devis.produits?.length || 0}{" "}
-                    article(s)
-                  </p>
-                  <p>
-                    <strong>Statut:</strong> {getStatusLabel(formData.status)}
-                  </p>
+      {/* Summary Section */}
+      <Card className="p-3">
+        <h5>Résumé du Devis</h5>
+        <Row>
+          <Col md={6}>
+            <div className="p-3">
+              <p>
+                <strong>N° Devis:</strong> {devis.num_devis}
+              </p>
+              <p>
+                <strong>Client:</strong>{" "}
+                {devis.client_name ||
+                  devis.client?.nom_complete ||
+                  "Client inconnu"}
+              </p>
+              <p>
+                <strong>Produits:</strong> {devis.produits?.length || 0}{" "}
+                article(s)
+              </p>
+              <p>
+                <strong>Statut:</strong> {getStatusLabel(formData.status)}
+              </p>
+              {formData.notes && (
+                <div className="mt-3">
+                  <strong>Notes:</strong>
+                  <p className="text-muted">{formData.notes}</p>
                 </div>
-                <div className="col-md-6 text-end">
-                  <h6>Montants</h6>
-                  <div className="d-flex justify-content-between fw-bold border-top pt-1">
-                    <span>Total a Payer:</span>
-                    <span>{total.toFixed(2)} </span>
-                  </div>
-                  {isCalculatingTotal ? (
-                    <div
-                      className="text-start mt-2"
-                      style={{ fontSize: "0.85em", fontStyle: "italic" }}
-                    >
-                      <small>Calcul en cours...</small>
-                    </div>
-                  ) : totalText ? (
-                    <div
-                      className="text-start mt-2"
-                      style={{ fontSize: "0.85em", fontStyle: "italic" }}
-                    >
-                      <small>Arrêté le présent devis à la somme de :</small>
-                      <br />
-                      <strong>{totalText}</strong>
-                    </div>
-                  ) : null}
-                </div>
+              )}
+            </div>
+          </Col>
+
+          <Col md={6}>
+            <div className="p-3 bg-light rounded">
+              <div className="d-flex justify-content-between fw-bold border-top pt-2">
+                <span>Total a Payer:</span>
+                <span>{total.toFixed(2)} </span>
               </div>
+              {isCalculatingTotal ? (
+                <div
+                  className="text-start mt-2"
+                  style={{ fontSize: "0.85em", fontStyle: "italic" }}
+                >
+                  <small>Calcul en cours...</small>
+                </div>
+              ) : totalText ? (
+                <div
+                  className="text-start mt-2"
+                  style={{ fontSize: "0.85em", fontStyle: "italic" }}
+                >
+                  <small>Arrêté le présent devis à la somme de :</small>
+                  <br />
+                  <strong>{totalText}</strong>
+                </div>
+              ) : null}
             </div>
-          </div>
+          </Col>
+        </Row>
+      </Card>
+
+      {/* Action Buttons Footer */}
+      <div className="d-flex justify-content-between mt-4 pt-3 border-top">
+        <div>
+          <Button
+            onClick={handlePrint}
+            color="outline-primary"
+            className="mt-2"
+          >
+            <FiPrinter className="me-2" />
+            Imprimer
+          </Button>
+          <Button
+            onClick={generateAndDownloadPDF}
+            color="outline-secondary"
+            className="mt-4"
+          >
+            <FiDownload className="me-2" />
+            PDF
+          </Button>
         </div>
-      </ModalBody>
 
-      <ModalFooter>
-        <div className="d-flex justify-content-between w-100">
-          <div>
-            <Button
-              onClick={handlePrint}
-              color="outline-primary"
-              className="me-2"
-            >
-              <FiPrinter className="me-2" />
-              Imprimer
-            </Button>
-            <Button
-              onClick={generateAndDownloadPDF}
-              color="outline-secondary"
-              className="mt-4"
-            >
-              <FiDownload className="me-2" />
-              PDF
-            </Button>
-          </div>
-
-          <div>
-            <Button onClick={toggle} color="danger" className="me-2">
-              <FiX className="me-2" />
-              Fermer
-            </Button>
-
-            <Button
-              onClick={handleSubmit}
-              color="primary"
-              disabled={isSubmitting}
-              className="mt-4"
-            >
-              <FiSave className="me-2" />
-              {isSubmitting ? "Enregistrement..." : "Enregistrer"}
-            </Button>
-          </div>
+        <div>
+          <Button
+            color="secondary"
+            className="me-2"
+            onClick={() => navigate("/devis/create")}
+          >
+            <FiArrowLeft className="me-2" />
+            Retour
+          </Button>
         </div>
-      </ModalFooter>
-    </Modal>
+      </div>
+    </Container>
   );
 };
 
-export default DevisDetailsModal;
+export default DevisDetailsPage;

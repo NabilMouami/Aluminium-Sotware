@@ -71,12 +71,7 @@ const getAllBons = async (req, res) => {
           model: Produit,
           as: "produits",
           through: {
-            attributes: [
-              "quantite",
-              "prix_unitaire",
-              "remise_ligne",
-              "total_ligne",
-            ],
+            attributes: ["quantite", "prix_unitaire", "total_ligne"],
           },
           attributes: ["id", "reference", "designation"],
         },
@@ -165,12 +160,7 @@ const getBonById = async (req, res) => {
           model: Produit,
           as: "produits",
           through: {
-            attributes: [
-              "quantite",
-              "prix_unitaire",
-              "remise_ligne",
-              "total_ligne",
-            ],
+            attributes: ["quantite", "prix_unitaire", "total_ligne"],
           },
           attributes: [
             "id",
@@ -315,7 +305,6 @@ const createBon = async (req, res) => {
       clientId,
       produits,
       mode_reglement,
-      remise = 0,
       notes = "",
       date_livraison,
       advancements = [],
@@ -363,8 +352,7 @@ const createBon = async (req, res) => {
       }
 
       const prix_unitaire = item.prix_unitaire || produit.prix_vente;
-      const remise_ligne = item.remise_ligne || 0;
-      const total_ligne = prix_unitaire * item.quantite - remise_ligne;
+      const total_ligne = prix_unitaire * item.quantite;
 
       montant_ht += total_ligne;
 
@@ -372,14 +360,9 @@ const createBon = async (req, res) => {
         produit,
         item,
         prix_unitaire,
-        remise_ligne,
         total_ligne,
       });
     }
-
-    // Appliquer la remise globale
-    const remiseValue = parseFloat(remise) || 0;
-    montant_ht -= remiseValue;
 
     // CALCUL DU MONTANT TTC (CORRIGÉ)
     const montant_ttc = montant_ht; // HT = TTC (si pas de TVA)
@@ -390,7 +373,6 @@ const createBon = async (req, res) => {
         num_bon_livraison,
         client_id: clientId,
         mode_reglement: mode_reglement || "espèces",
-        remise: remiseValue,
         montant_ht,
         montant_ttc, // Montant total du bon
         montant_restant: montant_ttc, // Montant restant à payer initial
@@ -404,8 +386,7 @@ const createBon = async (req, res) => {
 
     // Ajouter les produits et mettre à jour le stock
     for (const produitVerifie of produitsVerifies) {
-      const { produit, item, prix_unitaire, remise_ligne, total_ligne } =
-        produitVerifie;
+      const { produit, item, prix_unitaire, total_ligne } = produitVerifie;
 
       // Créer l'association
       await BonLivraisonProduit.create(
@@ -414,7 +395,6 @@ const createBon = async (req, res) => {
           produit_id: item.produitId,
           quantite: item.quantite,
           prix_unitaire,
-          remise_ligne,
           total_ligne,
         },
         { transaction },
@@ -491,12 +471,7 @@ const createBon = async (req, res) => {
           model: Produit,
           as: "produits",
           through: {
-            attributes: [
-              "quantite",
-              "prix_unitaire",
-              "remise_ligne",
-              "total_ligne",
-            ],
+            attributes: ["quantite", "prix_unitaire", "total_ligne"],
           },
         },
         {
@@ -545,7 +520,6 @@ const updateBon = async (req, res) => {
     const {
       produits,
       mode_reglement,
-      remise,
       notes,
       date_livraison,
       status,
@@ -581,16 +555,11 @@ const updateBon = async (req, res) => {
       sousTotal += parseFloat(item.total_ligne) || 0;
     });
 
-    // Appliquer la remise
-    const remiseValue =
-      parseFloat(remise) || parseFloat(bonLivraison.remise) || 0;
-
     // RECALCULER LES MONTANTS
-    let montant_ht = Math.max(0, sousTotal - remiseValue);
+    let montant_ht = Math.max(0, sousTotal);
     let montant_ttc = montant_ht; // TTC = HT quand pas de TVA
 
-    // Mettre à jour les montants avec la nouvelle remise
-    bonLivraison.remise = remiseValue;
+    // Mettre à jour les montants
     bonLivraison.montant_ht = montant_ht;
     bonLivraison.montant_ttc = montant_ttc;
 
@@ -727,11 +696,8 @@ const updateBon = async (req, res) => {
           item.prix_unitaire || produit.prix_vente,
         );
         const quantite = parseFloat(item.quantite);
-        const remise_ligne = parseFloat(item.remise_ligne || 0);
 
-        const total_ligne = +(prix_unitaire * quantite - remise_ligne).toFixed(
-          2,
-        );
+        const total_ligne = +(prix_unitaire * quantite).toFixed(2);
 
         montant_ht_new += total_ligne;
 
@@ -742,7 +708,6 @@ const updateBon = async (req, res) => {
             produit_id: item.produitId,
             quantite,
             prix_unitaire,
-            remise_ligne,
             total_ligne,
           },
           { transaction },
@@ -753,13 +718,11 @@ const updateBon = async (req, res) => {
         await produit.save({ transaction });
       }
 
-      // Recalculer avec la remise
-      montant_ht_new = Math.max(0, montant_ht_new - remiseValue);
+      montant_ht_new = Math.max(0, montant_ht_new);
 
       // Update bon amounts
       bonLivraison.montant_ht = montant_ht_new;
       bonLivraison.montant_ttc = montant_ht_new;
-      bonLivraison.remise = remiseValue;
     }
 
     // METTRE À JOUR LA DATE DE LIVRAISON
@@ -793,12 +756,7 @@ const updateBon = async (req, res) => {
           model: Produit,
           as: "produits",
           through: {
-            attributes: [
-              "quantite",
-              "prix_unitaire",
-              "remise_ligne",
-              "total_ligne",
-            ],
+            attributes: ["quantite", "prix_unitaire", "total_ligne"],
           },
         },
         {
@@ -1013,7 +971,6 @@ const getStats = async (req, res) => {
       attributes: [
         [sequelize.fn("COUNT", sequelize.col("id")), "total"],
         [sequelize.fn("SUM", sequelize.col("montant_ttc")), "total_montant"],
-        [sequelize.fn("SUM", sequelize.col("remise")), "total_remise"],
       ],
       raw: true,
     });

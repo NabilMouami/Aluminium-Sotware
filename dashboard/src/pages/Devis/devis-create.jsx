@@ -39,7 +39,6 @@ const DevisCreate = () => {
   const [formData, setFormData] = useState({
     client_id: "",
     mode_reglement: "espèces",
-    remise: 0,
     notes: "",
     date_creation: new Date().toISOString().split("T")[0],
   });
@@ -238,7 +237,6 @@ const DevisCreate = () => {
           ...produitData,
           quantite: 1,
           prix_unitaire: produitData.prix_vente,
-          remise_ligne: 0,
           total_ligne: produitData.prix_vente,
           description: "",
           unite: "unité",
@@ -273,7 +271,6 @@ const DevisCreate = () => {
         ...produitData,
         quantite: 1,
         prix_unitaire: produitData.prix_vente,
-        remise_ligne: 0,
         total_ligne: produitData.prix_vente,
         description: "",
         unite: "unité",
@@ -303,8 +300,7 @@ const DevisCreate = () => {
     const newProduits = [...selectedProduits];
     newProduits[index].quantite = newQuantity;
     newProduits[index].total_ligne =
-      newProduits[index].prix_unitaire * newQuantity -
-      newProduits[index].remise_ligne;
+      newProduits[index].prix_unitaire * newQuantity;
     setSelectedProduits(newProduits);
   };
 
@@ -312,17 +308,14 @@ const DevisCreate = () => {
     const newProduits = [...selectedProduits];
     newProduits[index].prix_unitaire = parseFloat(newPrice) || 0;
     newProduits[index].total_ligne =
-      newProduits[index].prix_unitaire * newProduits[index].quantite -
-      newProduits[index].remise_ligne;
+      newProduits[index].prix_unitaire * newProduits[index].quantite;
     setSelectedProduits(newProduits);
   };
 
   const updateProduitDiscount = (index, discount) => {
     const newProduits = [...selectedProduits];
-    newProduits[index].remise_ligne = parseFloat(discount) || 0;
     newProduits[index].total_ligne =
-      newProduits[index].prix_unitaire * newProduits[index].quantite -
-      newProduits[index].remise_ligne;
+      newProduits[index].prix_unitaire * newProduits[index].quantite;
     setSelectedProduits(newProduits);
   };
 
@@ -343,15 +336,13 @@ const DevisCreate = () => {
       (sum, p) => sum + p.total_ligne,
       0,
     );
-    const remise = parseFloat(formData.remise) || 0;
-    const montantHT = sousTotal - remise;
+    const montantHT = sousTotal;
     const montantTTC = montantHT;
 
     return {
       sousTotal: sousTotal.toFixed(2),
       montantHT: montantHT.toFixed(2),
       montantTTC: montantTTC.toFixed(2),
-      remise: remise.toFixed(2),
     };
   };
 
@@ -373,14 +364,12 @@ const DevisCreate = () => {
     const payload = {
       client_id: formData.client_id,
       mode_reglement: formData.mode_reglement,
-      remise: parseFloat(formData.remise) || 0,
       notes: formData.notes,
       date_creation: formData.date_creation,
       produits: selectedProduits.map((p) => ({
         produit_id: p.id,
         quantite: p.quantite,
         prix_unitaire: p.prix_unitaire,
-        remise_ligne: p.remise_ligne,
         description: p.description,
         unite: p.unite,
       })),
@@ -444,7 +433,6 @@ const DevisCreate = () => {
             setFormData({
               client_id: "",
               mode_reglement: "espèces",
-              remise: 0,
               notes: "",
               date_creation: new Date().toISOString().split("T")[0],
             });
@@ -600,26 +588,6 @@ const DevisCreate = () => {
                     />
                   </div>
 
-                  <div className="col-md-6">
-                    <label className="form-label">
-                      <FiPercent className="me-2" />
-                      Remise Globale (DH)
-                    </label>
-                    <div className="input-group">
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        className="form-control"
-                        value={formData.remise}
-                        onChange={(e) =>
-                          setFormData({ ...formData, remise: e.target.value })
-                        }
-                      />
-                      <span className="input-group-text">DH</span>
-                    </div>
-                  </div>
-
                   <div className="col-12">
                     <label className="form-label">
                       <FiFileText className="me-2" />
@@ -649,10 +617,6 @@ const DevisCreate = () => {
             </div>
             <div className="card-body">
               <div className="mb-4">
-                <label className="form-label">
-                  <FiSearch className="me-2" />
-                  Rechercher et ajouter un produit
-                </label>
                 {loadingProduits ? (
                   <div className="text-center py-3">
                     <div className="spinner-border text-primary" role="status">
@@ -734,9 +698,6 @@ const DevisCreate = () => {
                           Quantité
                         </th>
                         <th width="12%" className="text-center">
-                          Remise
-                        </th>
-                        <th width="12%" className="text-center">
                           Total
                         </th>
                         <th width="12%" className="text-center">
@@ -815,21 +776,6 @@ const DevisCreate = () => {
                             </div>
                           </td>
                           <td className="text-center">
-                            <div className="input-group input-group-sm">
-                              <input
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                className="form-control text-center"
-                                value={produit.remise_ligne}
-                                onChange={(e) =>
-                                  updateProduitDiscount(index, e.target.value)
-                                }
-                              />
-                              <span className="input-group-text">DH</span>
-                            </div>
-                          </td>
-                          <td className="text-center">
                             <strong className="text-primary">
                               {produit.total_ligne.toFixed(2)} DH
                             </strong>
@@ -892,24 +838,9 @@ const DevisCreate = () => {
 
               <div className="mb-3">
                 <div className="d-flex justify-content-between mb-2">
-                  <span>Sous-total:</span>
+                  <span>Total a Payer:</span>
                   <strong>{totals.sousTotal} DH</strong>
                 </div>
-                <div className="d-flex justify-content-between mb-2">
-                  <span>Remise globale:</span>
-                  <strong className="text-danger">-{totals.remise} DH</strong>
-                </div>
-                <div className="d-flex justify-content-between mb-2">
-                  <span>Montant HT:</span>
-                  <strong>{totals.montantHT} DH</strong>
-                </div>
-              </div>
-
-              <hr />
-
-              <div className="d-flex justify-content-between align-items-center mb-4">
-                <h5 className="mb-0">Total TTC:</h5>
-                <h3 className="mb-0 text-primary">{totals.montantTTC} DH</h3>
               </div>
 
               <div className="d-grid gap-2">
@@ -935,55 +866,6 @@ const DevisCreate = () => {
                     </>
                   )}
                 </button>
-                <button
-                  type="button"
-                  className="btn btn-outline-secondary"
-                  onClick={() => {
-                    setSelectedProduits([]);
-                    setFormData({
-                      client_id: "",
-                      mode_reglement: "espèces",
-                      remise: 0,
-                      notes: "",
-                      date_creation: new Date().toISOString().split("T")[0],
-                    });
-                  }}
-                  disabled={selectedProduits.length === 0}
-                >
-                  <FiX className="me-2" />
-                  Réinitialiser
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-outline-info"
-                  onClick={fetchAllProduits}
-                  disabled={loadingProduits}
-                >
-                  <FiRefreshCw
-                    className={`me-2 ${loadingProduits ? "spinner-border spinner-border-sm" : ""}`}
-                  />
-                  {loadingProduits
-                    ? "Chargement..."
-                    : "Actualiser les produits"}
-                </button>
-              </div>
-            </div>
-            <div className="card-footer">
-              <small className="text-muted">
-                <FiCheckCircle className="me-1" />
-                Le devis sera créé avec le statut "brouillon"
-              </small>
-            </div>
-          </div>
-
-          <div className="card mt-3">
-            <div className="card-body">
-              <h6 className="card-title">
-                <FiCreditCard className="me-2" />
-                Mode de Règlement
-              </h6>
-              <div className="alert alert-info mb-0">
-                <strong>{formData.mode_reglement}</strong>
               </div>
             </div>
           </div>

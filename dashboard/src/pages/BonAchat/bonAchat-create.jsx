@@ -5,27 +5,17 @@ import Select from "react-select";
 import AsyncSelect from "react-select/async";
 import PageHeader from "@/components/shared/pageHeader/PageHeader";
 import {
-  FiPackage,
   FiUser,
   FiShoppingCart,
   FiPlus,
   FiMinus,
-  FiTrash2,
   FiSearch,
-  FiPercent,
   FiDollarSign,
-  FiCalendar,
   FiCreditCard,
   FiFileText,
   FiSave,
   FiX,
-  FiCheck,
-  FiTruck,
-  FiChevronDown,
-  FiChevronUp,
   FiXCircle,
-  FiRefreshCw,
-  FiBox,
 } from "react-icons/fi";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
@@ -642,9 +632,7 @@ const BonAchatCreate = () => {
                         <th width="20%" className="text-center">
                           Quantité
                         </th>
-                        <th width="15%" className="text-center">
-                          Remise
-                        </th>
+
                         <th width="15%" className="text-center">
                           Total
                         </th>
@@ -728,21 +716,6 @@ const BonAchatCreate = () => {
                             </div>
                           </td>
                           <td className="text-center">
-                            <div className="input-group input-group-sm">
-                              <input
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                className="form-control text-center"
-                                value={produit.remise_ligne}
-                                onChange={(e) =>
-                                  updateProduitDiscount(index, e.target.value)
-                                }
-                              />
-                              <span className="input-group-text">DH</span>
-                            </div>
-                          </td>
-                          <td className="text-center">
                             <strong className="text-primary">
                               {produit.total_ligne.toFixed(2)} DH
                             </strong>
@@ -784,7 +757,7 @@ const BonAchatCreate = () => {
             <div className="card-header">
               <h5 className="card-title mb-0">
                 <FiDollarSign className="me-2" />
-                Récapitulatif
+                Informations
               </h5>
             </div>
             <div className="card-body">
@@ -806,33 +779,9 @@ const BonAchatCreate = () => {
               <div className="mb-3">
                 <h6 className="text-muted mb-3">Calcul des montants</h6>
                 <div className="d-flex justify-content-between mb-2">
-                  <span>Sous-total produits:</span>
+                  <span>Total a Payer:</span>
                   <strong>{totals.sousTotal} DH</strong>
                 </div>
-                <div className="d-flex justify-content-between mb-2">
-                  <span>Remise globale:</span>
-                  <strong className="text-danger">-{totals.remise} DH</strong>
-                </div>
-                <div className="d-flex justify-content-between mb-2">
-                  <span>Montant HT:</span>
-                  <strong>{totals.montantHT} DH</strong>
-                </div>
-                <div className="d-flex justify-content-between mb-2">
-                  <span>TVA ({totals.tvaPourcentage}%):</span>
-                  <strong className="text-info">+{totals.montantTVA} DH</strong>
-                </div>
-              </div>
-
-              <hr />
-
-              <div className="d-flex justify-content-between align-items-center mb-4">
-                <h5 className="mb-0">Total TTC:</h5>
-                <h3 className="mb-0 text-primary">{totals.montantTTC} DH</h3>
-              </div>
-
-              <div className="alert alert-info mb-3">
-                <strong>Note:</strong> Le stock sera augmenté uniquement lors de
-                la réception des produits.
               </div>
 
               <div className="d-grid gap-2">
@@ -854,35 +803,7 @@ const BonAchatCreate = () => {
                     </>
                   )}
                 </button>
-                <button
-                  type="button"
-                  className="btn btn-outline-secondary"
-                  onClick={resetForm}
-                  disabled={selectedProduits.length === 0}
-                >
-                  <FiX className="me-2" />
-                  Réinitialiser
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-outline-info"
-                  onClick={fetchAllProduits}
-                  disabled={loadingProduits}
-                >
-                  <FiRefreshCw
-                    className={`me-2 ${loadingProduits ? "spinner-border spinner-border-sm" : ""}`}
-                  />
-                  {loadingProduits
-                    ? "Chargement..."
-                    : "Actualiser les produits"}
-                </button>
               </div>
-            </div>
-            <div className="card-footer">
-              <small className="text-muted">
-                <FiCheck className="me-1" />
-                Le statut initial sera "Brouillon"
-              </small>
             </div>
           </div>
         </div>

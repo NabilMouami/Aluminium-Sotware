@@ -107,7 +107,7 @@ const ProduitsList = () => {
     const total = produits.length;
     const totalValue = produits.reduce(
       (sum, p) => sum + p.qty * p.prix_achat,
-      0
+      0,
     );
     const lowStock = produits.filter((p) => p.qty > 0 && p.qty < 10).length;
     const outOfStock = produits.filter((p) => p.qty === 0).length;
@@ -206,7 +206,7 @@ const ProduitsList = () => {
           headers: {
             Authorization: `Bearer ${token}`,
           },
-        }
+        },
       );
 
       // Update local state
@@ -216,7 +216,7 @@ const ProduitsList = () => {
             return { ...p, ...editModal.formData };
           }
           return p;
-        })
+        }),
       );
 
       MySwal.fire({
@@ -236,7 +236,7 @@ const ProduitsList = () => {
       topTost(
         error.response?.data?.message ||
           "Erreur lors de la mise à jour du produit",
-        "error"
+        "error",
       );
       setEditModal((prev) => ({ ...prev, loading: false }));
     }
@@ -270,7 +270,7 @@ const ProduitsList = () => {
           headers: {
             Authorization: `Bearer ${token}`,
           },
-        }
+        },
       );
 
       // Update local state
@@ -294,7 +294,7 @@ const ProduitsList = () => {
             return { ...p, qty: newQty };
           }
           return p;
-        })
+        }),
       );
 
       MySwal.fire({
@@ -314,7 +314,7 @@ const ProduitsList = () => {
       topTost(
         error.response?.data?.message ||
           "Erreur lors de la mise à jour du stock",
-        "error"
+        "error",
       );
     }
   };
@@ -392,10 +392,12 @@ const ProduitsList = () => {
 
         return (
           <div className="d-flex align-items-center gap-2">
-            <span className={`badge bg-${badgeClass} bg-opacity-10 text-white`}>
+            <span
+              className={`badge bg-${badgeClass} bg-opacity-10 text-white fs-6`}
+            >
               {qty} unités
             </span>
-            <div className="btn-group btn-group-sm">
+            <div className="btn-group btn-group-sm gap-2">
               <button
                 className="btn btn-outline-success btn-sm"
                 onClick={() => handleStockOperation(info.row.original, "add")}
@@ -404,7 +406,7 @@ const ProduitsList = () => {
                 <FiPlus size={12} />
               </button>
               <button
-                className="btn btn-outline-warning btn-sm"
+                className="btn btn-outline-danger btn-sm"
                 onClick={() =>
                   handleStockOperation(info.row.original, "subtract")
                 }
@@ -463,28 +465,6 @@ const ProduitsList = () => {
             <div className="fw-medium">{marge.toFixed(2)} DH</div>
             <small className="text-muted">{pourcentage}%</small>
           </div>
-        );
-      },
-    },
-    {
-      accessorKey: "fornisseur.nom_complete",
-      header: () => (
-        <span>
-          <FiUser className="me-2" />
-          Fournisseur
-        </span>
-      ),
-      cell: (info) => {
-        const fornisseur = info.row.original.fornisseur;
-        return fornisseur ? (
-          <div>
-            <div className="fw-medium">{fornisseur.nom_complete}</div>
-            {fornisseur.telephone && (
-              <small className="text-muted">{fornisseur.telephone}</small>
-            )}
-          </div>
-        ) : (
-          <span className="text-muted">-</span>
         );
       },
     },
@@ -665,34 +645,11 @@ const ProduitsList = () => {
                       <input
                         type="text"
                         className="form-control"
-                        placeholder="Rechercher par référence, désignation ou fournisseur..."
+                        placeholder="Rechercher Par Produit"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                       />
                       <i className="ri-search-line search-icon"></i>
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="d-flex gap-2">
-                      <select
-                        className="form-select"
-                        value={selectedFornisseur}
-                        onChange={(e) => setSelectedFornisseur(e.target.value)}
-                      >
-                        <option value="all">Tous les fournisseurs</option>
-                        {fornisseurs.map((fornisseur) => (
-                          <option key={fornisseur.id} value={fornisseur.id}>
-                            {fornisseur.nom_complete}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        className="btn btn-outline-secondary"
-                        onClick={fetchProduits}
-                        title="Rafraîchir"
-                      >
-                        <i className="ri-refresh-line"></i>
-                      </button>
                     </div>
                   </div>
                 </div>
@@ -1024,8 +981,8 @@ const ProduitsList = () => {
                   {stockOperation.operation === "add"
                     ? "Ajouter au stock"
                     : stockOperation.operation === "subtract"
-                    ? "Retirer du stock"
-                    : "Définir le stock"}
+                      ? "Retirer du stock"
+                      : "Définir le stock"}
                 </h5>
                 <button
                   type="button"
@@ -1053,8 +1010,8 @@ const ProduitsList = () => {
                     {stockOperation.operation === "add"
                       ? "à ajouter"
                       : stockOperation.operation === "subtract"
-                      ? "à retirer"
-                      : "du nouveau stock"}
+                        ? "à retirer"
+                        : "du nouveau stock"}
                   </label>
                   <input
                     type="number"

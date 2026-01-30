@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import Table from "@/components/shared/table/Table";
-import { DateRangePicker } from "react-date-range";
 import "react-date-range/dist/styles.css";
 import "react-date-range/dist/theme/default.css";
 import { format, subDays } from "date-fns";
@@ -40,17 +39,13 @@ const ListDevis = () => {
   const [devisList, setDevisList] = useState([]);
   const [filteredDevis, setFilteredDevis] = useState([]);
   const [selectedStatus, setSelectedStatus] = useState("all");
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [dateRange, setDateRange] = useState([
-    {
-      startDate: subDays(new Date(), 30),
-      endDate: new Date(),
-      key: "selection",
-    },
-  ]);
   const [selectedDevis, setSelectedDevis] = useState(null);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  // États simplifiés pour les dates
+  const [startDate, setStartDate] = useState(subDays(new Date(), 30));
+  const [endDate, setEndDate] = useState(new Date());
 
   useEffect(() => {
     fetchDevis();
@@ -86,7 +81,6 @@ const ListDevis = () => {
             client_phone: devis.client?.telephone || "",
             montant_ht: parseFloat(devis.montant_ht) || 0,
             montant_ttc: parseFloat(devis.montant_ttc) || 0,
-            remise: parseFloat(devis.remise) || 0,
             status: devis.status || "brouillon",
             date_creation: new Date(devis.date_creation || devis.createdAt),
             date_creation_string: new Date(
@@ -128,6 +122,21 @@ const ListDevis = () => {
     }
   };
 
+  // Fonctions simplifiées pour les dates
+  const handleStartDateChange = (e) => {
+    const date = new Date(e.target.value);
+    setStartDate(date);
+  };
+
+  const handleEndDateChange = (e) => {
+    const date = new Date(e.target.value);
+    setEndDate(date);
+  };
+
+  const formatDateForInput = (date) => {
+    return format(date, "yyyy-MM-dd");
+  };
+
   // Filter devis based on selected status and date range
   useEffect(() => {
     let result = [...devisList];
@@ -138,11 +147,11 @@ const ListDevis = () => {
     }
 
     // Filter by date range
-    if (dateRange[0].startDate && dateRange[0].endDate) {
-      const start = new Date(dateRange[0].startDate);
+    if (startDate && endDate) {
+      const start = new Date(startDate);
       start.setHours(0, 0, 0, 0);
 
-      const end = new Date(dateRange[0].endDate);
+      const end = new Date(endDate);
       end.setHours(23, 59, 59, 999);
 
       result = result.filter((devis) => {
@@ -152,12 +161,7 @@ const ListDevis = () => {
     }
 
     setFilteredDevis(result);
-  }, [selectedStatus, dateRange, devisList]);
-
-  const handleDateRangeChange = (ranges) => {
-    setDateRange([ranges.selection]);
-    setShowDatePicker(false);
-  };
+  }, [selectedStatus, startDate, endDate, devisList]);
 
   const getStatusColor = (status) => {
     const colors = {
@@ -169,7 +173,6 @@ const ListDevis = () => {
       transformé_en_commande: "bg-info text-white",
       transformé_en_bl: "bg-info text-white",
       transformé_en_facture: "bg-red text-white",
-
       en_attente: "bg-warning text-dark",
     };
     return colors[status] || "bg-secondary text-white";
@@ -263,7 +266,6 @@ const ListDevis = () => {
           client_phone: devisData.client?.telephone || "",
           montant_ht: parseFloat(devisData.montant_ht) || 0,
           montant_ttc: parseFloat(devisData.montant_ttc) || 0,
-          remise: parseFloat(devisData.remise) || 0,
           status: devisData.status || "brouillon",
           date_creation: new Date(
             devisData.date_creation || devisData.createdAt,
@@ -385,15 +387,6 @@ const ListDevis = () => {
       ),
     },
     {
-      accessorKey: "remise",
-      header: () => "Remise",
-      cell: ({ getValue }) => (
-        <span className="text-danger">
-          {parseFloat(getValue()).toFixed(2)} Dh
-        </span>
-      ),
-    },
-    {
       accessorKey: "status",
       header: () => "Statut",
       cell: ({ getValue }) => {
@@ -500,6 +493,7 @@ const ListDevis = () => {
           zIndex: 999,
         }}
       >
+        {/* Status Filter */}
         <InputGroup size="sm" className="w-auto shadow-sm rounded">
           <InputGroupText className="bg-white border-0">
             <FiFilter className="text-primary fs-6" />
@@ -518,29 +512,49 @@ const ListDevis = () => {
           </Input>
         </InputGroup>
 
-        {/* Date Range Filter */}
-        <div className="position-relative">
-          <button
-            className="btn btn-sm btn-primary"
-            onClick={() => setShowDatePicker(!showDatePicker)}
-          >
-            <FiCalendar className="me-2" />
-            {format(dateRange[0].startDate, "dd/MM/yyyy")} -{" "}
-            {format(dateRange[0].endDate, "dd/MM/yyyy")}
-          </button>
+        {/* Date Range Filter - Version simplifiée */}
+        <div className="d-flex align-items-center gap-2">
+          <InputGroup size="sm" className="w-auto shadow-sm rounded">
+            <InputGroupText className="bg-white border-0">
+              <FiCalendar className="text-primary fs-6" />
+            </InputGroupText>
+            <Input
+              type="date"
+              className="border-0 bg-white"
+              value={formatDateForInput(startDate)}
+              onChange={handleStartDateChange}
+              max={formatDateForInput(endDate)}
+              title="Date de début"
+            />
+          </InputGroup>
 
-          {showDatePicker && (
-            <div className="position-absolute mt-2" style={{ zIndex: 1050 }}>
-              <DateRangePicker
-                onChange={handleDateRangeChange}
-                showSelectionPreview={true}
-                moveRangeOnFirstSelection={false}
-                months={1}
-                ranges={dateRange}
-                direction="horizontal"
-              />
-            </div>
-          )}
+          <span className="text-muted">à</span>
+
+          <InputGroup size="sm" className="w-auto shadow-sm rounded">
+            <InputGroupText className="bg-white border-0">
+              <FiCalendar className="text-primary fs-6" />
+            </InputGroupText>
+            <Input
+              type="date"
+              className="border-0 bg-white"
+              value={formatDateForInput(endDate)}
+              onChange={handleEndDateChange}
+              min={formatDateForInput(startDate)}
+              title="Date de fin"
+            />
+          </InputGroup>
+
+          {/* Bouton pour réinitialiser à 30 jours */}
+          <button
+            className="btn btn-sm btn-outline-secondary"
+            onClick={() => {
+              setStartDate(subDays(new Date(), 30));
+              setEndDate(new Date());
+            }}
+            title="30 derniers jours"
+          >
+            30j
+          </button>
         </div>
 
         <div className="ms-auto d-flex gap-2">
@@ -563,6 +577,17 @@ const ListDevis = () => {
         </div>
       </div>
 
+      {/* Afficher la période sélectionnée */}
+      <div className="mb-2 text-muted small">
+        <FiCalendar className="me-1" />
+        Période : {format(startDate, "dd/MM/yyyy")} -{" "}
+        {format(endDate, "dd/MM/yyyy")}
+        <span className="ms-3">
+          ({filteredDevis.length} devis correspondants)
+        </span>
+      </div>
+
+      {/* Stats Cards */}
       <div className="mb-4">
         <div className="row g-3">
           <div className="col-md-3">
@@ -627,7 +652,7 @@ const ListDevis = () => {
         )}
       </div>
 
-      {/* Devis Details Modal - You'll need to create this component */}
+      {/* Devis Details Modal */}
       <DevisDetailsModal
         isOpen={isDetailsModalOpen}
         toggle={() => setIsDetailsModalOpen(false)}
@@ -635,7 +660,7 @@ const ListDevis = () => {
         onUpdateStatus={(devisId, newStatus) =>
           handleUpdateStatus(devisId, newStatus)
         }
-        onDevisUpdated={handleDevisUpdated} // ← new prop name (clearer)
+        onDevisUpdated={handleDevisUpdated}
       />
     </>
   );

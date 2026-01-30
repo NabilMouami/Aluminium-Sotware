@@ -72,12 +72,7 @@ const getAllBonsAchat = async (req, res) => {
           model: Produit,
           as: "produits",
           through: {
-            attributes: [
-              "quantite",
-              "prix_unitaire",
-              "remise_ligne",
-              "total_ligne",
-            ],
+            attributes: ["quantite", "prix_unitaire", "total_ligne"],
           },
           attributes: ["id", "reference", "designation", "qty"],
         },
@@ -168,7 +163,6 @@ const getBonAchatById = async (req, res) => {
     // Calculer les totaux et statistiques
     const bonJSON = bon.toJSON();
     let totalQuantite = 0;
-    let totalQuantiteRecue = 0;
     let totalMontantHT = 0;
 
     if (bonJSON.produits && bonJSON.produits.length > 0) {
@@ -178,7 +172,6 @@ const getBonAchatById = async (req, res) => {
         const totalLigne = parseFloat(ligne.total_ligne) || 0;
 
         totalQuantite += quantite;
-        totalQuantiteRecue += quantiteRecue;
         totalMontantHT += totalLigne;
       });
     }
@@ -188,7 +181,6 @@ const getBonAchatById = async (req, res) => {
       bon: {
         ...bonJSON,
         totalQuantite,
-        totalQuantiteRecue,
         totalMontantHT: totalMontantHT.toFixed(2),
         montantRestant: (
           parseFloat(bonJSON.montant_ttc) - totalMontantHT

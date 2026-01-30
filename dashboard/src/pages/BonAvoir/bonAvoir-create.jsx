@@ -647,9 +647,6 @@ const BonAvoirCreate = () => {
                         }),
                       }}
                     />{" "}
-                    <small className="text-muted">
-                      Optionnel si vous sélectionnez un bon de livraison
-                    </small>
                   </div>
 
                   <div className="col-md-6">
@@ -692,37 +689,6 @@ const BonAvoirCreate = () => {
                         }),
                       }}
                     />
-                    <small className="text-muted">
-                      Optionnel - pour les retours de produits
-                    </small>
-                  </div>
-
-                  <div className="col-md-12">
-                    <label className="form-label">
-                      <FiTag className="me-2" />
-                      Motif <span className="text-danger">*</span>
-                    </label>
-                    <select
-                      className="form-select"
-                      value={formData.motif}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          motif: e.target.value,
-                        })
-                      }
-                      required
-                    >
-                      <option value="retour_produit">Retour de produit</option>
-                      <option value="erreur_facturation">
-                        Erreur de facturation
-                      </option>
-                      <option value="remise_commerciale">
-                        Remise commerciale
-                      </option>
-                      <option value="annulation">Annulation</option>
-                      <option value="autre">Autre</option>
-                    </select>
                   </div>
 
                   {formData.bonLivraisonId && selectedBonLivraison && (
@@ -1124,7 +1090,7 @@ const BonAvoirCreate = () => {
             <div className="card-header">
               <h5 className="card-title mb-0">
                 <FiDollarSign className="me-2" />
-                Récapitulatif
+                Informations
               </h5>
             </div>
             <div className="card-body">
@@ -1136,12 +1102,6 @@ const BonAvoirCreate = () => {
                 <div className="d-flex justify-content-between mb-2">
                   <span className="text-muted">Articles totaux:</span>
                   <strong>{totals.totalQuantites}</strong>
-                </div>
-                <div className="d-flex justify-content-between mb-2">
-                  <span className="text-muted">Motif:</span>
-                  <strong className="text-capitalize">
-                    {formData.motif.replace("_", " ")}
-                  </strong>
                 </div>
                 {selectedBonLivraison && (
                   <div className="d-flex justify-content-between mb-2">
@@ -1168,27 +1128,6 @@ const BonAvoirCreate = () => {
                 <h3 className="mb-0 text-primary">{totals.montantTotal} DH</h3>
               </div>
 
-              <div className="alert alert-info mb-3">
-                <strong>Type: </strong>
-                {formData.motif === "retour_produit"
-                  ? "Bon d'avoir pour retour de produit"
-                  : formData.motif === "erreur_facturation"
-                    ? "Correction d'erreur de facturation"
-                    : formData.motif === "remise_commerciale"
-                      ? "Remise commerciale"
-                      : formData.motif === "annulation"
-                        ? "Annulation de transaction"
-                        : "Autre motif"}
-                {formData.motif === "retour_produit" && (
-                  <div className="mt-1">
-                    <small>
-                      <FiCheck className="me-1" />
-                      Le stock sera augmenté automatiquement
-                    </small>
-                  </div>
-                )}
-              </div>
-
               <div className="d-grid gap-2">
                 <button
                   type="submit"
@@ -1207,28 +1146,6 @@ const BonAvoirCreate = () => {
                       Créer le Bon d'Avoir
                     </>
                   )}
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-outline-secondary"
-                  onClick={resetForm}
-                  disabled={selectedProduits.length === 0}
-                >
-                  <FiRotateCcw className="me-2" />
-                  Réinitialiser
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-outline-info"
-                  onClick={fetchAllProduits}
-                  disabled={loadingProduits}
-                >
-                  <FiRefreshCw
-                    className={`me-2 ${loadingProduits ? "spinner-border spinner-border-sm" : ""}`}
-                  />
-                  {loadingProduits
-                    ? "Chargement..."
-                    : "Actualiser les produits"}
                 </button>
               </div>
             </div>

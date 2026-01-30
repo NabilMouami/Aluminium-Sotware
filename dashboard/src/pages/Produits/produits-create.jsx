@@ -23,21 +23,13 @@ function ProduitsCreate() {
   const [qty, setQty] = useState(0);
   const [prixAchat, setPrixAchat] = useState("");
   const [prixVente, setPrixVente] = useState("");
-  const [fornisseurId, setFornisseurId] = useState("");
 
   // Additional state
-  const [fornisseurs, setFornisseurs] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [loadingFornisseurs, setLoadingFornisseurs] = useState(true);
   const [calculations, setCalculations] = useState({
     marge: 0,
     margePourcentage: 0,
   });
-
-  // Fetch fornisseurs on component mount
-  useEffect(() => {
-    fetchFornisseurs();
-  }, []);
 
   // Calculate margin when prices change
   useEffect(() => {
@@ -53,25 +45,6 @@ function ProduitsCreate() {
       });
     }
   }, [prixAchat, prixVente]);
-
-  const fetchFornisseurs = async () => {
-    try {
-      setLoadingFornisseurs(true);
-      const token =
-        localStorage.getItem("token") || sessionStorage.getItem("token");
-      const response = await axios.get(`${config_url}/api/fornisseurs`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      setFornisseurs(response.data?.fornisseurs || []);
-    } catch (error) {
-      console.error("Error fetching fornisseurs:", error);
-      topTost("Erreur lors du chargement des fournisseurs", "error");
-    } finally {
-      setLoadingFornisseurs(false);
-    }
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -97,7 +70,6 @@ function ProduitsCreate() {
         qty: parseInt(qty) || 0,
         prix_achat: achat,
         prix_vente: vente,
-        fornisseurId: fornisseurId || null,
       };
 
       const token =
@@ -111,7 +83,7 @@ function ProduitsCreate() {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
-        }
+        },
       );
 
       MySwal.fire({
@@ -127,7 +99,6 @@ function ProduitsCreate() {
         setQty(0);
         setPrixAchat("");
         setPrixVente("");
-        setFornisseurId("");
         setCalculations({ marge: 0, margePourcentage: 0 });
       });
     } catch (error) {
@@ -141,14 +112,14 @@ function ProduitsCreate() {
       } else if (error.response?.data?.field === "reference") {
         topTost(
           "Cette référence est déjà utilisée par un autre produit",
-          "error"
+          "error",
         );
       } else {
         topTost(
           error.response?.data?.message ||
             error.message ||
             "Erreur lors de la création du produit",
-          "error"
+          "error",
         );
       }
     } finally {
@@ -179,14 +150,11 @@ function ProduitsCreate() {
     }
   };
 
-  // Find selected fornisseur
-  const selectedFornisseur = fornisseurs.find((f) => f.id == fornisseurId);
-
   return (
     <>
       <div className="main-content">
         <div className="row">
-          <form className="col-xl-9" onSubmit={handleSubmit}>
+          <form className="col-xl-12" onSubmit={handleSubmit}>
             <div className="card stretch stretch-full">
               <div className="card-header">
                 <h5 className="card-title mb-0">
@@ -318,42 +286,6 @@ function ProduitsCreate() {
                   </div>
                 )}
 
-                {/* Fornisseur Selection */}
-                <div className="mb-4">
-                  <label className="form-label">
-                    <FiUser size={16} className="me-1" />
-                    Fournisseur (optionnel)
-                  </label>
-                  <select
-                    className="form-select"
-                    value={fornisseurId}
-                    onChange={(e) => setFornisseurId(e.target.value)}
-                  >
-                    <option value="">Sélectionnez un fournisseur</option>
-                    {loadingFornisseurs ? (
-                      <option disabled>Chargement des fournisseurs...</option>
-                    ) : (
-                      fornisseurs.map((fornisseur) => (
-                        <option key={fornisseur.id} value={fornisseur.id}>
-                          {fornisseur.nom_complete}
-                          {fornisseur.reference && ` (${fornisseur.reference})`}
-                          {fornisseur.telephone && ` - ${fornisseur.telephone}`}
-                        </option>
-                      ))
-                    )}
-                  </select>
-                  {selectedFornisseur && (
-                    <div className="mt-2 p-2 bg-light rounded">
-                      <small className="text-muted">
-                        <strong>Fournisseur sélectionné:</strong>{" "}
-                        {selectedFornisseur.nom_complete}
-                        {selectedFornisseur.ville &&
-                          ` - ${selectedFornisseur.ville}`}
-                      </small>
-                    </div>
-                  )}
-                </div>
-
                 {/* Observation */}
                 <div className="mb-4">
                   <label className="form-label">
@@ -384,7 +316,6 @@ function ProduitsCreate() {
                       setQty(0);
                       setPrixAchat("");
                       setPrixVente("");
-                      setFornisseurId("");
                       setCalculations({ marge: 0, margePourcentage: 0 });
                     }}
                   >
@@ -406,105 +337,6 @@ function ProduitsCreate() {
               </div>
             </div>
           </form>
-
-          {/* Instructions Panel */}
-          <div className="col-xl-3">
-            <div className="card">
-              <div className="card-header">
-                <h5 className="card-title mb-0">
-                  <FiPackage className="me-2" />
-                  Informations Produit
-                </h5>
-              </div>
-              <div className="card-body">
-                <h6 className="mb-3">Champs obligatoires:</h6>
-                <ul className="list-unstyled mb-4">
-                  <li className="mb-2">
-                    <small className="text-muted d-flex align-items-center">
-                      <FiHash size={12} className="me-2" />
-                      <strong>Référence:</strong> Unique, identifiant du produit
-                    </small>
-                  </li>
-                  <li className="mb-2">
-                    <small className="text-muted d-flex align-items-center">
-                      <FiPackage size={12} className="me-2" />
-                      <strong>Désignation:</strong> Description complète
-                    </small>
-                  </li>
-                  <li className="mb-2">
-                    <small className="text-muted d-flex align-items-center">
-                      <FiDollarSign size={12} className="me-2" />
-                      <strong>Prix d'achat:</strong> Coût d'acquisition
-                    </small>
-                  </li>
-                  <li>
-                    <small className="text-muted d-flex align-items-center">
-                      <FiDollarSign size={12} className="me-2" />
-                      <strong>Prix de vente:</strong> Supérieur au prix d'achat
-                    </small>
-                  </li>
-                </ul>
-
-                <h6 className="mb-3">Champs optionnels:</h6>
-                <ul className="list-unstyled mb-4">
-                  <li className="mb-2">
-                    <small className="text-muted d-flex align-items-center">
-                      <FiBarChart2 size={12} className="me-2" />
-                      <strong>Quantité:</strong> Stock initial (0 par défaut)
-                    </small>
-                  </li>
-                  <li className="mb-2">
-                    <small className="text-muted d-flex align-items-center">
-                      <FiUser size={12} className="me-2" />
-                      <strong>Fournisseur:</strong> Source du produit
-                    </small>
-                  </li>
-                  <li>
-                    <small className="text-muted d-flex align-items-center">
-                      <FiBarChart2 size={12} className="me-2" />
-                      <strong>Observations:</strong> Notes supplémentaires
-                    </small>
-                  </li>
-                </ul>
-
-                <div className="mt-4 p-3 bg-light rounded">
-                  <small className="text-muted">
-                    <strong>Note importante:</strong>
-                    <ul className="mt-2 mb-0">
-                      <li>
-                        Le prix de vente doit être supérieur au prix d'achat
-                      </li>
-                      <li>La référence doit être unique dans le système</li>
-                      <li>La marge est calculée automatiquement</li>
-                    </ul>
-                  </small>
-                </div>
-
-                {/* Quick Stats */}
-                <div className="mt-4">
-                  <h6 className="mb-3">Aperçu:</h6>
-                  <div className="d-flex justify-content-between mb-2">
-                    <small>Marge unitaire:</small>
-                    <small className="fw-bold text-success">
-                      {calculations.marge} DH
-                    </small>
-                  </div>
-                  <div className="d-flex justify-content-between mb-2">
-                    <small>Taux de marge:</small>
-                    <small className="fw-bold text-primary">
-                      {calculations.margePourcentage}%
-                    </small>
-                  </div>
-                  <div className="d-flex justify-content-between">
-                    <small>Valeur du stock:</small>
-                    <small className="fw-bold text-info">
-                      {(qty * (parseFloat(prixAchat) || 0)).toFixed(2)} DH
-                    </small>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
     </>

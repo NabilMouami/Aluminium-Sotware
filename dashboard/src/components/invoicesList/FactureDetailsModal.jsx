@@ -320,8 +320,6 @@ const FactureDetailsModal = ({
   };
 
   const totalHTBeforeDiscount = calculateHTBeforeDiscount();
-  const globalDiscount = parseFloat(facture.globalDiscount || 0);
-  const montantHTAfterRemise = totalHTBeforeDiscount - globalDiscount;
   const montantTVA = parseFloat(facture.montantTVA || 0);
   const totalTTC = parseFloat(facture.totalTTC || facture.montant_ttc || 0);
   const remainingAmount = Math.max(0, totalTTC - totalPayments);
@@ -512,198 +510,144 @@ const FactureDetailsModal = ({
   };
 
   const handlePrint = () => {
-    if (!facture) return;
-
-    const formatDate = (dateStr) => {
-      if (!dateStr) return "";
-      const d = new Date(dateStr);
-      return d.toLocaleDateString("fr-FR");
-    };
-
-    const issueDate = facture.date_facturation
-      ? new Date(facture.date_facturation)
-      : facture.createdAt || new Date();
-
-    // Get the total text for printing
-    const printTotalText = totalText || totalToFrenchText(totalTTC);
-
     const printWindow = window.open("", "_blank");
 
-    const printContent = `
+    const formatDateWithTime = (dateString) => {
+      if (!dateString) return "—";
+      try {
+        const date = new Date(dateString);
+        if (isNaN(date.getTime())) return "—";
+        return date.toLocaleString("fr-FR", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+      } catch {
+        return "—";
+      }
+    };
+
+    const creationDateFormatted = formatDateWithTime(facture.createdAt);
+
+    const pdfTotalText = totalText || totalToFrenchText(totalTTC);
+
+    const content = `
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Facture ${facture.invoiceNumber || facture.num_facture}</title>
+  <title>Facture ${facture.clientName || facture.client?.nom_complete}</title>
+
   <style>
+    @page {
+      size: A4;
+      margin: 10mm;
+    }
+
     body {
       font-family: Arial, sans-serif;
-      font-size: 10px;
-      margin: 20px;
-      color: #333;
+      font-size: 12px;
+      margin: 0;
+      color: #000;
     }
+
     .header {
       text-align: center;
-      border-bottom: 2px solid #333;
+      border-bottom: 2px solid #000;
       padding-bottom: 10px;
-      margin-bottom: 15px;
     }
-    .company-info, .invoice-info {
-      display: flex;
-      justify-content: space-between;
-      flex-wrap: wrap;
-      margin-bottom: 20px;
-    }
-    .info-block {
-      flex: 1;
-      min-width: 220px;
-    }
-    .info-block p {
-      margin: 3px 0;
-    }
-    .table {
+
+    table {
       width: 100%;
       border-collapse: collapse;
-      margin: 15px 0;
+      margin: 20px 0;
     }
-    .table th, .table td {
+
+    th, td {
       border: 1px solid #ddd;
       padding: 6px;
       text-align: left;
     }
-    .table th {
-      background-color: #f5f5f5;
+
+    th {
+      background: #f5f5f5;
     }
+
     .totals {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-end;
+      text-align: right;
       margin-top: 20px;
     }
-    .totals p {
-      margin: 2px 0;
-    }
-    .advancements {
-      margin-top: 25px;
-    }
-    .advancements h3 {
-      margin-bottom: 5px;
-      font-size: 12px;
-    }
-    .notes {
-      margin-top: 20px;
-    }
-    .footer {
-      margin-top: 40px;
-      border-top: 1px solid #333;
-      padding-top: 15px;
-      text-align: center;
-    }
-    .status-badge {
-      display: inline-block;
-      padding: 2px 6px;
-      border-radius: 4px;
-      font-size: 9px;
+
+    .strong {
       font-weight: bold;
-      margin-left: 5px;
     }
-    .status-brouillon { background: #ffc107; color: #000; }
-    .status-payée { background: #28a745; color: #fff; }
-    .status-partiellement_payée { background: #007bff; color: #fff; }
-    .status-annulée { background: #6c757d; color: #fff; }
   </style>
 </head>
-<body>
+
+<body onload="window.print(); window.onafterprint = () => window.close();">
+
   <div class="header">
-    <h2 style="margin: 0;">Facture</h2>
-    <p style="margin: 5px 0;">ALUMINIUM OULAD BRAHIM</p>
-    <p style="margin: 0;">Tél: +212 661-431237</p>
+    <h2 style="margin:0;">FACTURE</h2>
+    <p style="margin:5px 0;">ALUMINIUM OULAD BRAHIM</p>
+    <p style="margin:0;">Tél: +212 671953725</p>
   </div>
 
-  <div class="invoice-info">
-    <div class="info-block">
-      <p><strong>Nom Client:</strong> ${facture.clientName || facture.client?.nom_complete}</p>
+  <div style="display:flex; justify-content:space-between; margin:20px 0;">
+    <div>
+      <strong>Client:</strong> ${facture.clientName || facture.client?.nom_complete}
     </div>
-    <div class="info-block" style="text-align:right;">
-      <p><strong>N° Facture:</strong> ${facture.invoiceNumber || facture.num_facture}</p>
-      <p><strong>Date facturation:</strong> ${formatDate(issueDate)}</p>
+    <div style="text-align:right;">
+      <strong>N° Facture:</strong> ${facture.invoiceNumber || facture.num_facture}<br/>
+      <strong>Date création :</strong> ${creationDateFormatted}<br/>
     </div>
   </div>
 
-  <table class="table">
+  <table>
     <thead>
       <tr>
         <th>Code</th>
         <th>Désignation</th>
         <th>Qté</th>
-        <th>Prix U.</th>
-        <th>Total Ligne HT</th>
+        <th>Prix U</th>
+        <th>Total</th>
       </tr>
     </thead>
     <tbody>
-      ${(facture.products || [])
-        .map(
-          (prod) => `
+          ${(facture.products || [])
+            .map(
+              (p) => `
         <tr>
-          <td>${prod.reference || "N/A"}</td>
-          <td>${prod.designation || "Produit"}</td>
-          <td>${prod.FactureProduit?.quantite || 0}</td>
-          <td>${parseFloat(prod.FactureProduit?.prix_unitaire || 0).toFixed(2)} Dh</td>
-          <td>${parseFloat(prod.FactureProduit?.total_ligne || 0).toFixed(2)} Dh</td>
+          <td>${p.reference || "—"}</td>
+          <td>${p.designation || "—"}</td>
+          <td>${p.FactureProduit?.quantite || 0}</td>
+          <td>${Number(p.FactureProduit?.prix_unitaire || 0).toFixed(2)}</td>
+          <td>${Number(p.FactureProduit?.total_ligne || 0).toFixed(2)}</td>
         </tr>
       `,
-        )
-        .join("")}
+            )
+            .join("")}
     </tbody>
   </table>
 
   <div class="totals">
-    <p><strong>Total HT:</strong> ${totalHTBeforeDiscount.toFixed(2)} Dh</p>
-    <p><strong>TVA (${facture.tva || 0}%):</strong> ${montantTVA.toFixed(2)} Dh</p>
-    <p><strong>Total TTC:</strong> ${totalTTC.toFixed(2)} Dh</p>
-
+    <p><strong>Total HT:</strong> ${totalHTBeforeDiscount.toFixed(2)}</p>
+        <p><strong>TVA (${facture.tva || 0}%):</strong> ${montantTVA.toFixed(2)} </p>
+        <p style="font-size:13px; font-weight:bold; color:#2c5aa0;">
+          <strong>Total TTC:</strong> ${totalTTC.toFixed(2)} 
+        </p>
     <p style="font-size:10px; font-style:italic;">
-      Arrêté le présent Facture à la somme de :
-      <strong>${printTotalText}</strong>
+      <strong>${pdfTotalText}</strong>
     </p>
-
-
-      ${
-        facture.remise_total > 0
-          ? `
-    <p style="color:#dc3545;">
-      <strong>Remise:</strong> -${parseFloat(facture.remise_total).toFixed(2)} Dh
-    </p>
-    <p><strong>Total HT après remise:</strong> ${facture.totalHT.toFixed(2)} Dh</p>
-    `
-          : ""
-      }
-
-
-    ${
-      totalPayments > 0
-        ? `
-      <p><strong>Total payé:</strong> ${totalPayments.toFixed(2)} Dh</p>
-      <p style="font-weight:bold; font-size:11px; color:${
-        remainingAmount > 0 ? "#dc3545" : "#28a745"
-      }">
-        <strong>Reste à payer:</strong> ${remainingAmount.toFixed(2)} Dh
-      </p>
-    `
-        : ""
-    }
   </div>
 
 </body>
 </html>
 `;
 
-    printWindow.document.write(printContent);
+    printWindow.document.open();
+    printWindow.document.write(content);
     printWindow.document.close();
-    printWindow.focus();
-
-    setTimeout(() => {
-      printWindow.print();
-    }, 500);
   };
 
   const generateAndDownloadPDF = async () => {
@@ -711,7 +655,7 @@ const FactureDetailsModal = ({
       const pdfContainer = document.createElement("div");
       pdfContainer.id = "pdf-container";
       pdfContainer.style.width = "210mm";
-      pdfContainer.style.minHeight = "297mm";
+      pdfContainer.style.minHeight = "150mm";
       pdfContainer.style.padding = "15mm 20mm";
       pdfContainer.style.background = "white";
       pdfContainer.style.color = "#000";
@@ -722,14 +666,24 @@ const FactureDetailsModal = ({
       pdfContainer.style.left = "-9999px";
       pdfContainer.style.top = "0";
 
-      const formatDate = (date) => {
-        if (!date) return "";
-        return new Date(date).toLocaleDateString("fr-FR");
+      const formatDateWithTime = (dateString) => {
+        if (!dateString) return "—";
+        try {
+          const date = new Date(dateString);
+          if (isNaN(date.getTime())) return "—";
+          return date.toLocaleString("fr-FR", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+        } catch {
+          return "—";
+        }
       };
 
-      const issueDate = facture.date_facturation
-        ? new Date(facture.date_facturation)
-        : facture.createdAt || new Date();
+      const creationDateFormatted = formatDateWithTime(facture.createdAt);
 
       // Get the total text for PDF
       const pdfTotalText = totalText || totalToFrenchText(totalTTC);
@@ -749,7 +703,7 @@ const FactureDetailsModal = ({
         <div style="text-align:right;">
           <h4 style="margin-bottom:5px;">Informations de la Facture</h4>
           <p><strong>N°:</strong> ${facture.invoiceNumber || facture.num_facture}</p>
-          <p><strong>Date facturation:</strong> ${formatDate(issueDate)}</p>
+          <p><strong>Date facturation:</strong> ${creationDateFormatted}</p>
         </div>
       </div>
 
@@ -759,7 +713,7 @@ const FactureDetailsModal = ({
             <th style="padding:6px; border:1px solid #2c5aa0;">Code</th>
             <th style="padding:6px; border:1px solid #2c5aa0;">Produit</th>
             <th style="padding:6px; border:1px solid #2c5aa0;">Qté</th>
-            <th style="padding:6px; border:1px solid #2c5aa0;">Prix U.</th>
+            <th style="padding:6px; border:1px solid #2c5aa0;">Prix U</th>
             <th style="padding:6px; border:1px solid #2c5aa0;">Total Ligne HT</th>
           </tr>
         </thead>
@@ -771,8 +725,8 @@ const FactureDetailsModal = ({
               <td style="border:1px solid #ddd; padding:5px;">${prod.reference || "N/A"}</td>
               <td style="border:1px solid #ddd; padding:5px;">${prod.designation || "Produit"}</td>
               <td style="border:1px solid #ddd; padding:5px; text-align:center;">${prod.FactureProduit?.quantite || 0}</td>
-              <td style="border:1px solid #ddd; padding:5px; text-align:right;">${parseFloat(prod.FactureProduit?.prix_unitaire || 0).toFixed(2)} Dh</td>
-              <td style="border:1px solid #ddd; padding:5px; text-align:right;">${parseFloat(prod.FactureProduit?.total_ligne || 0).toFixed(2)} Dh</td>
+              <td style="border:1px solid #ddd; padding:5px; text-align:right;">${parseFloat(prod.FactureProduit?.prix_unitaire || 0).toFixed(2)} </td>
+              <td style="border:1px solid #ddd; padding:5px; text-align:right;">${parseFloat(prod.FactureProduit?.total_ligne || 0).toFixed(2)} </td>
             </tr>
           `,
             )
@@ -781,10 +735,10 @@ const FactureDetailsModal = ({
       </table>
 
       <div style="text-align:right; margin-top:20px;">
-        <p><strong>Total HT:</strong> ${totalHTBeforeDiscount.toFixed(2)} Dh</p>
-        <p><strong>TVA (${facture.tva || 0}%):</strong> ${montantTVA.toFixed(2)} Dh</p>
+        <p><strong>Total HT:</strong> ${totalHTBeforeDiscount.toFixed(2)} </p>
+        <p><strong>TVA (${facture.tva || 0}%):</strong> ${montantTVA.toFixed(2)} </p>
         <p style="font-size:13px; font-weight:bold; color:#2c5aa0;">
-          <strong>Total TTC:</strong> ${totalTTC.toFixed(2)} Dh
+          <strong>Total TTC:</strong> ${totalTTC.toFixed(2)} 
         </p>
         <p style="font-size:10px; font-style:italic;">
           Arrêté le présent Facture à la somme de :
@@ -795,11 +749,11 @@ const FactureDetailsModal = ({
           totalPayments > 0
             ? `
           <div style="border-top:1px solid #ddd; margin-top:10px; padding-top:10px;">
-            <p><strong>Total payé:</strong> ${totalPayments.toFixed(2)} Dh</p>
+            <p><strong>Total payé:</strong> ${totalPayments.toFixed(2)} </p>
             <p style="font-weight:bold; color:${
               remainingAmount > 0 ? "#dc3545" : "#28a745"
             }">
-              <strong>Reste à payer:</strong> ${remainingAmount.toFixed(2)} Dh
+              <strong>Reste à payer:</strong> ${remainingAmount.toFixed(2)} 
             </p>
           </div>
         `
@@ -807,17 +761,6 @@ const FactureDetailsModal = ({
         }
 
         
-      ${
-        facture.remise_total > 0
-          ? `
-    <p style="color:#dc3545;">
-      <strong>Remise:</strong> -${parseFloat(facture.remise_total).toFixed(2)} Dh
-    </p>
-    <p><strong>Total HT après remise:</strong> ${facture.totalHT.toFixed(2)} Dh</p>
-    `
-          : ""
-      }
-
       </div>
     `;
 
@@ -1000,11 +943,16 @@ const FactureDetailsModal = ({
             <div className="d-flex justify-content-between align-items-center mb-3">
               <h6>
                 <FiDollarSign className="me-2" />
-                Paiements
+                Paiements (التسبيقات)
               </h6>
-              <Button color="primary" size="sm" onClick={addPayment}>
+              <Button
+                color="primary"
+                size="lg"
+                className="fs-6"
+                onClick={addPayment}
+              >
                 <FiPlus className="me-1" />
-                Ajouter Paiement
+                Ajouter Paiement (التسبيقات)
               </Button>
             </div>
 
@@ -1014,7 +962,7 @@ const FactureDetailsModal = ({
                   <thead>
                     <tr>
                       <th>Date</th>
-                      <th>Montant (Dh)</th>
+                      <th>Montant ()</th>
                       <th>Type</th>
                       <th>Méthode</th>
                       <th>Référence</th>
@@ -1157,7 +1105,6 @@ const FactureDetailsModal = ({
                     <th>Produit</th>
                     <th>Quantité</th>
                     <th>Prix Unitaire</th>
-                    <th>Remise Ligne</th>
                     <th>Total Ligne HT</th>
                   </tr>
                 </thead>
@@ -1171,19 +1118,11 @@ const FactureDetailsModal = ({
                         {parseFloat(
                           prod.FactureProduit?.prix_unitaire || 0,
                         ).toFixed(2)}{" "}
-                        Dh
-                      </td>
-                      <td>
-                        {parseFloat(
-                          prod.FactureProduit?.remise_ligne || 0,
-                        ).toFixed(2)}{" "}
-                        Dh
                       </td>
                       <td>
                         {parseFloat(
                           prod.FactureProduit?.total_ligne || 0,
                         ).toFixed(2)}{" "}
-                        Dh
                       </td>
                     </tr>
                   ))}
@@ -1223,32 +1162,22 @@ const FactureDetailsModal = ({
                 <div className="col-md-6 text-end">
                   <h6>Montants</h6>
                   <div className="d-flex justify-content-between">
-                    <span>Total HT avant remise:</span>
-                    <span>{totalHTBeforeDiscount.toFixed(2)} Dh</span>
-                  </div>
-                  {globalDiscount > 0 && (
-                    <div className="d-flex justify-content-between text-danger">
-                      <span>Remise globale:</span>
-                      <span>-{globalDiscount.toFixed(2)} Dh</span>
-                    </div>
-                  )}
-                  <div className="d-flex justify-content-between">
-                    <span>HT après remise:</span>
-                    <span>{montantHTAfterRemise.toFixed(2)} Dh</span>
+                    <span>Total HT:</span>
+                    <span>{totalHTBeforeDiscount.toFixed(2)} </span>
                   </div>
                   <div className="d-flex justify-content-between text-success">
                     <span>TVA ({facture.tva || 0}%):</span>
-                    <span>{montantTVA.toFixed(2)} Dh</span>
+                    <span>{montantTVA.toFixed(2)} </span>
                   </div>
                   <div className="d-flex justify-content-between fw-bold border-top pt-1">
                     <span>Total TTC:</span>
-                    <span>{totalTTC.toFixed(2)} Dh</span>
+                    <span>{totalTTC.toFixed(2)} </span>
                   </div>
                   {totalPayments > 0 && (
                     <>
                       <div className="d-flex justify-content-between text-primary">
                         <span>Total payé:</span>
-                        <span>{totalPayments.toFixed(2)} Dh</span>
+                        <span>{totalPayments.toFixed(2)} </span>
                       </div>
                       <div className="d-flex justify-content-between fw-bold border-top pt-1">
                         <span>Reste à payer:</span>
@@ -1259,7 +1188,7 @@ const FactureDetailsModal = ({
                               : "text-success"
                           }
                         >
-                          {remainingAmount.toFixed(2)} Dh
+                          {remainingAmount.toFixed(2)}
                         </span>
                       </div>
                     </>
@@ -1323,10 +1252,13 @@ const FactureDetailsModal = ({
                 onClick={handleSubmit}
                 color="primary"
                 disabled={isSubmitting}
-                className="mt-4"
+                className="mt-4 fs-6"
+                size="lg"
               >
                 <FiSave className="me-2" />
-                {isSubmitting ? "Enregistrement..." : "Enregistrer"}
+                {isSubmitting
+                  ? "Enregistrement..."
+                  : "Enregistrer تسجيل التعديل"}
               </Button>
             )}
           </div>

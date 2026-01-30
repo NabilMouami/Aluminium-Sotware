@@ -10,7 +10,6 @@ import {
   FiPlus,
   FiMinus,
   FiSearch,
-  FiPercent,
   FiDollarSign,
   FiCalendar,
   FiCreditCard,
@@ -40,7 +39,6 @@ const BonLivraisonCreate = () => {
   const [formData, setFormData] = useState({
     clientId: "",
     mode_reglement: "espèces",
-    remise: 0,
     notes: "",
     date_livraison: "",
   });
@@ -229,7 +227,6 @@ const BonLivraisonCreate = () => {
           ...produitData,
           quantite: 1,
           prix_unitaire: produitData.prix_vente,
-          remise_ligne: 0,
           total_ligne: produitData.prix_vente,
         };
 
@@ -262,7 +259,6 @@ const BonLivraisonCreate = () => {
         ...produitData,
         quantite: 1,
         prix_unitaire: produitData.prix_vente,
-        remise_ligne: 0,
         total_ligne: produitData.prix_vente,
       };
 
@@ -296,8 +292,7 @@ const BonLivraisonCreate = () => {
     const newProduits = [...selectedProduits];
     newProduits[index].quantite = newQuantity;
     newProduits[index].total_ligne =
-      newProduits[index].prix_unitaire * newQuantity -
-      newProduits[index].remise_ligne;
+      newProduits[index].prix_unitaire * newQuantity;
     setSelectedProduits(newProduits);
   };
 
@@ -305,17 +300,14 @@ const BonLivraisonCreate = () => {
     const newProduits = [...selectedProduits];
     newProduits[index].prix_unitaire = parseFloat(newPrice) || 0;
     newProduits[index].total_ligne =
-      newProduits[index].prix_unitaire * newProduits[index].quantite -
-      newProduits[index].remise_ligne;
+      newProduits[index].prix_unitaire * newProduits[index].quantite;
     setSelectedProduits(newProduits);
   };
 
   const updateProduitDiscount = (index, discount) => {
     const newProduits = [...selectedProduits];
-    newProduits[index].remise_ligne = parseFloat(discount) || 0;
     newProduits[index].total_ligne =
-      newProduits[index].prix_unitaire * newProduits[index].quantite -
-      newProduits[index].remise_ligne;
+      newProduits[index].prix_unitaire * newProduits[index].quantite;
     setSelectedProduits(newProduits);
   };
 
@@ -383,8 +375,7 @@ const BonLivraisonCreate = () => {
       (sum, p) => sum + p.total_ligne,
       0,
     );
-    const remise = parseFloat(formData.remise) || 0;
-    const montantHT = sousTotal - remise;
+    const montantHT = sousTotal;
     const montantTTC = montantHT;
     const totalAdvancements = calculateTotalAdvancements();
     const remaining = montantTTC - totalAdvancements;
@@ -393,7 +384,6 @@ const BonLivraisonCreate = () => {
       sousTotal: sousTotal.toFixed(2),
       montantHT: montantHT.toFixed(2),
       montantTTC: montantTTC.toFixed(2),
-      remise: remise.toFixed(2),
       totalAdvancements: totalAdvancements.toFixed(2),
       remaining: remaining > 0 ? remaining.toFixed(2) : "0.00",
     };
@@ -486,14 +476,12 @@ const BonLivraisonCreate = () => {
     const payload = {
       clientId: formData.clientId,
       mode_reglement: formData.mode_reglement,
-      remise: parseFloat(formData.remise) || 0,
       notes: formData.notes,
       date_livraison: formData.date_livraison || null,
       produits: selectedProduits.map((p) => ({
         produitId: p.id,
         quantite: p.quantite,
         prix_unitaire: p.prix_unitaire,
-        remise_ligne: p.remise_ligne,
       })),
       advancements: advancementsData.length > 0 ? advancementsData : undefined,
     };
@@ -567,7 +555,6 @@ const BonLivraisonCreate = () => {
             setFormData({
               clientId: "",
               mode_reglement: "espèces",
-              remise: 0,
               notes: "",
               date_livraison: new Date().toISOString().split("T")[0],
             });
@@ -607,7 +594,6 @@ const BonLivraisonCreate = () => {
     setFormData({
       clientId: formData.clientId,
       mode_reglement: formData.mode_reglement,
-      remise: 0,
       notes: "",
       date_livraison: new Date().toISOString().split("T")[0],
     });
@@ -717,6 +703,7 @@ const BonLivraisonCreate = () => {
                     <input
                       type="date"
                       className="form-control"
+                      placeholder="dd/MM/yyyy"
                       value={formData.date_livraison}
                       onChange={(e) =>
                         setFormData({
@@ -725,26 +712,6 @@ const BonLivraisonCreate = () => {
                         })
                       }
                     />
-                  </div>
-
-                  <div className="col-md-6">
-                    <label className="form-label">
-                      <FiPercent className="me-2" />
-                      Remise Globale (DH)
-                    </label>
-                    <div className="input-group">
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        className="form-control"
-                        value={formData.remise}
-                        onChange={(e) =>
-                          setFormData({ ...formData, remise: e.target.value })
-                        }
-                      />
-                      <span className="input-group-text">DH</span>
-                    </div>
                   </div>
 
                   <div className="col-12">
@@ -761,7 +728,7 @@ const BonLivraisonCreate = () => {
                         htmlFor="showAdvancements"
                       >
                         <FiCash className="me-2" />
-                        Ajouter des acomptes
+                        Ajouter des Paiements (التسبيقات)
                       </label>
                     </div>
                   </div>
@@ -772,20 +739,22 @@ const BonLivraisonCreate = () => {
                         <div className="card-header bg-light">
                           <h6 className="mb-0">
                             <FiCash className="me-2" />
-                            Acomptes
+                            Paiements (التسبيقات)
                           </h6>
                         </div>
                         <div className="card-body">
                           {advancements.length === 0 ? (
                             <div className="text-center py-3">
-                              <p className="text-muted">Aucun acompte ajouté</p>
+                              <p className="text-muted">
+                                Aucun paiement ajouté
+                              </p>
                               <button
                                 type="button"
                                 className="btn btn-sm btn-outline-primary"
                                 onClick={addAdvancement}
                               >
                                 <FiPlus className="me-1" />
-                                Ajouter un acompte
+                                Ajouter Paiement (التسبيقات)
                               </button>
                             </div>
                           ) : (
@@ -972,10 +941,6 @@ const BonLivraisonCreate = () => {
             </div>
             <div className="card-body">
               <div className="mb-4">
-                <label className="form-label">
-                  <FiSearch className="me-2" />
-                  Rechercher et ajouter un produit
-                </label>
                 {loadingProduits ? (
                   <div className="text-center py-3">
                     <div className="spinner-border text-primary" role="status">
@@ -1056,9 +1021,7 @@ const BonLivraisonCreate = () => {
                         <th width="20%" className="text-center">
                           Quantité
                         </th>
-                        <th width="15%" className="text-center">
-                          Remise
-                        </th>
+
                         <th width="15%" className="text-center">
                           Total
                         </th>
@@ -1144,21 +1107,7 @@ const BonLivraisonCreate = () => {
                               </button>
                             </div>
                           </td>
-                          <td className="text-center">
-                            <div className="input-group input-group-sm">
-                              <input
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                className="form-control text-center"
-                                value={produit.remise_ligne}
-                                onChange={(e) =>
-                                  updateProduitDiscount(index, e.target.value)
-                                }
-                              />
-                              <span className="input-group-text">DH</span>
-                            </div>
-                          </td>
+
                           <td className="text-center">
                             <strong className="text-primary">
                               {produit.total_ligne.toFixed(2)} DH
@@ -1201,21 +1150,11 @@ const BonLivraisonCreate = () => {
             <div className="card-header">
               <h5 className="card-title mb-0">
                 <FiDollarSign className="me-2" />
-                Récapitulatif
+                Informations
               </h5>
             </div>
             <div className="card-body">
               <div className="mb-4">
-                <div className="d-flex justify-content-between mb-2">
-                  <span className="text-muted">Nombre de produits:</span>
-                  <strong>{selectedProduits.length}</strong>
-                </div>
-                <div className="d-flex justify-content-between mb-2">
-                  <span className="text-muted">Articles totaux:</span>
-                  <strong>
-                    {selectedProduits.reduce((sum, p) => sum + p.quantite, 0)}
-                  </strong>
-                </div>
                 {advancements.length > 0 && (
                   <div className="d-flex justify-content-between mb-2">
                     <span className="text-muted">Acomptes:</span>
@@ -1223,29 +1162,6 @@ const BonLivraisonCreate = () => {
                   </div>
                 )}
               </div>
-
-              <hr />
-
-              <div className="mb-3">
-                <div className="d-flex justify-content-between mb-2">
-                  <span>Sous-total:</span>
-                  <strong>{totals.sousTotal} DH</strong>
-                </div>
-                <div className="d-flex justify-content-between mb-2">
-                  <span>Remise globale:</span>
-                  <strong className="text-danger">-{totals.remise} DH</strong>
-                </div>
-                <div className="d-flex justify-content-between mb-2">
-                  <span>Montant HT:</span>
-                  <strong>{totals.montantHT} DH</strong>
-                </div>
-                <div className="d-flex justify-content-between mb-2">
-                  <span>Montant TTC:</span>
-                  <strong>{totals.montantTTC} DH</strong>
-                </div>
-              </div>
-
-              <hr />
 
               {advancements.length > 0 && (
                 <>
@@ -1316,37 +1232,7 @@ const BonLivraisonCreate = () => {
                     </>
                   )}
                 </button>
-                <button
-                  type="button"
-                  className="btn btn-outline-secondary"
-                  onClick={handleResetForm}
-                  disabled={
-                    selectedProduits.length === 0 && advancements.length === 0
-                  }
-                >
-                  <FiX className="me-2" />
-                  Réinitialiser
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-outline-info"
-                  onClick={fetchAllProduits}
-                  disabled={loadingProduits}
-                >
-                  <FiRefreshCw
-                    className={`me-2 ${loadingProduits ? "spinner-border spinner-border-sm" : ""}`}
-                  />
-                  {loadingProduits
-                    ? "Chargement..."
-                    : "Actualiser les produits"}
-                </button>
               </div>
-            </div>
-            <div className="card-footer">
-              <small className="text-muted">
-                <FiCheck className="me-1" />
-                Le stock sera automatiquement déduit après création
-              </small>
             </div>
           </div>
 
@@ -1356,18 +1242,6 @@ const BonLivraisonCreate = () => {
               disponible. Veuillez ajuster les quantités.
             </div>
           )}
-
-          <div className="card mt-3">
-            <div className="card-body">
-              <h6 className="card-title">
-                <FiCreditCard className="me-2" />
-                Mode de Règlement sélectionné
-              </h6>
-              <div className="alert alert-info mb-0">
-                <strong>{formData.mode_reglement}</strong>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
     </div>

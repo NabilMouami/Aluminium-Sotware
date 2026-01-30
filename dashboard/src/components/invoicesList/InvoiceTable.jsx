@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import axios from "axios";
 import FactureDetailsModal from "./FactureDetailsModal";
 import Table from "@/components/shared/table/Table";
-import { DateRangePicker } from "react-date-range";
 import "react-date-range/dist/styles.css";
 import "react-date-range/dist/theme/default.css";
 import { format, subDays, parseISO, isBefore } from "date-fns";
@@ -55,14 +54,6 @@ const FactureTable = () => {
   const [factures, setFactures] = useState([]);
   const [filteredFactures, setFilteredFactures] = useState([]);
   const [selectedStatus, setSelectedStatus] = useState("all");
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [dateRange, setDateRange] = useState([
-    {
-      startDate: subDays(new Date(), 30),
-      endDate: new Date(),
-      key: "selection",
-    },
-  ]);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [selectedFacture, setSelectedFacture] = useState(null);
   const [paymentAmount, setPaymentAmount] = useState(0);
@@ -70,6 +61,10 @@ const FactureTable = () => {
   const [isPaidFilter, setIsPaidFilter] = useState("all");
   const [clients, setClients] = useState([]);
   const [selectedClient, setSelectedClient] = useState("all");
+
+  // États simplifiés pour les dates
+  const [startDate, setStartDate] = useState(subDays(new Date(), 30));
+  const [endDate, setEndDate] = useState(new Date());
 
   // Statistics states
   const [statistics, setStatistics] = useState({
@@ -150,7 +145,6 @@ const FactureTable = () => {
             totalTTC: parseFloat(facture.montant_ttc) || 0,
             paidAmount: parseFloat(facture.montant_paye) || 0,
             remainingAmount: parseFloat(facture.montant_restant) || 0,
-            globalDiscount: parseFloat(facture.remise_total) || 0,
             status: facture.status || "brouillon",
             paymentStatus: facture.paymentStatus || "impayée",
             createdAt: parseISO(facture.date_creation || facture.createdAt),
@@ -271,6 +265,21 @@ const FactureTable = () => {
     });
   };
 
+  // Fonctions simplifiées pour les dates
+  const handleStartDateChange = (e) => {
+    const date = new Date(e.target.value);
+    setStartDate(date);
+  };
+
+  const handleEndDateChange = (e) => {
+    const date = new Date(e.target.value);
+    setEndDate(date);
+  };
+
+  const formatDateForInput = (date) => {
+    return format(date, "yyyy-MM-dd");
+  };
+
   // Filter factures based on selected criteria
   useEffect(() => {
     let result = [...factures];
@@ -297,11 +306,11 @@ const FactureTable = () => {
     }
 
     // Filter by date range
-    if (dateRange[0].startDate && dateRange[0].endDate) {
-      const start = new Date(dateRange[0].startDate);
+    if (startDate && endDate) {
+      const start = new Date(startDate);
       start.setHours(0, 0, 0, 0);
 
-      const end = new Date(dateRange[0].endDate);
+      const end = new Date(endDate);
       end.setHours(23, 59, 59, 999);
 
       result = result.filter((facture) => {
@@ -312,12 +321,14 @@ const FactureTable = () => {
 
     setFilteredFactures(result);
     calculateStatistics(result);
-  }, [selectedStatus, isPaidFilter, selectedClient, dateRange, factures]);
-
-  const handleDateRangeChange = (ranges) => {
-    setDateRange([ranges.selection]);
-    setShowDatePicker(false);
-  };
+  }, [
+    selectedStatus,
+    isPaidFilter,
+    selectedClient,
+    startDate,
+    endDate,
+    factures,
+  ]);
 
   const getStatusColor = (status) => {
     const colors = {
@@ -600,13 +611,11 @@ const FactureTable = () => {
           clientId: factureData.client_id,
           totalHT: parseFloat(factureData.montant_ht) || 0,
           tva: parseFloat(factureData.tva) || 0,
-          remise_total: parseFloat(factureData.remise_total) || 0,
 
           montantTVA: parseFloat(factureData.montant_tva) || 0,
           totalTTC: parseFloat(factureData.montant_ttc) || 0,
           paidAmount: parseFloat(factureData.montant_paye) || 0,
           remainingAmount: parseFloat(factureData.montant_restant) || 0,
-          globalDiscount: parseFloat(factureData.remise_total) || 0,
           status: factureData.status || "brouillon",
           paymentStatus: factureData.paymentStatus || "impayée",
           createdAt: parseISO(
@@ -777,9 +786,10 @@ const FactureTable = () => {
           zIndex: 999,
         }}
       >
+        {/* Status Filter */}
         <InputGroup size="sm" className="w-auto shadow-sm rounded">
           <InputGroupText className="bg-white border-0">
-            <FiFilter className="text-white fs-6" />
+            <FiFilter className="text-primary fs-6" />
           </InputGroupText>
           <Input
             type="select"
@@ -795,9 +805,10 @@ const FactureTable = () => {
           </Input>
         </InputGroup>
 
+        {/* Client Filter */}
         <InputGroup size="sm" className="w-auto shadow-sm rounded">
           <InputGroupText className="bg-white border-0">
-            <FiUser className="text-white fs-6" />
+            <FiUser className="text-primary fs-6" />
           </InputGroupText>
           <Input
             type="select"
@@ -813,31 +824,70 @@ const FactureTable = () => {
           </Input>
         </InputGroup>
 
-        {/* Date Range Filter */}
-        <div className="position-relative">
-          <button
-            className="btn btn-sm btn-primary"
-            onClick={() => setShowDatePicker(!showDatePicker)}
+        {/* Payment Status Filter */}
+        <InputGroup size="sm" className="w-auto shadow-sm rounded">
+          <InputGroupText className="bg-white border-0">
+            <FiCreditCard className="text-primary fs-6" />
+          </InputGroupText>
+          <Input
+            type="select"
+            value={isPaidFilter}
+            onChange={(e) => setIsPaidFilter(e.target.value)}
+            className="border-0 bg-white"
           >
-            <FiCalendar className="me-2" />
-            {format(dateRange[0].startDate, "dd/MM/yyyy")} -{" "}
-            {format(dateRange[0].endDate, "dd/MM/yyyy")}
-          </button>
+            <option value="all">Tous les paiements</option>
+            <option value="paid">Payées</option>
+            <option value="unpaid">Impayées</option>
+            <option value="overdue">En retard</option>
+          </Input>
+        </InputGroup>
 
-          {showDatePicker && (
-            <div className="position-absolute mt-2" style={{ zIndex: 1050 }}>
-              <DateRangePicker
-                onChange={handleDateRangeChange}
-                showSelectionPreview={true}
-                moveRangeOnFirstSelection={false}
-                months={1}
-                ranges={dateRange}
-                direction="horizontal"
-              />
-            </div>
-          )}
+        {/* Date Range Filter - Version simplifiée */}
+        <div className="d-flex align-items-center gap-2">
+          <InputGroup size="sm" className="w-auto shadow-sm rounded">
+            <InputGroupText className="bg-white border-0">
+              <FiCalendar className="text-primary fs-6" />
+            </InputGroupText>
+            <Input
+              type="date"
+              className="border-0 bg-white"
+              value={formatDateForInput(startDate)}
+              onChange={handleStartDateChange}
+              max={formatDateForInput(endDate)}
+              title="Date de début"
+            />
+          </InputGroup>
+
+          <span className="text-muted">à</span>
+
+          <InputGroup size="sm" className="w-auto shadow-sm rounded">
+            <InputGroupText className="bg-white border-0">
+              <FiCalendar className="text-primary fs-6" />
+            </InputGroupText>
+            <Input
+              type="date"
+              className="border-0 bg-white"
+              value={formatDateForInput(endDate)}
+              onChange={handleEndDateChange}
+              min={formatDateForInput(startDate)}
+              title="Date de fin"
+            />
+          </InputGroup>
+
+          {/* Bouton pour réinitialiser à 30 jours */}
+          <button
+            className="btn btn-sm btn-outline-secondary"
+            onClick={() => {
+              setStartDate(subDays(new Date(), 30));
+              setEndDate(new Date());
+            }}
+            title="30 derniers jours"
+          >
+            30j
+          </button>
         </div>
 
+        {/* Create Button */}
         <div>
           <Link to="/facture/create">
             <button className="btn btn-sm btn-success">
@@ -848,11 +898,21 @@ const FactureTable = () => {
         </div>
       </div>
 
+      {/* Afficher la période sélectionnée */}
+      <div className="mb-2 text-muted small">
+        <FiCalendar className="me-1" />
+        Période : {format(startDate, "dd/MM/yyyy")} -{" "}
+        {format(endDate, "dd/MM/yyyy")}
+        <span className="ms-3">
+          ({filteredFactures.length} facture(s) correspondante(s))
+        </span>
+      </div>
+
       {/* Statistics Cards Section */}
       <div
         className="mb-4"
         style={{
-          marginTop: "60px",
+          marginTop: "20px",
         }}
       >
         <div className="row g-3">

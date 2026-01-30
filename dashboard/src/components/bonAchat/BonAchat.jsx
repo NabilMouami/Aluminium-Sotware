@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import Table from "@/components/shared/table/Table";
-import { DateRangePicker } from "react-date-range";
 import "react-date-range/dist/styles.css";
 import "react-date-range/dist/theme/default.css";
 import { format, subDays } from "date-fns";
@@ -24,28 +23,6 @@ import BonAchatDetailsModal from "./BonAchatDetailsModal";
 
 const MySwal = withReactContent(Swal);
 
-// Status options for Bon Achat
-const statusOptions = [
-  { value: "all", label: "Tous les statuts" },
-  { value: "brouillon", label: "Brouillon" },
-  { value: "commandé", label: "Commandé" },
-  { value: "partiellement_reçu", label: "Partiellement Reçu" },
-  { value: "reçu", label: "Reçu" },
-  { value: "partiellement_payé", label: "Partiellement Payé" },
-  { value: "payé", label: "Payé" },
-  { value: "annulé", label: "Annulé" },
-];
-
-// Type achat options
-const typeAchatOptions = [
-  { value: "all", label: "Tous les types" },
-  { value: "matiere_premiere", label: "Matière Première" },
-  { value: "produit_fini", label: "Produit Fini" },
-  { value: "equipement", label: "Équipement" },
-  { value: "service", label: "Service" },
-  { value: "autre", label: "Autre" },
-];
-
 const BonAchatTable = () => {
   const [bons, setBons] = useState([]);
   const [filteredBons, setFilteredBons] = useState([]);
@@ -53,17 +30,13 @@ const BonAchatTable = () => {
   const [selectedStatus, setSelectedStatus] = useState("all");
   const [selectedTypeAchat, setSelectedTypeAchat] = useState("all");
   const [selectedFornisseur, setSelectedFornisseur] = useState("all");
-  const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedBonAchat, setSelectedBonAchat] = useState(null);
   const [showModal, setShowModal] = useState(false);
-  const [dateRange, setDateRange] = useState([
-    {
-      startDate: subDays(new Date(), 30),
-      endDate: new Date(),
-      key: "selection",
-    },
-  ]);
+  const [startDate, setStartDate] = useState(subDays(new Date(), 30));
+  const [endDate, setEndDate] = useState(new Date());
   const [loading, setLoading] = useState(true);
+  const [showStartCalendar, setShowStartCalendar] = useState(false);
+  const [showEndCalendar, setShowEndCalendar] = useState(false);
 
   useEffect(() => {
     fetchBonsAchat();
@@ -92,11 +65,11 @@ const BonAchatTable = () => {
     }
 
     // Filter by date range
-    if (dateRange[0].startDate && dateRange[0].endDate) {
-      const start = new Date(dateRange[0].startDate);
+    if (startDate && endDate) {
+      const start = new Date(startDate);
       start.setHours(0, 0, 0, 0);
 
-      const end = new Date(dateRange[0].endDate);
+      const end = new Date(endDate);
       end.setHours(23, 59, 59, 999);
 
       result = result.filter((bon) => {
@@ -106,7 +79,14 @@ const BonAchatTable = () => {
     }
 
     setFilteredBons(result);
-  }, [selectedStatus, selectedTypeAchat, selectedFornisseur, dateRange, bons]);
+  }, [
+    selectedStatus,
+    selectedTypeAchat,
+    selectedFornisseur,
+    startDate,
+    endDate,
+    bons,
+  ]);
 
   const fetchBonsAchat = async () => {
     try {
@@ -232,7 +212,7 @@ const BonAchatTable = () => {
     try {
       const token =
         localStorage.getItem("token") || sessionStorage.getItem("token");
-      const response = await axios.get(`${config_url}/api/fournisseurs`, {
+      const response = await axios.get(`${config_url}/api/fornisseurs`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -251,9 +231,20 @@ const BonAchatTable = () => {
     }
   };
 
-  const handleDateRangeChange = (ranges) => {
-    setDateRange([ranges.selection]);
-    setShowDatePicker(false);
+  const handleStartDateChange = (e) => {
+    const date = new Date(e.target.value);
+    setStartDate(date);
+    setShowStartCalendar(false);
+  };
+
+  const handleEndDateChange = (e) => {
+    const date = new Date(e.target.value);
+    setEndDate(date);
+    setShowEndCalendar(false);
+  };
+
+  const formatDateForInput = (date) => {
+    return format(date, "yyyy-MM-dd");
   };
 
   // Handle updates
@@ -272,54 +263,6 @@ const BonAchatTable = () => {
       prev.map((bon) => (bon.id === bonAchat.id ? bonAchat : bon)),
     );
     topTost("Stock réceptionné avec succès!", "success");
-  };
-
-  const getStatusColor = (status) => {
-    const colors = {
-      brouillon: "warning",
-      commandé: "primary",
-      partiellement_reçu: "info",
-      reçu: "success",
-      partiellement_payé: "warning",
-      payé: "success",
-      annulé: "danger",
-    };
-    return colors[status] || "secondary";
-  };
-
-  const getStatusText = (status) => {
-    const texts = {
-      brouillon: "Brouillon",
-      commandé: "Commandé",
-      partiellement_reçu: "Partiellement Reçu",
-      reçu: "Reçu",
-      partiellement_payé: "Partiellement Payé",
-      payé: "Payé",
-      annulé: "Annulé",
-    };
-    return texts[status] || status;
-  };
-
-  const getTypeAchatText = (type) => {
-    const texts = {
-      matiere_premiere: "Matière Première",
-      produit_fini: "Produit Fini",
-      equipement: "Équipement",
-      service: "Service",
-      autre: "Autre",
-    };
-    return texts[type] || type;
-  };
-
-  const getTypeAchatColor = (type) => {
-    const colors = {
-      matiere_premiere: "info",
-      produit_fini: "primary",
-      equipement: "warning",
-      service: "success",
-      autre: "secondary",
-    };
-    return colors[type] || "secondary";
   };
 
   const handleDeleteBon = async (bonId, num_bon_achat) => {
@@ -440,16 +383,36 @@ const BonAchatTable = () => {
       cell: ({ getValue }) => <span>{getValue()}</span>,
     },
     {
-      accessorKey: "produits_count",
-      header: () => "Produits",
-      cell: ({ getValue, row }) => (
-        <div>
-          <span className="badge bg-info">{getValue()} produits</span>
-          <small className="text-muted ms-1">
-            ({row.original.totalQuantite} unités)
-          </small>
-        </div>
-      ),
+      accessorKey: "produits_info",
+      header: () => "Produits Achat",
+      cell: ({ row }) => {
+        const produits = row.original.produits || [];
+        if (produits.length === 0) {
+          return <span className="text-muted">Aucun produit</span>;
+        }
+
+        return (
+          <div className="d-flex flex-column gap-1">
+            {produits.map((produit, index) => (
+              <div
+                key={index}
+                className="d-flex align-items-center justify-content-between"
+              >
+                <span className="fw-bold">
+                  {produit.reference} ×{" "}
+                  {produit.BonAchatProduit?.prix_unitaire || "0.00"} DH
+                </span>
+                <Badge color="info" className="ms-2">
+                  {produit.BonAchatProduit?.quantite || 0} unités
+                </Badge>
+              </div>
+            ))}
+          </div>
+        );
+      },
+      meta: {
+        headerClassName: "text-center",
+      },
     },
     {
       accessorKey: "actions",
@@ -568,29 +531,69 @@ const BonAchatTable = () => {
             </Input>
           </InputGroup>
 
-          {/* Date Range Filter */}
-          <div className="position-relative">
-            <button
-              className="btn btn-sm btn-primary"
-              onClick={() => setShowDatePicker(!showDatePicker)}
-            >
-              <FiCalendar className="me-2" />
-              {format(dateRange[0].startDate, "dd/MM/yyyy")} -{" "}
-              {format(dateRange[0].endDate, "dd/MM/yyyy")}
-            </button>
+          {/* Date Range Filter - Two Separate Buttons */}
+          <div className="d-flex align-items-center gap-2">
+            <div className="position-relative fs-1">
+              <button
+                className="btn btn-lg btn-outline-primary d-flex align-items-center"
+                onClick={() => {
+                  setShowStartCalendar(!showStartCalendar);
+                  setShowEndCalendar(false);
+                }}
+              >
+                <FiCalendar className="me-2" />
+                De: {format(startDate, "dd/MM/yyyy")}
+              </button>
 
-            {showDatePicker && (
-              <div className="position-absolute mt-2" style={{ zIndex: 1050 }}>
-                <DateRangePicker
-                  onChange={handleDateRangeChange}
-                  showSelectionPreview={true}
-                  moveRangeOnFirstSelection={false}
-                  months={1}
-                  ranges={dateRange}
-                  direction="horizontal"
-                />
-              </div>
-            )}
+              {showStartCalendar && (
+                <div
+                  className="position-absolute mt-2"
+                  style={{ zIndex: 1050 }}
+                >
+                  <div className="bg-white p-3 rounded shadow border">
+                    <input
+                      type="date"
+                      className="form-control form-control-sm"
+                      value={formatDateForInput(startDate)}
+                      onChange={handleStartDateChange}
+                      max={formatDateForInput(endDate)}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <span className="text-muted">→</span>
+
+            <div className="position-relative">
+              <button
+                className="btn btn-lg btn-outline-primary d-flex align-items-center"
+                onClick={() => {
+                  setShowEndCalendar(!showEndCalendar);
+                  setShowStartCalendar(false);
+                }}
+              >
+                <FiCalendar className="me-2" />
+                À: {format(endDate, "dd/MM/yyyy")}
+              </button>
+
+              {showEndCalendar && (
+                <div
+                  className="position-absolute mt-2"
+                  style={{ zIndex: 1050 }}
+                >
+                  <div className="bg-white p-3 rounded shadow border">
+                    <input
+                      type="date"
+                      className="form-control form-control-sm"
+                      value={formatDateForInput(endDate)}
+                      onChange={handleEndDateChange}
+                      min={formatDateForInput(startDate)}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Create Button */}

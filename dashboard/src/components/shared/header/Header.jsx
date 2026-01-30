@@ -136,7 +136,7 @@ const Header = () => {
             href="#"
             className="nxl-head-mobile-toggler"
             onClick={(e) => {
-              e.preventDefault(), setNavigationOpen(true);
+              (e.preventDefault(), setNavigationOpen(true));
             }}
             id="mobile-collapse"
           >
@@ -232,7 +232,7 @@ const Header = () => {
               </div>
             </div>
 
-            <ProfileModal />
+            {/* <ProfileModal /> */}
           </div>
         </div>
         {/* <!--! [End] Header Right !--> */}

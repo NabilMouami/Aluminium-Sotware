@@ -19,7 +19,6 @@ import {
   FiCalendar,
   FiCreditCard,
   FiDollarSign,
-  FiPercent,
 } from "react-icons/fi";
 import DatePicker from "react-datepicker";
 import axios from "axios";
@@ -32,6 +31,40 @@ import "react-datepicker/dist/react-datepicker.css";
 import withReactContent from "sweetalert2-react-content";
 
 const MySwal = withReactContent(Swal);
+
+// Safe parser for date_creation in "dd/MM/yyyy" format
+const parseDateSafely = (dateInput) => {
+  if (!dateInput) return null;
+
+  // If it's already a valid Date object
+  if (dateInput instanceof Date && !isNaN(dateInput.getTime())) {
+    return dateInput;
+  }
+
+  // Handle string in "dd/MM/yyyy" format (common in your backend)
+  if (typeof dateInput === "string") {
+    const parts = dateInput.trim().split("/");
+    if (parts.length === 3) {
+      const [day, month, year] = parts.map(Number);
+      // Validate reasonable values
+      if (
+        day >= 1 &&
+        day <= 31 &&
+        month >= 1 &&
+        month <= 12 &&
+        year >= 2000 &&
+        year <= 2100
+      ) {
+        const date = new Date(year, month - 1, day);
+        if (!isNaN(date.getTime())) return date;
+      }
+    }
+  }
+
+  // Fallback: try native parsing
+  const fallback = new Date(dateInput);
+  return isNaN(fallback.getTime()) ? null : fallback;
+};
 
 // Updated status options
 const statusOptions = [
@@ -49,15 +82,158 @@ const paymentMethodOptions = [
   { value: "carte", label: "Carte Bancaire" },
 ];
 
+// Move totalToFrenchText outside and make it synchronous
+const totalToFrenchText = (amount) => {
+  if (amount === 0) return "Zéro dirham";
+
+  const units = [
+    "",
+    "un",
+    "deux",
+    "trois",
+    "quatre",
+    "cinq",
+    "six",
+    "sept",
+    "huit",
+    "neuf",
+  ];
+  const teens = [
+    "dix",
+    "onze",
+    "douze",
+    "treize",
+    "quatorze",
+    "quinze",
+    "seize",
+    "dix-sept",
+    "dix-huit",
+    "dix-neuf",
+  ];
+  const tens = [
+    "",
+    "",
+    "vingt",
+    "trente",
+    "quarante",
+    "cinquante",
+    "soixante",
+    "soixante",
+    "quatre-vingt",
+    "quatre-vingt",
+  ];
+  const convertLessThanOneThousand = (num) => {
+    if (num === 0) return "";
+
+    let result = "";
+
+    // Hundreds
+    if (num >= 100) {
+      const h = Math.floor(num / 100);
+      result += h === 1 ? "cent" : units[h] + " cent";
+      num %= 100;
+      if (num === 0 && h > 1) result += "s"; // deux cents
+      if (num > 0) result += " ";
+    }
+
+    // Tens & units
+    if (num < 10) {
+      result += units[num];
+    } else if (num < 20) {
+      result += teens[num - 10];
+    } else {
+      const t = Math.floor(num / 10);
+      const u = num % 10;
+
+      if (t === 7) {
+        result += "soixante";
+        result += u === 1 ? " et onze" : "-" + teens[u];
+      } else if (t === 9) {
+        result += "quatre-vingt";
+        result += "-" + teens[u];
+      } else {
+        result += tens[t];
+        if (u === 1 && t !== 8) {
+          result += " et un";
+        } else if (u > 0) {
+          result += "-" + units[u];
+        }
+        if (t === 8 && u === 0) result += "s"; // quatre-vingts
+      }
+    }
+
+    return result;
+  };
+
+  const convertNumberToWords = (num) => {
+    if (num === 0) return "zéro";
+
+    let result = "";
+
+    // Billions (not needed for our use case, but kept for completeness)
+    if (num >= 1000000000) {
+      const billions = Math.floor(num / 1000000000);
+      result += convertLessThanOneThousand(billions) + " milliard";
+      if (billions > 1) result += "s";
+      num %= 1000000000;
+      if (num > 0) result += " ";
+    }
+
+    // Millions
+    if (num >= 1000000) {
+      const millions = Math.floor(num / 1000000);
+      result += convertLessThanOneThousand(millions) + " million";
+      if (millions > 1) result += "s";
+      num %= 1000000;
+      if (num > 0) result += " ";
+    }
+
+    // Thousands
+    if (num >= 1000) {
+      const thousands = Math.floor(num / 1000);
+      if (thousands === 1) {
+        result += "mille";
+      } else {
+        result += convertLessThanOneThousand(thousands) + " mille";
+      }
+      num %= 1000;
+      if (num > 0) {
+        if (num < 100) result += " ";
+        else result += " ";
+      }
+    }
+
+    // Hundreds, tens and units
+    if (num > 0) {
+      result += convertLessThanOneThousand(num);
+    }
+
+    return result.trim();
+  };
+
+  const dirhams = Math.floor(amount);
+  const centimes = Math.round((amount - dirhams) * 100);
+
+  let text = convertNumberToWords(dirhams) + " dirham";
+  if (dirhams > 1) text += "s";
+
+  if (centimes > 0) {
+    text += " et " + convertNumberToWords(centimes) + " centime";
+    if (centimes > 1) text += "s";
+  }
+
+  return text.charAt(0).toUpperCase() + text.slice(1);
+};
+
 const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     status: "brouillon",
     notes: "",
-    remise: 0,
-    date_livraison: null, // Initialiser à null au lieu de new Date()
     advancements: [],
   });
+  const [totalText, setTotalText] = useState("");
+  const [isCalculatingTotal, setIsCalculatingTotal] = useState(false);
 
   // Initialize form data when bon changes
   useEffect(() => {
@@ -66,7 +242,6 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
         id: bon.id,
         montant_ht: bon.montant_ht,
         montant_ttc: bon.montant_ttc,
-        remise: bon.remise,
         produits: bon.produits?.length,
         advancements: bon.advancements?.length,
         totalProduits: calculateTotalFromProduits(bon.produits),
@@ -77,7 +252,7 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
             id: adv.id,
             amount: parseFloat(adv.amount) || 0,
             paymentDate: adv.paymentDate
-              ? new Date(adv.paymentDate)
+              ? parseDateSafely(adv.paymentDate) || new Date()
               : new Date(),
             paymentMethod: adv.paymentMethod || "espece",
             reference: adv.reference || "",
@@ -85,23 +260,9 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
           }))
         : [];
 
-      // Fonction pour créer une date valide
-      const parseDate = (dateString) => {
-        if (!dateString) return null;
-        try {
-          const date = new Date(dateString);
-          return isNaN(date.getTime()) ? null : date;
-        } catch (error) {
-          console.error("Error parsing date:", error);
-          return null;
-        }
-      };
-
       setFormData({
         status: bon.status || "brouillon",
         notes: bon.notes || "",
-        remise: parseFloat(bon.remise) || 0,
-        date_livraison: parseDate(bon.date_livraison),
         advancements: formattedAdvancements,
       });
     }
@@ -116,6 +277,33 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
       return total + ligneTotal;
     }, 0);
   };
+
+  // Calculate total in French text
+  useEffect(() => {
+    const calculateTotalText = () => {
+      if (bon) {
+        const total = parseFloat(bon.montant_ttc) || 0;
+        if (total > 0) {
+          setIsCalculatingTotal(true);
+          try {
+            const text = totalToFrenchText(total);
+            setTotalText(text);
+          } catch (error) {
+            console.error("Error converting total to French text:", error);
+            setTotalText(`${total.toFixed(2)} dirhams`);
+          } finally {
+            setIsCalculatingTotal(false);
+          }
+        } else {
+          setTotalText("Zéro dirham");
+        }
+      }
+    };
+
+    if (bon) {
+      calculateTotalText();
+    }
+  }, [bon]);
 
   if (!bon) return null;
 
@@ -133,11 +321,11 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
         return "secondary";
     }
   };
+  const total = parseFloat(bon.montant_ttc) || 0;
 
   // Calculer les totaux CORRIGÉS avec remise dynamique
   const sousTotal = calculateTotalFromProduits(bon.produits);
-  const remise = parseFloat(formData.remise) || 0; // Utiliser formData.remise au lieu de bon.remise
-  const montantHT = Math.max(0, sousTotal - remise);
+  const montantHT = Math.max(0, sousTotal);
   const montantTotal = parseFloat(bon.montant_ttc) || montantHT;
 
   const totalAdvancements = formData.advancements.reduce(
@@ -172,8 +360,8 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
 
   const removeAdvancement = async (index) => {
     const result = await MySwal.fire({
-      title: "Supprimer cet acompte?",
-      text: "Êtes-vous sûr de vouloir supprimer cet acompte?",
+      title: "Supprimer cet Paiement?",
+      text: "Êtes-vous sûr de vouloir supprimer cet paiement?",
       icon: "warning",
       showCancelButton: true,
       confirmButtonColor: "#d33",
@@ -206,7 +394,7 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
       );
 
       if (newAmount + totalSansCeluiCi > montantTotal) {
-        topTost("Le total des acomptes dépasse le montant total!", "error");
+        topTost("Le total des paiements dépasse le montant total!", "error");
         return;
       }
 
@@ -230,144 +418,89 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
   const handlePrint = () => {
     if (!bon) return;
 
-    const formatDate = (dateStr) => {
-      if (!dateStr) return "";
-      const d = new Date(dateStr);
-      return isNaN(d.getTime()) ? "" : d.toLocaleDateString("fr-FR");
-    };
-
-    console.log("Infos Bom:" + JSON.stringify(bon));
-    const issueDate = bon.date_creation
-      ? new Date(bon.date_creation)
-      : new Date();
+    console.log("Bon Livraison:" + JSON.stringify(bon));
 
     const printWindow = window.open("", "_blank");
+    if (!printWindow) return;
 
-    const printContent = `
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Bon Livraison ${bon.deliveryNumber}</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      font-size: 12px;
-      margin: 20px;
-      color: #333;
-    }
-    .header {
-      text-align: center;
-      border-bottom: 2px solid #333;
-      padding-bottom: 10px;
-      margin-bottom: 15px;
-    }
-    .invoice-info {
-      display: flex;
-      justify-content: space-between;
-      margin-bottom: 20px;
-    }
-    .table {
-      width: 100%;
-      border-collapse: collapse;
-      margin: 15px 0;
-    }
-    .table th, .table td {
-      border: 1px solid #ddd;
-      padding: 8px;
-      text-align: left;
-    }
-    .table th {
-      background-color: #f5f5f5;
-    }
-    .totals {
-      text-align: right;
-      margin-top: 20px;
-    }
-    .footer {
-      margin-top: 40px;
-      text-align: center;
-      font-size: 10px;
-      color: #666;
-    }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <h2 style="margin: 0;">Bon de Livraison</h2>
-    <p style="margin: 5px 0;">ALUMINIUM OULAD BRAHIM</p>
-    <p style="margin: 0;">Tél: +212 661-431237</p>
-  </div>
+    const formatDate = (dateInput) => {
+      const parsed = parseDateSafely(dateInput);
+      return parsed ? parsed.toLocaleDateString("fr-FR") : "";
+    };
 
-  <div class="invoice-info">
-    <div>
-      <p><strong>Client:</strong> ${bon.customerName || ""}</p>
-      <p><strong>Date livraison:</strong> ${formatDate(bon.date_livraison)}</p>
+    const txt = totalToFrenchText(sousTotal);
+    const dateCreation = bon.date_creation;
+
+    const content = `
+  <!DOCTYPE html>
+  <html>
+  <head>
+    <title>Bon de Livraison ${bon.deliveryNumber}</title>
+    <style>
+      @page { margin: 10mm; }
+      body { font-family: Arial, sans-serif; font-size: 12px; margin: 0; color: #000; }
+      .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 12px; margin-bottom: 15px; }
+      table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+      th, td { border: 1px solid #ccc; padding: 6px; text-align: left; }
+      th { background: #f5f5f5; }
+      .totals { text-align: right; margin-top: 15px; }
+      .italic { font-style: italic; font-size: 11px; }
+    </style>
+  </head>
+  <body onload="window.print(); window.onafterprint = () => window.close();">
+    <div class="header">
+      <h2>Bon de Livraison</h2>
+      <p>ALUMINIUM OULAD BRAHIM – Tél: +212 671953725</p>
     </div>
-    <div style="text-align:right;">
-      <p><strong>N° Bon:</strong> ${bon.deliveryNumber}</p>
-      <p><strong>Date création:</strong> ${formatDate(issueDate)}</p>
-    </div>
-  </div>
 
-  <table class="table">
-    <thead>
-      <tr>
-        <th>Code</th>
-        <th>Désignation</th>
-        <th>Qté</th>
-        <th>Prix U. (Dh)</th>
-        <th>Total (Dh)</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${(bon.produits || [])
-        .map(
-          (prod) => `
+    <div style="display:flex;justify-content:space-between;margin:20px 0;">
+      <div>
+        <strong>Client :</strong> ${bon.customerName || ""}
+      </div>
+      <div style="text-align:right;">
+        <strong>N° Bon :</strong> ${bon.deliveryNumber}<br/>
+        <strong>Date création :</strong> ${formatDate(dateCreation)}
+      </div>
+    </div>
+
+    <table>
+      <thead>
         <tr>
-          <td>${prod.reference || "N/A"}</td>
-          <td>${prod.designation || "Produit"}</td>
-          <td>${prod.BonLivraisonProduit?.quantite || 0}</td>
-          <td>${parseFloat(
-            prod.BonLivraisonProduit?.prix_unitaire || 0,
-          ).toFixed(2)}</td>
-          <td>${parseFloat(prod.BonLivraisonProduit?.total_ligne || 0).toFixed(2)}</td>
+          <th>Code</th>
+          <th>Désignation</th>
+          <th>Qté</th>
+          <th>Prix U</th>
+          <th>Total</th>
         </tr>
-      `,
-        )
-        .join("")}
-    </tbody>
-  </table>
+      </thead>
+      <tbody>
+        ${(bon.produits || [])
+          .map(
+            (prod) => `
+          <tr>
+            <td>${prod.reference || "—"}</td>
+            <td>${prod.designation || "—"}</td>
+            <td>${prod.BonLivraisonProduit?.quantite || 0}</td>
+            <td>${Number(prod.BonLivraisonProduit?.prix_unitaire || 0).toFixed(2)}</td>
+            <td>${Number(prod.BonLivraisonProduit?.total_ligne || 0).toFixed(2)}</td>
+          </tr>
+        `,
+          )
+          .join("")}
+      </tbody>
+    </table>
 
-  <div class="totals">
-    <p><strong>Sous-total produits:</strong> ${sousTotal.toFixed(2)} Dh</p>
-    ${remise > 0 ? `<p><strong>Remise globale:</strong> -${remise.toFixed(2)} Dh</p>` : ""}
-    <p><strong>Montant HT:</strong> ${montantHT.toFixed(2)} Dh</p>
-    <p style="font-size:14px; font-weight:bold;">
-      <strong>Montant TTC:</strong> ${montantTotal.toFixed(2)} Dh
-    </p>
-    
-    ${
-      totalAdvancements > 0
-        ? `
-      <p><strong>Total acomptes:</strong> -${totalAdvancements.toFixed(2)} Dh</p>
-      <p style="font-weight:bold; color:${resteAPayer > 0 ? "#dc3545" : "#28a745"}">
-        <strong>Reste à payer:</strong> ${resteAPayer.toFixed(2)} Dh
-      </p>
-    `
-        : ""
-    }
-  </div>
+    <div class="totals">
+      <p><strong>Total à payer :</strong> ${sousTotal.toFixed(2)}</p>
+      <p class="italic"><strong>${txt}</strong></p>
+    </div>
+  </body>
+  </html>
+  `;
 
-</body>
-</html>`;
-
-    printWindow.document.write(printContent);
+    printWindow.document.open();
+    printWindow.document.write(content);
     printWindow.document.close();
-    printWindow.focus();
-
-    setTimeout(() => {
-      printWindow.print();
-    }, 500);
   };
 
   const generateAndDownloadPDF = async () => {
@@ -375,7 +508,7 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
       const pdfContainer = document.createElement("div");
       pdfContainer.id = "pdf-container";
       pdfContainer.style.width = "210mm";
-      pdfContainer.style.minHeight = "297mm";
+      pdfContainer.style.minHeight = "150mm";
       pdfContainer.style.padding = "15mm 20mm";
       pdfContainer.style.background = "white";
       pdfContainer.style.color = "#000";
@@ -386,28 +519,25 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
       pdfContainer.style.left = "-9999px";
       pdfContainer.style.top = "0";
 
-      const formatDate = (date) => {
-        if (!date) return "";
-        const d = new Date(date);
-        return isNaN(d.getTime()) ? "" : d.toLocaleDateString("fr-FR");
+      const formatDate = (dateInput) => {
+        const parsed = parseDateSafely(dateInput);
+        return parsed ? parsed.toLocaleDateString("fr-FR") : "";
       };
 
-      const issueDate = bon.date_creation
-        ? new Date(bon.date_creation)
-        : new Date();
+      const issueDate = parseDateSafely(bon.date_creation) || new Date();
+      const printTotalText = totalToFrenchText(sousTotal);
 
       pdfContainer.innerHTML = `
     <div style="text-align:center; border-bottom:2px solid #333; padding-bottom:10px; margin-bottom:15px;">
       <h1 style="margin:0; color:#2c5aa0;">Bon de Livraison</h1>
       <h3 style="margin:5px 0;">ALUMINIUM OULAD BRAHIM</h3>
-      <p style="font-size:10px;">Tél: +212 661-431237</p>
+      <p style="font-size:10px;">Tél: +212 671953725</p>
     </div>
 
     <div style="display:flex; justify-content:space-between; margin-bottom:20px;">
       <div>
         <h4 style="margin-bottom:5px;">Client</h4>
-        <p><strong>Nom:</strong> ${bon.customerName || "Client inconnu"}</p>
-        <p><strong>Date livraison:</strong> ${formatDate(bon.date_livraison)}</p>
+        <p><strong>Nom:</strong> ${bon.customerName || ""}</p>
       </div>
       <div style="text-align:right;">
         <h4 style="margin-bottom:5px;">Informations du Bon</h4>
@@ -422,7 +552,7 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
           <th style="padding:6px; border:1px solid #2c5aa0;">Code</th>
           <th style="padding:6px; border:1px solid #2c5aa0;">Produit</th>
           <th style="padding:6px; border:1px solid #2c5aa0;">Qté</th>
-          <th style="padding:6px; border:1px solid #2c5aa0;">Prix U.</th>
+          <th style="padding:6px; border:1px solid #2c5aa0;">Prix U</th>
           <th style="padding:6px; border:1px solid #2c5aa0;">Total</th>
         </tr>
       </thead>
@@ -438,10 +568,10 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
             }</td>
             <td style="border:1px solid #ddd; padding:5px; text-align:right;">${parseFloat(
               prod.BonLivraisonProduit?.prix_unitaire || 0,
-            ).toFixed(2)} Dh</td>
+            ).toFixed(2)} </td>
             <td style="border:1px solid #ddd; padding:5px; text-align:right;">${parseFloat(
               prod.BonLivraisonProduit?.total_ligne || 0,
-            ).toFixed(2)} Dh</td>
+            ).toFixed(2)} </td>
           </tr>
         `,
           )
@@ -450,29 +580,11 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
     </table>
 
     <div style="text-align:right; margin-top:20px;">
-      <p><strong>Sous-total produits:</strong> ${sousTotal.toFixed(2)} Dh</p>
-      ${
-        remise > 0
-          ? `<p><strong>Remise globale:</strong> -${remise.toFixed(2)} Dh</p>`
-          : ""
-      }
-      <p><strong>Montant HT:</strong> ${montantHT.toFixed(2)} Dh</p>
-      <p style="font-size:13px; font-weight:bold; color:#2c5aa0;">
-        <strong>Montant TTC:</strong> ${montantTotal.toFixed(2)} Dh
-      </p>
-      
-      ${
-        totalAdvancements > 0
-          ? `
-        <p><strong>Total acomptes:</strong> -${totalAdvancements.toFixed(2)} Dh</p>
-        <p style="font-weight:bold; color:${
-          resteAPayer > 0 ? "#dc3545" : "#28a745"
-        }">
-          <strong>Reste à payer:</strong> ${resteAPayer.toFixed(2)} Dh
-        </p>
-      `
-          : ""
-      }
+      <p><strong>Total a Payer:</strong> ${sousTotal.toFixed(2)} </p>
+               <p style="font-size:10px; font-style:italic;">
+    <strong>${printTotalText}</strong>
+  </p>
+
     </div>
     `;
 
@@ -521,7 +633,7 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
     // Valider que le total des acomptes ne dépasse pas le montant total
     if (totalAdvancements > montantTotal) {
       topTost(
-        "Le total des acomptes ne peut pas dépasser le montant total",
+        "Le total des paiements ne peut pas dépasser le montant total",
         "error",
       );
       return;
@@ -530,11 +642,11 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
     // Valider les acomptes individuels
     for (const adv of formData.advancements) {
       if (!adv.amount || adv.amount <= 0) {
-        topTost("Tous les acomptes doivent avoir un montant positif", "error");
+        topTost("Tous les paiements doivent avoir un montant positif", "error");
         return;
       }
       if (!adv.paymentDate) {
-        topTost("Tous les acomptes doivent avoir une date", "error");
+        topTost("Tous les paiements doivent avoir une date", "error");
         return;
       }
     }
@@ -546,10 +658,6 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
       const updateData = {
         status: formData.status,
         notes: formData.notes,
-        remise: formData.remise,
-        date_livraison: formData.date_livraison
-          ? formData.date_livraison.toISOString().split("T")[0]
-          : null,
         advancements: formData.advancements.map((adv) => ({
           id: adv.id,
           amount: adv.amount,
@@ -591,8 +699,8 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
   const formatDate = (dateInput) => {
     if (!dateInput) return "";
 
-    const d = new Date(dateInput);
-    if (isNaN(d.getTime())) return "";
+    const d = parseDateSafely(dateInput);
+    if (!d) return "";
 
     return d.toLocaleString("fr-FR", {
       day: "2-digit",
@@ -605,14 +713,12 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
 
   const formatDateOnly = (dateInput) => {
     if (!dateInput) return "";
-    const d = new Date(dateInput);
-    return isNaN(d.getTime()) ? "" : d.toLocaleDateString("fr-FR");
+    const d = parseDateSafely(dateInput);
+    return d ? d.toLocaleDateString("fr-FR") : "";
   };
 
   // Get date from bon
-  const issueDate = bon.date_creation
-    ? new Date(bon.date_creation)
-    : new Date();
+  const issueDate = parseDateSafely(bon.date_creation) || new Date();
 
   return (
     <Modal isOpen={isOpen} toggle={toggle} size="xl">
@@ -659,25 +765,6 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
                   <strong>Date création:</strong> {formatDate(issueDate)}{" "}
                 </p>
 
-                {/* Date de Livraison modifiable */}
-                <div className="form-group mb-2">
-                  <label className="form-label d-block">
-                    <strong>Date livraison:</strong>
-                  </label>
-                  <DatePicker
-                    selected={formData.date_livraison}
-                    onChange={(date) =>
-                      handleInputChange("date_livraison", date)
-                    }
-                    className="form-control form-control-sm"
-                    dateFormat="dd/MM/yyyy"
-                    showTimeSelect={false}
-                    todayButton="Aujourd'hui"
-                    isClearable
-                    placeholderText="Sélectionner une date"
-                  />
-                </div>
-
                 <p>
                   <strong>Mode règlement:</strong>{" "}
                   {bon.mode_reglement || "Non spécifié"}
@@ -686,7 +773,7 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
             </div>
           </div>
 
-          {/* Status, Remise and Notes */}
+          {/* Status and Notes */}
           <div className="col-md-4">
             <div className="form-group mb-3">
               <label className="form-label">
@@ -709,32 +796,6 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
 
           <div className="col-md-4">
             <div className="form-group mb-3">
-              <label className="form-label">
-                <FiPercent className="me-2" />
-                Remise Globale
-              </label>
-              <div className="input-group">
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={formData.remise}
-                  onChange={(e) => {
-                    const newRemise = parseFloat(e.target.value) || 0;
-                    handleInputChange("remise", newRemise);
-                  }}
-                  placeholder="Montant de la remise"
-                />
-                <span className="input-group-text">DH</span>
-              </div>
-              <small className="text-muted">
-                Remise totale appliquée au bon
-              </small>
-            </div>
-          </div>
-
-          <div className="col-md-4">
-            <div className="form-group mb-3">
               <label className="form-label">Notes</label>
               <Input
                 type="textarea"
@@ -751,11 +812,16 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
             <div className="d-flex justify-content-between align-items-center mb-3">
               <h6>
                 <FiDollarSign className="me-2" />
-                Acomptes
+                Paiements (التسبيقات)
               </h6>
-              <Button color="primary" size="sm" onClick={addAdvancement}>
+              <Button
+                color="primary"
+                size="lg"
+                className="fs-6"
+                onClick={addAdvancement}
+              >
                 <FiPlus className="me-1" />
-                Ajouter Acompte
+                Ajouter Paiement (التسبيقات)
               </Button>
             </div>
 
@@ -765,7 +831,7 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
                   <thead>
                     <tr>
                       <th>Date</th>
-                      <th>Montant (Dh)</th>
+                      <th>Montant ()</th>
                       <th>Méthode</th>
                       <th>Référence</th>
                       <th>Notes</th>
@@ -888,7 +954,6 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
                     <th>Produit</th>
                     <th>Quantité</th>
                     <th>Prix Unitaire</th>
-                    <th>Remise Ligne</th>
                     <th>Total Ligne</th>
                   </tr>
                 </thead>
@@ -902,19 +967,11 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
                         {parseFloat(
                           prod.BonLivraisonProduit?.prix_unitaire || 0,
                         ).toFixed(2)}{" "}
-                        Dh
-                      </td>
-                      <td>
-                        {parseFloat(
-                          prod.BonLivraisonProduit?.remise_ligne || 0,
-                        ).toFixed(2)}{" "}
-                        Dh
                       </td>
                       <td>
                         {parseFloat(
                           prod.BonLivraisonProduit?.total_ligne || 0,
                         ).toFixed(2)}{" "}
-                        Dh
                       </td>
                     </tr>
                   ))}
@@ -943,42 +1000,19 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
                         ?.label
                     }
                   </p>
-                  <p>
-                    <strong>Date livraison:</strong>{" "}
-                    {formData.date_livraison
-                      ? formatDateOnly(formData.date_livraison)
-                      : "Non définie"}
-                  </p>
                 </div>
                 <div className="col-md-6 text-end">
                   <h6>Montants</h6>
-                  <div className="d-flex justify-content-between">
-                    <span>Sous-total produits:</span>
-                    <span>{sousTotal.toFixed(2)} Dh</span>
-                  </div>
-                  {remise > 0 && (
-                    <div className="d-flex justify-content-between text-danger">
-                      <span>
-                        <FiPercent className="me-1" />
-                        Remise globale:
-                      </span>
-                      <span>-{remise.toFixed(2)} Dh</span>
-                    </div>
-                  )}
-                  <div className="d-flex justify-content-between fw-bold">
-                    <span>Montant HT:</span>
-                    <span>{montantHT.toFixed(2)} Dh</span>
-                  </div>
                   <div className="d-flex justify-content-between fw-bold text-primary">
-                    <span>Montant TTC:</span>
-                    <span>{montantTotal.toFixed(2)} Dh</span>
+                    <span>Toatal a Payer:</span>
+                    <span>{sousTotal.toFixed(2)} </span>
                   </div>
 
                   {totalAdvancements > 0 && (
                     <>
                       <div className="d-flex justify-content-between text-success mt-2">
-                        <span>Total acomptes:</span>
-                        <span>{totalAdvancements.toFixed(2)} Dh</span>
+                        <span>Total paiements:</span>
+                        <span>{totalAdvancements.toFixed(2)} </span>
                       </div>
                       <div className="d-flex justify-content-between fw-bold border-top pt-1 mt-1">
                         <span>Reste à payer:</span>
@@ -987,14 +1021,14 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
                             resteAPayer > 0 ? "text-warning" : "text-success"
                           }
                         >
-                          {resteAPayer.toFixed(2)} Dh
+                          {resteAPayer.toFixed(2)}
                         </span>
                       </div>
                       <div className="mt-2">
                         <small className="text-muted">
                           {resteAPayer === 0
                             ? "✅ Bon entièrement payé"
-                            : `⚠️ Reste ${resteAPayer.toFixed(2)} Dh à payer`}
+                            : `⚠️ Reste ${resteAPayer.toFixed(2)}  à payer`}
                         </small>
                       </div>
                     </>
@@ -1036,10 +1070,11 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
               onClick={handleSubmit}
               color="primary"
               disabled={isSubmitting}
-              className="mt-4"
+              className="mt-4 fs-6"
+              size="lg"
             >
               <FiSave className="me-2" />
-              {isSubmitting ? "Enregistrement..." : "Enregistrer"}
+              {isSubmitting ? "Enregistrement..." : "Enregistrer تسجيل التعديل"}
             </Button>
           </div>
         </div>

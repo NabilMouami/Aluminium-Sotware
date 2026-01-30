@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import axios from "axios";
 import BonLivrDetailsModal from "./BonLivrDetailsModal";
 import Table from "@/components/shared/table/Table";
-import { DateRangePicker } from "react-date-range";
 import "react-date-range/dist/styles.css";
 import "react-date-range/dist/theme/default.css";
 import { format, subDays } from "date-fns";
@@ -55,18 +54,14 @@ const BonLivraisonTable = () => {
   const [bookings, setBookings] = useState([]);
   const [filteredBookings, setFilteredBookings] = useState([]);
   const [selectedStatus, setSelectedStatus] = useState("all");
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [dateRange, setDateRange] = useState([
-    {
-      startDate: subDays(new Date(), 30),
-      endDate: new Date(),
-      key: "selection",
-    },
-  ]);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [selectedBon, setSelectedBon] = useState(null);
   const [advancementPrice, setAdvancementPrice] = useState(0);
   const [bonStatus, setBonStatus] = useState("brouillon");
+
+  // États simplifiés pour les dates
+  const [startDate, setStartDate] = useState(subDays(new Date(), 30));
+  const [endDate, setEndDate] = useState(new Date());
 
   // Statistics states
   const [statistics, setStatistics] = useState({
@@ -221,6 +216,21 @@ const BonLivraisonTable = () => {
     });
   };
 
+  // Fonctions simplifiées pour les dates
+  const handleStartDateChange = (e) => {
+    const date = new Date(e.target.value);
+    setStartDate(date);
+  };
+
+  const handleEndDateChange = (e) => {
+    const date = new Date(e.target.value);
+    setEndDate(date);
+  };
+
+  const formatDateForInput = (date) => {
+    return format(date, "yyyy-MM-dd");
+  };
+
   // Filter bookings based on selected status and date range
   useEffect(() => {
     let result = [...bookings];
@@ -230,12 +240,12 @@ const BonLivraisonTable = () => {
       result = result.filter((bon) => bon.status === selectedStatus);
     }
 
-    // Filter by date range
-    if (dateRange[0].startDate && dateRange[0].endDate) {
-      const start = new Date(dateRange[0].startDate);
+    // Filter by date range (version simplifiée)
+    if (startDate && endDate) {
+      const start = new Date(startDate);
       start.setHours(0, 0, 0, 0);
 
-      const end = new Date(dateRange[0].endDate);
+      const end = new Date(endDate);
       end.setHours(23, 59, 59, 999);
 
       result = result.filter((bon) => {
@@ -246,12 +256,7 @@ const BonLivraisonTable = () => {
 
     setFilteredBookings(result);
     calculateStatistics(result);
-  }, [selectedStatus, dateRange, bookings]);
-
-  const handleDateRangeChange = (ranges) => {
-    setDateRange([ranges.selection]);
-    setShowDatePicker(false);
-  };
+  }, [selectedStatus, startDate, endDate, bookings]);
 
   const getStatusColor = (status) => {
     const colors = {
@@ -420,6 +425,8 @@ const BonLivraisonTable = () => {
           remainingAmount:
             (parseFloat(bonData.montant_ttc) || 0) - totalAdvancements,
           status: bonData.status || "brouillon",
+          date_creation: bonData.date_creation,
+
           date_livraison: bonData.date_livraison
             ? new Date(bonData.date_livraison).toLocaleDateString("fr-FR")
             : "",
@@ -564,6 +571,7 @@ const BonLivraisonTable = () => {
           zIndex: 999,
         }}
       >
+        {/* Status Filter */}
         <InputGroup size="sm" className="w-auto shadow-sm rounded">
           <InputGroupText className="bg-white border-0">
             <FiFilter className="text-primary fs-6" />
@@ -582,30 +590,52 @@ const BonLivraisonTable = () => {
           </Input>
         </InputGroup>
 
-        {/* Date Range Filter */}
-        <div className="position-relative">
-          <button
-            className="btn btn-sm btn-primary"
-            onClick={() => setShowDatePicker(!showDatePicker)}
-          >
-            <FiCalendar className="me-2" />
-            {format(dateRange[0].startDate, "dd/MM/yyyy")} -{" "}
-            {format(dateRange[0].endDate, "dd/MM/yyyy")}
-          </button>
+        {/* Date Range Filter - Version simplifiée */}
+        <div className="d-flex align-items-center gap-2">
+          <InputGroup size="sm" className="w-auto shadow-sm rounded">
+            <InputGroupText className="bg-white border-0">
+              <FiCalendar className="text-primary fs-6" />
+            </InputGroupText>
+            <Input
+              type="date"
+              className="border-0 bg-white"
+              value={formatDateForInput(startDate)}
+              onChange={handleStartDateChange}
+              max={formatDateForInput(endDate)}
+              title="Date de début"
+            />
+          </InputGroup>
 
-          {showDatePicker && (
-            <div className="position-absolute mt-2" style={{ zIndex: 1050 }}>
-              <DateRangePicker
-                onChange={handleDateRangeChange}
-                showSelectionPreview={true}
-                moveRangeOnFirstSelection={false}
-                months={1}
-                ranges={dateRange}
-                direction="horizontal"
-              />
-            </div>
-          )}
+          <span className="text-muted">à</span>
+
+          <InputGroup size="sm" className="w-auto shadow-sm rounded">
+            <InputGroupText className="bg-white border-0">
+              <FiCalendar className="text-primary fs-6" />
+            </InputGroupText>
+            <Input
+              type="date"
+              className="border-0 bg-white"
+              value={formatDateForInput(endDate)}
+              onChange={handleEndDateChange}
+              min={formatDateForInput(startDate)}
+              title="Date de fin"
+            />
+          </InputGroup>
+
+          {/* Bouton pour réinitialiser à 30 jours */}
+          <button
+            className="btn btn-sm btn-outline-secondary"
+            onClick={() => {
+              setStartDate(subDays(new Date(), 30));
+              setEndDate(new Date());
+            }}
+            title="30 derniers jours"
+          >
+            30j
+          </button>
         </div>
+
+        {/* Create Button */}
         <div>
           <Link to="/bon-livraison/create">
             <button className="btn btn-sm btn-success">
@@ -616,11 +646,21 @@ const BonLivraisonTable = () => {
         </div>
       </div>
 
+      {/* Afficher la période sélectionnée */}
+      <div className="mb-2 text-muted small">
+        <FiCalendar className="me-1" />
+        Période : {format(startDate, "dd/MM/yyyy")} -{" "}
+        {format(endDate, "dd/MM/yyyy")}
+        <span className="ms-3">
+          ({filteredBookings.length} bons correspondants)
+        </span>
+      </div>
+
       {/* Statistics Cards Section */}
       <div
         className="mb-4"
         style={{
-          marginTop: "60px",
+          marginTop: "20px", // Réduit pour tenir compte de la ligne de période
         }}
       >
         <div className="row g-3">
@@ -629,7 +669,7 @@ const BonLivraisonTable = () => {
             <Card className="border-0 shadow-sm h-100">
               <CardBody className="d-flex align-items-center">
                 <div className="bg-primary bg-opacity-10 rounded-circle p-3 me-3">
-                  <FiFileText className="text-white fs-3 z-3" />
+                  <FiFileText className="text-white fs-3" />
                 </div>
                 <div>
                   <h6 className="text-muted mb-1">Total Bons</h6>

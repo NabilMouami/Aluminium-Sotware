@@ -4,15 +4,8 @@ const { Op } = require("sequelize");
 // Create a new produit
 const createProduit = async (req, res) => {
   try {
-    const {
-      reference,
-      designation,
-      observation,
-      qty,
-      prix_achat,
-      prix_vente,
-      fornisseurId,
-    } = req.body;
+    const { reference, designation, observation, qty, prix_achat, prix_vente } =
+      req.body;
 
     // Validation
     if (
@@ -42,16 +35,6 @@ const createProduit = async (req, res) => {
       });
     }
 
-    // Check if fornisseur exists (if fornisseurId is provided)
-    if (fornisseurId) {
-      const fornisseur = await Fornisseur.findByPk(fornisseurId);
-      if (!fornisseur) {
-        return res.status(404).json({
-          message: "Fornisseur not found",
-        });
-      }
-    }
-
     // Create produit
     const produit = await Produit.create({
       reference,
@@ -60,23 +43,13 @@ const createProduit = async (req, res) => {
       qty: qty || 0,
       prix_achat: parseFloat(prix_achat),
       prix_vente: parseFloat(prix_vente),
-      fornisseurId,
     });
 
     // Load with fornisseur info
-    const produitWithDetails = await Produit.findByPk(produit.id, {
-      include: [
-        {
-          model: Fornisseur,
-          as: "fornisseur",
-          attributes: ["id", "nom_complete", "telephone"],
-        },
-      ],
-    });
 
     return res.status(201).json({
       message: "Produit created successfully",
-      produit: produitWithDetails,
+      produit: produit,
     });
   } catch (err) {
     console.error(err);
@@ -224,7 +197,7 @@ const getFornisseurStats = async (req, res) => {
 
     const totalProducts = produitsByFornisseur.reduce(
       (sum, item) => sum + parseInt(item.produitCount),
-      0
+      0,
     );
 
     // Fornisseurs with most products
@@ -552,13 +525,6 @@ const searchProduits = async (req, res) => {
           },
         ],
       },
-      include: [
-        {
-          model: Fornisseur,
-          as: "fornisseur",
-          attributes: ["id", "nom_complete"],
-        },
-      ],
       order: [["reference", "ASC"]],
       limit: 50,
     });
@@ -647,7 +613,7 @@ const getProduitStats = async (req, res) => {
         [
           sequelize.fn(
             "AVG",
-            sequelize.literal("(prix_vente - prix_achat) / prix_achat * 100")
+            sequelize.literal("(prix_vente - prix_achat) / prix_achat * 100"),
           ),
           "avgMarginPercentage",
         ],
@@ -665,7 +631,7 @@ const getProduitStats = async (req, res) => {
         totalValue: parseFloat(totalValue).toFixed(2),
         avgMargin: parseFloat(marginResult[0]?.avgMargin || 0).toFixed(2),
         avgMarginPercentage: parseFloat(
-          marginResult[0]?.avgMarginPercentage || 0
+          marginResult[0]?.avgMarginPercentage || 0,
         ).toFixed(2),
         produitsByFornisseur,
       },

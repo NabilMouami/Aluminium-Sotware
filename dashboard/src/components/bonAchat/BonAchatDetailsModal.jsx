@@ -459,7 +459,7 @@ const BonAchatDetailsModal = ({
   <div class="header">
     <h2 style="margin: 0;">Bon d'Achat</h2>
     <p style="margin: 5px 0;">ALUMINIUM OULAD BRAHIM</p>
-    <p style="margin: 0;">Tél: +212 661-431237</p>
+    <p style="margin: 0;">Tél: +212 671953725</p>
   </div>
 
   <div class="invoice-info">
@@ -540,7 +540,7 @@ const BonAchatDetailsModal = ({
       const pdfContainer = document.createElement("div");
       pdfContainer.id = "pdf-container";
       pdfContainer.style.width = "210mm";
-      pdfContainer.style.minHeight = "297mm";
+      pdfContainer.style.minHeight = "150mm";
       pdfContainer.style.padding = "15mm 20mm";
       pdfContainer.style.background = "white";
       pdfContainer.style.color = "#000";
@@ -569,7 +569,7 @@ const BonAchatDetailsModal = ({
       <div style="text-align:center; border-bottom:2px solid #333; padding-bottom:10px; margin-bottom:15px;">
         <h1 style="margin:0; color:#2c5aa0;">Bon d'Achat</h1>
         <h3 style="margin:5px 0;">ALUMINIUM OULAD BRAHIM</h3>
-        <p style="font-size:10px;">Tél: +212 661-431237</p>
+        <p style="font-size:10px;">Tél: +212 671953725</p>
       </div>
 
       <div style="display:flex; justify-content:space-between; margin-bottom:20px;">

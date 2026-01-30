@@ -37,6 +37,11 @@ import BonAvoirCreate from "../pages/BonAvoir/bonAvoir-create";
 import BonAvoirList from "../pages/BonAvoir/bonAvoir-list";
 import BonAchatCreate from "../pages/BonAchat/bonAchat-create";
 import BonAchatList from "../pages/BonAchat/bonAchat-list";
+import BonLivraisonDetailsPage from "../pages/BonLivraison/BonLivrDetails";
+import DevisDetailsPage from "../pages/Devis/DevisDetails";
+import FactureDetailsPage from "../pages/Invoices/FactureDetails";
+import BonAchatDetailsPage from "../pages/BonAchat/BonAchatDetails";
+import BonAvoirDetailsPage from "../pages/BonAvoir/BonAvoirDetails";
 
 export const router = createBrowserRouter([
   {
@@ -125,6 +130,11 @@ export const router = createBrowserRouter([
         element: <FactureCreate />,
       },
       {
+        path: "factures/:id",
+        element: <FactureDetailsPage />,
+      },
+
+      {
         path: "devis/create",
         element: <DevisCreate />,
       },
@@ -132,6 +142,11 @@ export const router = createBrowserRouter([
         path: "devis/list",
         element: <DevisList />,
       },
+      {
+        path: "devis/:id",
+        element: <DevisDetailsPage />,
+      },
+
       {
         path: "invoices/list",
         element: <InvoicesList />,
@@ -145,6 +160,11 @@ export const router = createBrowserRouter([
         element: <BonLivraisonCreate />,
       },
       {
+        path: "bon-livraisons/:id",
+        element: <BonLivraisonDetailsPage />,
+      },
+
+      {
         path: "bon-avoir/create",
         element: <BonAvoirCreate />,
       },
@@ -153,12 +173,21 @@ export const router = createBrowserRouter([
         element: <BonAvoirList />,
       },
       {
+        path: "bon-avoir/:id",
+        element: <BonAvoirDetailsPage />,
+      },
+
+      {
         path: "bon-achat/create",
         element: <BonAchatCreate />,
       },
       {
         path: "bon-achat/list",
         element: <BonAchatList />,
+      },
+      {
+        path: "bon-achat/:id",
+        element: <BonAchatDetailsPage />,
       },
     ],
   },

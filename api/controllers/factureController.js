@@ -71,7 +71,6 @@ const getAllFactures = async (req, res) => {
             attributes: [
               "quantite",
               "prix_unitaire",
-              "remise_ligne",
               "montant_ht_ligne",
               "montant_tva_ligne",
               "total_ligne",
@@ -178,7 +177,6 @@ const getFactureById = async (req, res) => {
             attributes: [
               "quantite",
               "prix_unitaire",
-              "remise_ligne",
               "montant_ht_ligne",
               "montant_tva_ligne",
               "total_ligne",
@@ -260,7 +258,6 @@ const createFacture = async (req, res) => {
       client_id,
       produits,
       mode_reglement,
-      remise_total = 0,
       tva = 0,
       notes = "",
       date_facturation,
@@ -303,7 +300,6 @@ const createFacture = async (req, res) => {
       const prix_unitaire = parseFloat(
         item.prix_unitaire || produit.prix_vente,
       );
-      const remise_ligne = parseFloat(item.remise_ligne || 0);
 
       // 🔴 STOCK CHECK (ONLY IF NO BL)
       if (!bon_livraison_id && produit.qty < quantite) {
@@ -312,10 +308,7 @@ const createFacture = async (req, res) => {
         );
       }
 
-      const montant_ht_ligne = +(
-        prix_unitaire * quantite -
-        remise_ligne
-      ).toFixed(2);
+      const montant_ht_ligne = +(prix_unitaire * quantite).toFixed(2);
 
       const total_ligne = montant_ht_ligne;
 
@@ -325,7 +318,6 @@ const createFacture = async (req, res) => {
         produit,
         item,
         prix_unitaire,
-        remise_ligne,
         montant_ht_ligne,
         montant_tva_ligne: +((montant_ht_ligne * tauxTVA) / 100).toFixed(2),
         total_ligne,
@@ -333,14 +325,9 @@ const createFacture = async (req, res) => {
     }
 
     // ---------------- CALCULS DÉTAILLÉS ----------------
-    const remiseValue = parseFloat(remise_total) || 0;
 
     const total_ht_initial = montant_ht;
-    const remise_totale = Math.min(remiseValue, total_ht_initial);
-    const montant_ht_after_remise = Math.max(
-      total_ht_initial - remise_totale,
-      0,
-    );
+    const montant_ht_after_remise = Math.max(total_ht_initial, 0);
 
     const montant_tva = +((montant_ht_after_remise * tauxTVA) / 100).toFixed(2);
     const montant_ttc = +(montant_ht_after_remise + montant_tva).toFixed(2);
@@ -352,7 +339,6 @@ const createFacture = async (req, res) => {
         client_id,
         bon_livraison_id,
         mode_reglement: mode_reglement || "espèces",
-        remise_total: remise_totale,
         montant_ht: montant_ht_after_remise,
         montant_ht_initial: total_ht_initial,
         tva: tauxTVA,
@@ -378,7 +364,6 @@ const createFacture = async (req, res) => {
           produit_id: p.item.produitId, // Changed from produitId
           quantite: p.item.quantite,
           prix_unitaire: p.prix_unitaire,
-          remise_ligne: p.remise_ligne,
           montant_ht_ligne: p.montant_ht_ligne,
           montant_tva_ligne: p.montant_tva_ligne,
           total_ligne: p.total_ligne,
@@ -431,7 +416,6 @@ const createFacture = async (req, res) => {
         ...facture.toJSON(),
         calculs_details: {
           total_ht_initial: parseFloat(total_ht_initial.toFixed(2)),
-          remise_totale: parseFloat(remise_totale.toFixed(2)),
           montant_ht_after_remise: parseFloat(
             montant_ht_after_remise.toFixed(2),
           ),
@@ -481,12 +465,7 @@ const createFactureFromBonLivraison = async (req, res) => {
           model: Produit,
           as: "produits",
           through: {
-            attributes: [
-              "quantite",
-              "prix_unitaire",
-              "remise_ligne",
-              "total_ligne",
-            ],
+            attributes: ["quantite", "prix_unitaire", "total_ligne"],
           },
         },
         {
@@ -532,7 +511,6 @@ const createFactureFromBonLivraison = async (req, res) => {
         client_id: bonLivraison.clientId,
         bon_livraison_id,
         mode_reglement: mode_reglement || bonLivraison.mode_reglement,
-        remise_total: bonLivraison.remise,
         montant_ht,
         tva,
         montant_tva: tva,
@@ -560,7 +538,6 @@ const createFactureFromBonLivraison = async (req, res) => {
           produitId: produit.id,
           quantite: bonProduit.quantite,
           prix_unitaire: bonProduit.prix_unitaire,
-          remise_ligne: bonProduit.remise_ligne,
           montant_ht_ligne: bonProduit.total_ligne,
           montant_tva_ligne: bonProduit.total_ligne * 0.2,
           total_ligne: bonProduit.total_ligne * 1.2,
@@ -621,7 +598,6 @@ const createFactureFromBonLivraison = async (req, res) => {
             attributes: [
               "quantite",
               "prix_unitaire",
-              "remise_ligne",
               "montant_ht_ligne",
               "montant_tva_ligne",
               "total_ligne",
@@ -668,7 +644,6 @@ const updateFacture = async (req, res) => {
     const {
       produits,
       mode_reglement,
-      remise_total,
       notes,
       date_facturation,
       date_echeance,
@@ -820,9 +795,8 @@ const updateFacture = async (req, res) => {
         }
 
         const prix_unitaire = item.prix_unitaire || produit.prix_vente;
-        const remise_ligne = item.remise_ligne || 0;
 
-        const montant_ht_ligne = prix_unitaire * item.quantite - remise_ligne;
+        const montant_ht_ligne = prix_unitaire * item.quantite;
         const montant_tva_ligne = montant_ht_ligne;
         const total_ligne = montant_ht_ligne + montant_tva_ligne;
 
@@ -836,7 +810,6 @@ const updateFacture = async (req, res) => {
             produit_id: item.produitId, // Changed from produitId
             quantite: item.quantite,
             prix_unitaire,
-            remise_ligne,
             montant_ht_ligne,
             montant_tva_ligne,
             total_ligne,
@@ -845,10 +818,6 @@ const updateFacture = async (req, res) => {
           { transaction },
         );
       }
-
-      // Appliquer la remise
-      montant_ht -=
-        remise_total !== undefined ? remise_total : facture.remise_total;
 
       // Calculer les nouveaux totaux
       const montant_ttc = montant_ht + montant_tva;
@@ -866,7 +835,6 @@ const updateFacture = async (req, res) => {
 
     // Mettre à jour les autres champs
     if (mode_reglement) facture.mode_reglement = mode_reglement;
-    if (remise_total !== undefined) facture.remise_total = remise_total;
     if (notes !== undefined) facture.notes = notes;
     if (date_facturation) facture.date_facturation = new Date(date_facturation);
     if (date_echeance) facture.date_echeance = new Date(date_echeance);
@@ -980,7 +948,6 @@ const updateFacture = async (req, res) => {
             attributes: [
               "quantite",
               "prix_unitaire",
-              "remise_ligne",
               "montant_ht_ligne",
               "montant_tva_ligne",
               "total_ligne",
@@ -1132,13 +1099,7 @@ const cancelFacture = async (req, res) => {
           model: Produit,
           as: "produits", // Changed from "Produits" to "produits"
           through: {
-            attributes: [
-              "quantite",
-              "prix_unitaire",
-              "remise_ligne",
-              "unite",
-              "description",
-            ],
+            attributes: ["quantite", "prix_unitaire", "unite", "description"],
           },
         },
       ],
@@ -1258,12 +1219,7 @@ const deleteFacture = async (req, res) => {
           model: Produit,
           as: "produits", // Changed from "Produits" to "produits"
           through: {
-            attributes: [
-              "quantite",
-              "prix_unitaire",
-              "remise_ligne",
-              "description",
-            ],
+            attributes: ["quantite", "prix_unitaire", "description"],
           },
         },
       ],
@@ -1386,7 +1342,6 @@ const getFactureStats = async (req, res) => {
           sequelize.fn("SUM", sequelize.col("montant_restant")),
           "total_restant",
         ],
-        [sequelize.fn("SUM", sequelize.col("remise_total")), "total_remise"],
       ],
       raw: true,
     });

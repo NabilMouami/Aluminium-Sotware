@@ -5,12 +5,10 @@ import Select from "react-select";
 import AsyncSelect from "react-select/async";
 import PageHeader from "@/components/shared/pageHeader/PageHeader";
 import {
-  FiPackage,
   FiUser,
   FiShoppingCart,
   FiPlus,
   FiMinus,
-  FiTrash2,
   FiSearch,
   FiPercent,
   FiDollarSign,
@@ -20,12 +18,7 @@ import {
   FiSave,
   FiX,
   FiCheck,
-  FiChevronDown,
-  FiChevronUp,
   FiXCircle,
-  FiRefreshCw,
-  FiPrinter,
-  FiClock,
   FiPercent as FiPercentIcon,
   FiTag,
   FiList,
@@ -34,7 +27,6 @@ import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
 import api from "@/utils/axiosConfig";
 import { format, addDays } from "date-fns";
-import { fr } from "date-fns/locale";
 
 const MySwal = withReactContent(Swal);
 
@@ -55,8 +47,6 @@ const FactureCreate = () => {
     client_id: "",
     bon_livraison_id: "",
     mode_reglement: "espèces",
-    remise_total: 0,
-    remise_total_type: "montant", // "montant" or "pourcentage"
     tva: 20, // TVA rate in percentage
     notes: "",
     date_facturation: "",
@@ -228,7 +218,6 @@ const FactureCreate = () => {
           ...produit,
           quantite: produit.BonLivraisonProduit.quantite,
           prix_unitaire: produit.BonLivraisonProduit.prix_unitaire,
-          remise_ligne: produit.BonLivraisonProduit.remise_ligne || 0,
           total_ligne: produit.BonLivraisonProduit.total_ligne,
         }));
 
@@ -239,7 +228,6 @@ const FactureCreate = () => {
         setFormData((prev) => ({
           ...prev,
           notes: blInfo,
-          remise_total: response.data.bon.remise || 0,
         }));
 
         topTost(
@@ -327,7 +315,6 @@ const FactureCreate = () => {
           ...produitData,
           quantite: 1,
           prix_unitaire: produitData.prix_vente,
-          remise_ligne: 0,
           total_ligne: produitData.prix_vente, // C'est le HT
         };
 
@@ -357,7 +344,6 @@ const FactureCreate = () => {
         ...produitData,
         quantite: 1,
         prix_unitaire: produitData.prix_vente,
-        remise_ligne: 0,
         total_ligne: produitData.prix_vente, // C'est le HT
       };
 
@@ -382,12 +368,10 @@ const FactureCreate = () => {
   const updateProduitQuantity = (index, newQuantity) => {
     if (newQuantity < 1) return;
 
-    const produit = selectedProduits[index];
     const newProduits = [...selectedProduits];
     newProduits[index].quantite = newQuantity;
     newProduits[index].total_ligne =
-      newProduits[index].prix_unitaire * newQuantity -
-      newProduits[index].remise_ligne;
+      newProduits[index].prix_unitaire * newQuantity;
 
     setSelectedProduits(newProduits);
   };
@@ -396,18 +380,15 @@ const FactureCreate = () => {
     const newProduits = [...selectedProduits];
     newProduits[index].prix_unitaire = parseFloat(newPrice) || 0;
     newProduits[index].total_ligne =
-      newProduits[index].prix_unitaire * newProduits[index].quantite -
-      newProduits[index].remise_ligne;
+      newProduits[index].prix_unitaire * newProduits[index].quantite;
 
     setSelectedProduits(newProduits);
   };
 
   const updateProduitDiscount = (index, discount) => {
     const newProduits = [...selectedProduits];
-    newProduits[index].remise_ligne = parseFloat(discount) || 0;
     newProduits[index].total_ligne =
-      newProduits[index].prix_unitaire * newProduits[index].quantite -
-      newProduits[index].remise_ligne;
+      newProduits[index].prix_unitaire * newProduits[index].quantite;
 
     setSelectedProduits(newProduits);
   };
@@ -465,21 +446,8 @@ const FactureCreate = () => {
     );
 
     // Calculate total discount based on type (amount or percentage)
-    let remiseMontant = 0;
-    const remiseValeur = parseFloat(formData.remise_total) || 0;
 
-    if (formData.remise_total_type === "pourcentage" && remiseValeur > 0) {
-      remiseMontant = (totalHT * remiseValeur) / 100;
-    } else {
-      remiseMontant = remiseValeur;
-    }
-
-    // Limit discount to maximum HT amount
-    if (remiseMontant > totalHT) {
-      remiseMontant = totalHT;
-    }
-
-    const montantHTAfterRemise = Math.max(totalHT - remiseMontant, 0);
+    const montantHTAfterRemise = Math.max(totalHT, 0);
 
     // Calculate VAT on HT after discount
     const tauxTVA = parseFloat(formData.tva) || 0;
@@ -517,8 +485,6 @@ const FactureCreate = () => {
 
     return {
       totalHT: totalHT.toFixed(2),
-      remiseMontant: remiseMontant.toFixed(2),
-      montantHTAfterRemise: montantHTAfterRemise.toFixed(2),
       tauxTVA: tauxTVA.toFixed(2),
       montantTVA: montantTVA.toFixed(2),
       montantTTC: montantTTC.toFixed(2),
@@ -585,7 +551,6 @@ const FactureCreate = () => {
       client_id: formData.client_id,
       bon_livraison_id: formData.bon_livraison_id || null,
       mode_reglement: formData.mode_reglement,
-      remise_total: parseFloat(totals.remiseMontant) || 0,
       tva: parseFloat(formData.tva) || 0,
       notes: formData.notes,
       date_facturation: formData.date_facturation,
@@ -594,7 +559,6 @@ const FactureCreate = () => {
         produitId: p.id,
         quantite: p.quantite,
         prix_unitaire: p.prix_unitaire,
-        remise_ligne: p.remise_ligne,
         description: p.designation,
       })),
       advancements: advancementsData.length > 0 ? advancementsData : undefined,
@@ -612,10 +576,6 @@ const FactureCreate = () => {
       html: `
         <div class="text-start">
           <p><strong>Client:</strong> ${clients.find((c) => c.value === formData.client_id)?.label || "Non spécifié"}</p>
-          <p><strong>Total HT avant remise:</strong> ${totals.totalHT} DH</p>
-          <p><strong>Remise globale:</strong> -${totals.remiseMontant} DH
-          ${formData.remise_total_type === "pourcentage" && formData.remise_total > 0 ? ` (${formData.remise_total}%)` : ""}</p>
-          <p><strong>HT après remise:</strong> ${totals.montantHTAfterRemise} DH</p>
           <p><strong>TVA (${totals.tauxTVA}%):</strong> ${totals.montantTVA} DH</p>
           <p><strong>Montant TTC:</strong> ${totals.montantTTC} DH</p>
           ${
@@ -663,12 +623,6 @@ const FactureCreate = () => {
               }</p>
               <p><strong>Total HT avant remise:</strong> ${
                 response.data.facture.montant_ht_initial || totals.totalHT
-              } DH</p>
-              <p><strong>Remise globale:</strong> -${
-                response.data.facture.remise_total || totals.remiseMontant
-              } DH</p>
-              <p><strong>HT après remise:</strong> ${
-                response.data.facture.montant_ht
               } DH</p>
               <p><strong>TVA (${response.data.facture.tva}%):</strong> ${response.data.facture.montant_tva} DH</p>
               <p><strong>Montant TTC:</strong> ${
@@ -727,8 +681,6 @@ const FactureCreate = () => {
       client_id: formData.client_id, // Garder le même client
       bon_livraison_id: "",
       mode_reglement: "espèces",
-      remise_total: 0,
-      remise_total_type: "montant",
       tva: 20,
       notes: "",
       date_facturation: new Date().toISOString().split("T")[0],
@@ -897,12 +849,45 @@ const FactureCreate = () => {
 
                   <div className="col-md-3">
                     <label className="form-label">
-                      <FiCalendar className="me-2" />
                       Date de Facturation <span className="text-danger">*</span>
                     </label>
+
+                    <div className="input-group">
+                      {/* Visible formatted input */}
+                      <input
+                        type="text"
+                        className="form-control"
+                        placeholder="dd/MM/yyyy"
+                        value={
+                          formData.date_facturation
+                            ? new Date(
+                                formData.date_facturation,
+                              ).toLocaleDateString("fr-FR")
+                            : ""
+                        }
+                        readOnly
+                        onClick={() =>
+                          document.getElementById("real-date").showPicker()
+                        }
+                      />
+
+                      {/* Icon inside input */}
+                      <span
+                        className="input-group-text"
+                        style={{ cursor: "pointer" }}
+                        onClick={() =>
+                          document.getElementById("real-date").showPicker()
+                        }
+                      >
+                        <FiCalendar />
+                      </span>
+                    </div>
+
+                    {/* Real hidden date input */}
                     <input
+                      id="real-date"
                       type="date"
-                      className="form-control"
+                      className="d-none"
                       value={formData.date_facturation}
                       onChange={(e) =>
                         setFormData({
@@ -935,47 +920,6 @@ const FactureCreate = () => {
                     </div>
                   </div>
 
-                  <div className="col-md-6">
-                    <label className="form-label">
-                      <FiPercentIcon className="me-2" />
-                      Remise Globale
-                    </label>
-                    <div className="input-group">
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        className="form-control"
-                        value={formData.remise_total}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            remise_total: e.target.value,
-                          })
-                        }
-                      />
-                      <select
-                        className="form-select"
-                        style={{ width: "120px" }}
-                        value={formData.remise_total_type}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            remise_total_type: e.target.value,
-                          })
-                        }
-                      >
-                        <option value="montant">DH</option>
-                        <option value="pourcentage">%</option>
-                      </select>
-                    </div>
-                    <small className="text-muted">
-                      {formData.remise_total_type === "pourcentage"
-                        ? `Remise: ${formData.remise_total}% du total HT`
-                        : `Remise: ${formData.remise_total} DH`}
-                    </small>
-                  </div>
-
                   <div className="col-12">
                     <div className="form-check form-switch">
                       <input
@@ -990,7 +934,7 @@ const FactureCreate = () => {
                         htmlFor="showAdvancements"
                       >
                         <FiDollarSign className="me-2" />
-                        Ajouter des paiements
+                        Ajouter Paiement (التسبيقات)
                       </label>
                     </div>
                   </div>
@@ -1001,7 +945,7 @@ const FactureCreate = () => {
                         <div className="card-header bg-light">
                           <h6 className="mb-0">
                             <FiDollarSign className="me-2" />
-                            Paiements
+                            Paiements (التسبيقات)
                           </h6>
                         </div>
                         <div className="card-body">
@@ -1444,7 +1388,7 @@ const FactureCreate = () => {
             <div className="card-header">
               <h5 className="card-title mb-0">
                 <FiDollarSign className="me-2" />
-                Récapitulatif Facture
+                Informations Facture
               </h5>
             </div>
             <div className="card-body">
@@ -1512,7 +1456,7 @@ const FactureCreate = () => {
                   <div className="mb-3">
                     {totals.totalAcomptes !== "0.00" && (
                       <div className="d-flex justify-content-between mb-2">
-                        <span className="text-info">Total acomptes:</span>
+                        <span className="text-info">Total paiements:</span>
                         <strong className="text-info">
                           -{totals.totalAcomptes} DH
                         </strong>
@@ -1538,7 +1482,7 @@ const FactureCreate = () => {
                     {totals.totalAcomptes !== "0.00" && (
                       <div className="d-flex justify-content-between mb-2">
                         <span className="text-warning">
-                          TTC après acomptes:
+                          TTC après paiements:
                         </span>
                         <strong className="text-warning">
                           {totals.ttcAfterAcomptes} DH
@@ -1567,7 +1511,7 @@ const FactureCreate = () => {
                   {totals.montantTTC} DH
                   {totals.totalAcomptes !== "0.00" && (
                     <small className="text-muted d-block fs-6">
-                      → {totals.ttcAfterAcomptes} DH après acomptes
+                      → {totals.ttcAfterAcomptes} DH après paiements
                     </small>
                   )}
                 </h3>
@@ -1616,30 +1560,6 @@ const FactureCreate = () => {
                       Créer la Facture
                     </>
                   )}
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-outline-secondary"
-                  onClick={resetForm}
-                  disabled={
-                    selectedProduits.length === 0 && advancements.length === 0
-                  }
-                >
-                  <FiX className="me-2" />
-                  Réinitialiser
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-outline-info"
-                  onClick={fetchAllProduits}
-                  disabled={loadingProduits}
-                >
-                  <FiRefreshCw
-                    className={`me-2 ${loadingProduits ? "spinner-border spinner-border-sm" : ""}`}
-                  />
-                  {loadingProduits
-                    ? "Chargement..."
-                    : "Actualiser les produits"}
                 </button>
               </div>
             </div>

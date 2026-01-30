@@ -1,4 +1,8 @@
-require("dotenv").config();
+const path = require("path");
+
+require("dotenv").config({
+  path: path.resolve(__dirname, ".env"),
+});
 const express = require("express");
 const cors = require("cors");
 const bodyParser = require("body-parser");
@@ -23,15 +27,16 @@ const PORT = process.env.PORT || 5000;
 const corsOptions = {
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps, curl requests, etc.)
-    if (!origin) return callback(null, true);
-
+    if (!origin || origin.startsWith("file://")) {
+      return callback(null, true);
+    }
     // List of allowed origins
     const allowedOrigins = [
-      "http://localhost:5173", // React dev server (Vite)
-      "http://localhost:3000", // Create React App
+      "http://localhost:5173",
       "http://127.0.0.1:5173",
-      "http://127.0.0.1:3000",
-      "https://admin.alnox.online",
+      "http://127.0.0.1:5000",
+      "http://localhost:4173",
+      "http://127.0.0.1:4173",
     ];
 
     // Add production domains if defined
@@ -116,7 +121,7 @@ app.use((req, res) => {
     // 🔥 SEED ADMIN USER HERE
     await seedAdmin();
 
-    app.listen(PORT, () => {
+    app.listen(PORT, "0.0.0.0", () => {
       console.log(`Server started at http://localhost:${PORT}`);
     });
   } catch (err) {

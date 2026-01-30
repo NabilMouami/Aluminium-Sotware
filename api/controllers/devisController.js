@@ -122,7 +122,6 @@ const getAllDevis = async (req, res) => {
             attributes: [
               "quantite",
               "prix_unitaire",
-              "remise_ligne",
               "total_ligne",
               "description",
               "unite",
@@ -168,7 +167,6 @@ const getDevisById = async (req, res) => {
             attributes: [
               "quantite",
               "prix_unitaire",
-              "remise_ligne",
               "total_ligne",
               "description",
               "unite",
@@ -209,7 +207,6 @@ const createDevis = async (req, res) => {
       client_id,
       produits,
       mode_reglement,
-      remise = 0,
       notes = "",
 
       date_creation,
@@ -251,8 +248,7 @@ const createDevis = async (req, res) => {
       }
 
       const prix_unitaire = item.prix_unitaire || produit.prix_vente;
-      const remise_ligne = item.remise_ligne || 0;
-      const total_ligne = prix_unitaire * item.quantite - remise_ligne;
+      const total_ligne = prix_unitaire * item.quantite;
 
       montant_ht += total_ligne;
 
@@ -261,14 +257,9 @@ const createDevis = async (req, res) => {
         produit,
         item,
         prix_unitaire,
-        remise_ligne,
         total_ligne,
       });
     }
-
-    // Apply global discount
-    const remiseValue = parseFloat(remise) || 0;
-    montant_ht -= remiseValue;
 
     const montant_ttc = montant_ht;
 
@@ -278,7 +269,6 @@ const createDevis = async (req, res) => {
         num_devis,
         client_id,
         mode_reglement: mode_reglement || "espèces",
-        remise: remiseValue,
         montant_ht,
         montant_ttc,
         notes,
@@ -291,8 +281,7 @@ const createDevis = async (req, res) => {
 
     // Add products - NO STOCK DECREASE FOR QUOTES
     for (const produitVerifie of produitsVerifies) {
-      const { produit, item, prix_unitaire, remise_ligne, total_ligne } =
-        produitVerifie;
+      const { item, prix_unitaire, total_ligne } = produitVerifie;
 
       // Create association
       await DevisProduit.create(
@@ -301,7 +290,6 @@ const createDevis = async (req, res) => {
           produit_id: item.produit_id,
           quantite: item.quantite,
           prix_unitaire,
-          remise_ligne,
           total_ligne,
           description: item.description || null,
           unite: item.unite || "unité",
@@ -327,7 +315,6 @@ const createDevis = async (req, res) => {
             attributes: [
               "quantite",
               "prix_unitaire",
-              "remise_ligne",
               "total_ligne",
               "description",
               "unite",
@@ -437,9 +424,8 @@ const createFactureFromDevis = async (devis, transaction) => {
     for (const dp of devisProduits) {
       const quantite = parseFloat(dp.quantite);
       const prix_unitaire = parseFloat(dp.prix_unitaire) || 0;
-      const remise_ligne = parseFloat(dp.remise_ligne) || 0;
       const montant_ht_ligne = parseFloat(
-        (prix_unitaire * quantite - remise_ligne).toFixed(2),
+        (prix_unitaire * quantite).toFixed(2),
       );
 
       total_ht_initial += montant_ht_ligne;
@@ -450,19 +436,12 @@ const createFactureFromDevis = async (devis, transaction) => {
         produit_id: dp.produit_id,
         quantite,
         prix_unitaire,
-        remise_ligne,
         montant_ht_ligne,
       });
     }
 
-    // Calculate discounts and taxes
-    const remise_totale = parseFloat(devis.remise) || 0;
-
     // Apply global discount
-    const montant_ht_after_remise = Math.max(
-      total_ht_initial - remise_totale,
-      0,
-    );
+    const montant_ht_after_remise = Math.max(total_ht_initial, 0);
 
     // Calculate TVA on discounted amount
     const montant_tva = parseFloat(
@@ -491,7 +470,6 @@ const createFactureFromDevis = async (devis, transaction) => {
         client_id: devis.client_id,
         devis_id: devis.id,
         mode_reglement: modeReglement,
-        remise_total: remise_totale,
         montant_ht: montant_ht_after_remise,
         montant_ht_initial: total_ht_initial,
         tva: tauxTVA,
@@ -517,7 +495,6 @@ const createFactureFromDevis = async (devis, transaction) => {
           produit_id: p.produit_id,
           quantite: p.quantite,
           prix_unitaire: p.prix_unitaire,
-          remise_ligne: p.remise_ligne,
           montant_ht_ligne: p.montant_ht_ligne,
           montant_tva_ligne: 0, // TVA is calculated at total level, not per line
           total_ligne: p.montant_ht_ligne, // Total ligne = HT amount only
@@ -537,7 +514,6 @@ const createFactureFromDevis = async (devis, transaction) => {
       facture,
       calculs_details: {
         total_ht_initial: parseFloat(total_ht_initial.toFixed(2)),
-        remise_totale: parseFloat(remise_totale.toFixed(2)),
         montant_ht_after_remise: parseFloat(montant_ht_after_remise.toFixed(2)),
         taux_tva: parseFloat(tauxTVA.toFixed(2)),
         montant_tva: parseFloat(montant_tva.toFixed(2)),
@@ -591,7 +567,6 @@ const createBonLivraisonFromDevis = async (devis, transaction) => {
         client_id: devis.client_id,
         devis_id: devis.id,
         mode_reglement: modeReglement,
-        remise: parseFloat(devis.remise) || 0,
         montant_ht: parseFloat(montantHT.toFixed(2)),
         montant_ttc: parseFloat(montantTTC.toFixed(2)),
         tva: tauxTVA, // Add TVA field if your model has it
@@ -611,7 +586,6 @@ const createBonLivraisonFromDevis = async (devis, transaction) => {
           produit_id: dp.produit_id,
           quantite: dp.quantite,
           prix_unitaire: parseFloat(dp.prix_unitaire) || 0,
-          remise_ligne: parseFloat(dp.remise_ligne) || 0,
           total_ligne: parseFloat(dp.total_ligne) || 0,
         },
         { transaction },
@@ -635,7 +609,7 @@ const updateDevis = async (req, res) => {
 
   try {
     const { id } = req.params;
-    const { produits, mode_reglement, remise, notes, status } = req.body;
+    const { produits, mode_reglement, notes, status } = req.body;
 
     console.log("Req Body: " + JSON.stringify(req.body));
 
@@ -653,7 +627,6 @@ const updateDevis = async (req, res) => {
             attributes: [
               "quantite",
               "prix_unitaire",
-              "remise_ligne",
               "total_ligne",
               "description",
               "unite",
@@ -696,8 +669,7 @@ const updateDevis = async (req, res) => {
         }
 
         const prix_unitaire = item.prix_unitaire || produit.prix_vente;
-        const remise_ligne = item.remise_ligne || 0;
-        const total_ligne = prix_unitaire * item.quantite - remise_ligne;
+        const total_ligne = prix_unitaire * item.quantite;
 
         montant_ht += total_ligne;
 
@@ -708,7 +680,6 @@ const updateDevis = async (req, res) => {
             produit_id: item.produit_id,
             quantite: item.quantite,
             prix_unitaire,
-            remise_ligne,
             total_ligne,
             description: item.description || null,
             unite: item.unite || "unité",
@@ -718,15 +689,13 @@ const updateDevis = async (req, res) => {
       }
 
       // Apply discount
-      const finalRemise = remise !== undefined ? remise : devis.remise;
-      montant_ht = Math.max(0, montant_ht - finalRemise);
+      montant_ht = Math.max(0, montant_ht);
 
       const montant_ttc = montant_ht;
 
       // Update totals
       devis.montant_ht = montant_ht;
       devis.montant_ttc = montant_ttc;
-      if (remise !== undefined) devis.remise = finalRemise;
     }
 
     // Update other fields
@@ -767,7 +736,6 @@ const updateDevis = async (req, res) => {
             attributes: [
               "quantite",
               "prix_unitaire",
-              "remise_ligne",
               "total_ligne",
               "description",
               "unite",
@@ -935,7 +903,6 @@ const getStats = async (req, res) => {
       attributes: [
         [sequelize.fn("COUNT", sequelize.col("id")), "total"],
         [sequelize.fn("SUM", sequelize.col("montant_ttc")), "total_montant"],
-        [sequelize.fn("SUM", sequelize.col("remise")), "total_remise"],
       ],
       raw: true,
     });
@@ -1000,12 +967,7 @@ const convertToBonLivraison = async (req, res) => {
           model: Produit,
           as: "produits",
           through: {
-            attributes: [
-              "quantite",
-              "prix_unitaire",
-              "remise_ligne",
-              "total_ligne",
-            ],
+            attributes: ["quantite", "prix_unitaire", "total_ligne"],
           },
         },
       ],
@@ -1050,7 +1012,6 @@ const convertToBonLivraison = async (req, res) => {
         client_id: devis.client_id,
         devis_id: devis.id,
         mode_reglement: modeReglement, // Use the fixed value
-        remise: devis.remise || 0,
         montant_ht: devis.montant_ht || 0,
         montant_ttc: devis.montant_ttc || 0,
         notes:
@@ -1078,7 +1039,6 @@ const convertToBonLivraison = async (req, res) => {
           produit_id: produit.id,
           quantite: productDevis.quantite,
           prix_unitaire: productDevis.prix_unitaire,
-          remise_ligne: productDevis.remise_ligne,
           total_ligne: productDevis.total_ligne,
         },
         { transaction },
@@ -1107,12 +1067,7 @@ const convertToBonLivraison = async (req, res) => {
           model: Produit,
           as: "produits",
           through: {
-            attributes: [
-              "quantite",
-              "prix_unitaire",
-              "remise_ligne",
-              "total_ligne",
-            ],
+            attributes: ["quantite", "prix_unitaire", "total_ligne"],
           },
         },
       ],
