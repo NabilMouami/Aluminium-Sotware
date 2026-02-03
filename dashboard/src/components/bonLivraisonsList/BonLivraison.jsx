@@ -572,7 +572,7 @@ const BonLivraisonTable = () => {
         }}
       >
         {/* Status Filter */}
-        <InputGroup size="sm" className="w-auto shadow-sm rounded">
+        <InputGroup size="lg" className="w-auto shadow-sm rounded">
           <InputGroupText className="bg-white border-0">
             <FiFilter className="text-primary fs-6" />
           </InputGroupText>
@@ -592,7 +592,7 @@ const BonLivraisonTable = () => {
 
         {/* Date Range Filter - Version simplifiée */}
         <div className="d-flex align-items-center gap-2">
-          <InputGroup size="sm" className="w-auto shadow-sm rounded">
+          <InputGroup size="lg" className="w-auto shadow-sm rounded">
             <InputGroupText className="bg-white border-0">
               <FiCalendar className="text-primary fs-6" />
             </InputGroupText>
@@ -606,9 +606,9 @@ const BonLivraisonTable = () => {
             />
           </InputGroup>
 
-          <span className="text-muted">à</span>
+          <span className="text-muted">حتى</span>
 
-          <InputGroup size="sm" className="w-auto shadow-sm rounded">
+          <InputGroup size="lg" className="w-auto shadow-sm rounded">
             <InputGroupText className="bg-white border-0">
               <FiCalendar className="text-primary fs-6" />
             </InputGroupText>
@@ -623,22 +623,12 @@ const BonLivraisonTable = () => {
           </InputGroup>
 
           {/* Bouton pour réinitialiser à 30 jours */}
-          <button
-            className="btn btn-sm btn-outline-secondary"
-            onClick={() => {
-              setStartDate(subDays(new Date(), 30));
-              setEndDate(new Date());
-            }}
-            title="30 derniers jours"
-          >
-            30j
-          </button>
         </div>
 
         {/* Create Button */}
         <div>
           <Link to="/bon-livraison/create">
-            <button className="btn btn-sm btn-success">
+            <button className="btn btn-lg btn-success">
               <FiPlusCircle className="me-2" />
               Créer Nouveau Bon de Livraison
             </button>

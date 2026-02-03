@@ -60,3 +60,169 @@
   background-color: #ff6b6b !important;
   color: white !important;
 }
+/* ClientDetails.css */
+.client-details-page {
+  min-height: 100vh;
+}
+
+.stat-card {
+  transition: transform 0.2s ease;
+  border: 1px solid #e0e0e0;
+}
+
+.stat-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+}
+
+.document-row {
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.document-row:hover {
+  background-color: #f8f9fa;
+}
+
+.status-badge {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.85em;
+  font-weight: 500;
+}
+
+.badge-success {
+  background-color: #d1f7c4 !important;
+  color: #2e7d32 !important;
+}
+
+.badge-warning {
+  background-color: #ffeaa7 !important;
+  color: #f57c00 !important;
+}
+
+.badge-danger {
+  background-color: #ffcdd2 !important;
+  color: #c62828 !important;
+}
+
+.badge-info {
+  background-color: #bbdefb !important;
+  color: #1565c0 !important;
+}
+
+.badge-secondary {
+  background-color: #e0e0e0 !important;
+  color: #616161 !important;
+}
+
+.action-buttons .btn {
+  opacity: 0.8;
+  transition: opacity 0.2s ease;
+}
+
+.action-buttons .btn:hover {
+  opacity: 1;
+}
+
+.client-info-icon {
+  width: 20px;
+  text-align: center;
+}
+
+.nxl-head-back {
+  display: flex;
+  align-items: center;
+  color: inherit;
+  cursor: pointer;
+}
+
+.nxl-head-back:hover {
+  opacity: 0.7;
+}
+
+/* Add to your ClientDetails.css or create new CSS */
+.product-history-card {
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  margin-bottom: 15px;
+  transition: all 0.3s ease;
+}
+
+.product-history-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.product-icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.product-quantity {
+  font-size: 1.2rem;
+  font-weight: bold;
+  color: #2c3e50;
+}
+
+.product-amount {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #27ae60;
+}
+
+.product-documents-badge {
+  font-size: 0.8rem;
+  padding: 3px 8px;
+}
+
+.tab-content {
+  animation: fadeIn 0.3s ease;
+}
+.modal-backdrop-custom {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 1040;
+}
+
+.modal-custom {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1050;
+  max-width: 95%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .product-history-card .row > div {
+    margin-bottom: 10px;
+  }
+
+  .product-icon {
+    width: 30px;
+    height: 30px;
+    font-size: 0.9rem;
+  }
+}

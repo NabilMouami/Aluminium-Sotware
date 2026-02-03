@@ -331,123 +331,146 @@ const DevisDetailsPage = () => {
   const handlePrint = () => {
     if (!devis) return;
 
-    const formatDate = (dateStr) => {
-      if (!dateStr) return "";
-      const d = new Date(dateStr);
-      return d.toLocaleDateString("fr-FR");
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return;
+
+    const formatDateWithTime = (dateStr) => {
+      if (!dateStr) return "—";
+      try {
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return "—";
+        return d.toLocaleString("fr-FR", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+      } catch {
+        return "—";
+      }
     };
 
-    const issueDate = devis.date_creation
-      ? new Date(devis.date_creation)
-      : new Date();
-
+    const creationDateFormatted = formatDateWithTime(devis.date_creation);
     const printTotalText = totalToFrenchText(total);
-
-    const printWindow = window.open("", "_blank");
 
     const printContent = `
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Devis ${devis.num_devis}</title>
+  <title>DEVIS ${devis.num_devis}</title>
+  <meta charset="UTF-8" />
+
   <style>
+    @page {
+      size: A4;
+      margin: 10mm;
+    }
+
+    * {
+      box-sizing: border-box;
+      text-transform: uppercase;
+    }
+
     body {
       font-family: Arial, sans-serif;
-      font-size: 10px;
-      margin: 20px;
-      color: #333;
+      font-size: 0.8rem;
+      margin: 0;
+      padding: 10mm;
+      color: #000;
+      background: #fff;
     }
+
     .header {
       text-align: center;
-      border-bottom: 2px solid #333;
-      padding-bottom: 10px;
-      margin-bottom: 15px;
-    }
-    .company-info, .invoice-info {
-      display: flex;
-      justify-content: space-between;
-      flex-wrap: wrap;
+      border-bottom: 3px solid #000;
+      padding-bottom: 16px;
       margin-bottom: 20px;
     }
-    .info-block {
-      flex: 1;
-      min-width: 220px;
+
+    h2 {
+      margin: 0 0 10px;
+      font-size: 2rem;
+      letter-spacing: 1px;
     }
-    .info-block p {
-      margin: 3px 0;
+
+    .info {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 20px;
     }
-    .table {
+
+    table {
       width: 100%;
       border-collapse: collapse;
-      margin: 15px 0;
+      margin: 20px 0;
     }
-    .table th, .table td {
-      border: 1px solid #ddd;
-      padding: 6px;
-      text-align: left;
+
+    th, td {
+      border: 1.5px solid #000;
+      padding: 10px;
+      vertical-align: middle;
     }
-    .table th {
-      background-color: #f5f5f5;
-    }
-    .totals {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-end;
-      margin-top: 20px;
-    }
-    .totals p {
-      margin: 2px 0;
-    }
-    .conditions {
-      margin-top: 25px;
-    }
-    .conditions h3 {
-      margin-bottom: 5px;
-      font-size: 12px;
-    }
-    .notes {
-      margin-top: 20px;
-    }
-    .footer {
-      margin-top: 40px;
-      border-top: 1px solid #333;
-      padding-top: 15px;
+
+    th {
+      background: #f2f2f2;
       text-align: center;
     }
-    .status-badge {
+
+    td {
+      text-align: left;
+    }
+
+    .totals {
+      margin-top: 25px;
+      text-align: right;
+    }
+
+    .net-box {
       display: inline-block;
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-size: 10px;
-      margin-left: 10px;
+      border: 2px solid #000;
+      padding: 10px 16px;
+      margin-right: 20px;
+      margin-top: 8px;
+      font-weight: bold;
+      text-align: right;
+    }
+
+    .italic {
+      font-style: italic;
+      font-size: 1.1rem;
+      margin: 30px;
+      font-weight: bold;
     }
   </style>
 </head>
+
 <body>
   <div class="header">
-    <h2 style="margin: 0;">Devis</h2>
-    <p style="margin: 5px 0;">ALUMINIUM OULAD BRAHIM</p>
-    <p style="margin: 0;">Tél: +212 671953725</p>
+    <h2>DEVIS</h2>
+    <p>ALUMINIUM OULAD BRAHIM – TÉL: +212 671953725</p>
   </div>
 
-  <div class="invoice-info">
-    <div class="info-block">
-      <p><strong>Nom Client:</strong> ${devis.client_name || devis.client?.nom_complete || "Client inconnu"}</p>
+  <div class="info">
+    <div>
+      <strong>NOM CLIENT :</strong><br/>
+      ${devis.client_name || devis.client?.nom_complete || "—"}
     </div>
-    <div class="info-block" style="text-align:right;">
-      <p><strong>N° Devis:</strong> ${devis.num_devis}</p>
-      <p><strong>Date création:</strong> ${formatDate(issueDate)}</p>
+
+    <div style="text-align:right;">
+      <strong>N° DEVIS :</strong> ${devis.num_devis}<br/>
+      <strong>DATE CRÉATION :</strong> ${creationDateFormatted}
     </div>
   </div>
 
-  <table class="table">
+  <table>
     <thead>
       <tr>
-        <th>Code</th>
-        <th>Designation</th>
-        <th>Qté</th>
-        <th>Prix U</th>
-        <th>Total</th>
+        <th>CODE</th>
+        <th>DÉSIGNATION</th>
+        <th>QTÉ</th>
+        <th>PRIX U</th>
+        <th>MONTANT</th>
       </tr>
     </thead>
     <tbody>
@@ -455,11 +478,17 @@ const DevisDetailsPage = () => {
         .map(
           (prod) => `
         <tr>
-          <td>${prod.reference || "N/A"}</td>
-          <td>${prod.designation || "Produit"}</td>
-          <td>${parseFloat(prod.DevisProduit?.quantite || 0).toFixed(2)}</td>
-          <td>${parseFloat(prod.DevisProduit?.prix_unitaire || 0).toFixed(2)} </td>
-          <td>${parseFloat(prod.DevisProduit?.total_ligne || 0).toFixed(2)} </td>
+          <td>${prod.reference || "—"}</td>
+          <td>${prod.designation || "—"}</td>
+          <td style="text-align:center;">
+            ${Number(prod.DevisProduit?.quantite || 0).toFixed(2)}
+          </td>
+          <td style="text-align:right;">
+            ${Number(prod.DevisProduit?.prix_unitaire || 0).toFixed(2)}
+          </td>
+          <td style="text-align:right;">
+            ${Number(prod.DevisProduit?.total_ligne || 0).toFixed(2)}
+          </td>
         </tr>
       `,
         )
@@ -468,154 +497,181 @@ const DevisDetailsPage = () => {
   </table>
 
   <div class="totals">
-    <p style="font-size:14px; font-weight:bold;">
-      <strong>Total a Payer:</strong> ${total.toFixed(2)} 
-    </p>
+    <div class="net-box">
+      TOTAL À PAYER : ${total.toFixed(2)} DH
+    </div>
 
-    <p style="font-size:10px; font-style:italic;">
-      <strong>${printTotalText}</strong>
-    </p>
+    <div class="italic">
+      ${printTotalText}
+    </div>
   </div>
 
+  <script>
+    window.onload = function () {
+      window.print();
+      setTimeout(() => window.close(), 100);
+    };
+  </script>
 </body>
-</html>`;
+</html>
+`;
 
+    printWindow.document.open();
     printWindow.document.write(printContent);
     printWindow.document.close();
-    printWindow.focus();
-
-    setTimeout(() => {
-      printWindow.print();
-    }, 500);
   };
 
   const generateAndDownloadPDF = async () => {
     try {
-      const pdfContainer = document.createElement("div");
-      pdfContainer.id = "pdf-container";
-      pdfContainer.style.width = "210mm";
-      pdfContainer.style.minHeight = "150mm";
-      pdfContainer.style.padding = "15mm 20mm";
-      pdfContainer.style.background = "white";
-      pdfContainer.style.color = "#000";
-      pdfContainer.style.fontFamily = "Arial, sans-serif";
-      pdfContainer.style.fontSize = "11px";
-      pdfContainer.style.lineHeight = "1.5";
-      pdfContainer.style.position = "absolute";
-      pdfContainer.style.left = "-9999px";
-      pdfContainer.style.top = "0";
+      const container = document.createElement("div");
 
-      const formatDate = (date) => {
-        if (!date) return "";
-        return new Date(date).toLocaleDateString("fr-FR");
+      container.style.width = "210mm";
+      container.style.minHeight = "150mm";
+      container.style.padding = "15mm";
+      container.style.background = "#fff";
+      container.style.color = "#000";
+      container.style.fontFamily = "Arial, sans-serif";
+      container.style.fontSize = "0.8rem";
+      container.style.textTransform = "uppercase";
+      container.style.boxSizing = "border-box";
+      container.style.position = "absolute";
+      container.style.left = "-9999px";
+      container.style.top = "0";
+
+      const formatDateWithTime = (dateStr) => {
+        if (!dateStr) return "—";
+        try {
+          const d = new Date(dateStr);
+          if (isNaN(d.getTime())) return "—";
+          return d.toLocaleString("fr-FR", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+        } catch {
+          return "—";
+        }
       };
 
-      const issueDate = devis.date_creation
-        ? new Date(devis.date_creation)
-        : new Date();
+      const creationDateFormatted = formatDateWithTime(devis.date_creation);
+      const totalText = totalToFrenchText(total);
 
-      const pdfTotalText = totalToFrenchText(total);
+      container.innerHTML = `
+  <div style="text-align:center; border-bottom:3px solid #000; padding-bottom:15px; margin-bottom:20px;">
+    <h1 style="margin:0; letter-spacing:1px;">DEVIS</h1>
+    <p style="margin:8px 0; font-weight:bold;">ALUMINIUM OULAD BRAHIM</p>
+    <p>TÉL : +212 671953725</p>
+  </div>
 
-      pdfContainer.innerHTML = `
-      <div style="text-align:center; border-bottom:2px solid #333; padding-bottom:10px; margin-bottom:15px;">
-        <h1 style="margin:0; color:#2c5aa0;">Devis</h1>
-        <h3 style="margin:5px 0;">ALUMINIUM OULAD BRAHIM</h3>
-        <p style="font-size:10px;">Tél: +212 671953725</p>
-      </div>
+  <div style="display:flex; justify-content:space-between; margin-bottom:25px;">
+    <div>
+      <p><strong>NOM CLIENT :</strong><br/>
+        ${devis.client_name || devis.client?.nom_complete || "—"}
+      </p>
+    </div>
+    <div style="text-align:right;">
+      <p><strong>N° DEVIS :</strong> ${devis.num_devis}</p>
+      <p><strong>DATE CRÉATION :</strong> ${creationDateFormatted}</p>
+    </div>
+  </div>
 
-      <div style="display:flex; justify-content:space-between; margin-bottom:20px;">
-        <div>
-          <h4 style="margin-bottom:5px;">Client</h4>
-          <p><strong>Nom client:</strong> ${devis.client_name || devis.client?.nom_complete || "Client inconnu"}</p>
-        </div>
-        <div>
-          <h4 style="margin-bottom:5px;">Informations du Devis</h4>
-          <p><strong>N°:</strong> ${devis.num_devis}</p>
-          <p><strong>Date création:</strong> ${formatDate(issueDate)}</p>
-        </div>
-      </div>
+  <table style="width:100%; border-collapse:collapse; margin-bottom:25px;">
+    <thead>
+      <tr>
+        <th style="border:1.5px solid #000; padding:10px;">CODE</th>
+        <th style="border:1.5px solid #000; padding:10px;">DÉSIGNATION</th>
+        <th style="border:1.5px solid #000; padding:10px;">QTÉ</th>
+        <th style="border:1.5px solid #000; padding:10px;">PRIX U</th>
+        <th style="border:1.5px solid #000; padding:10px;">MONTANT</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${(devis.produits || [])
+        .map(
+          (prod) => `
+        <tr>
+          <td style="border:1.5px solid #000; padding:8px;">${prod.reference || "—"}</td>
+          <td style="border:1.5px solid #000; padding:8px;">${prod.designation || "—"}</td>
+          <td style="border:1.5px solid #000; padding:8px; text-align:center;">
+            ${Number(prod.DevisProduit?.quantite || 0).toFixed(2)}
+          </td>
+          <td style="border:1.5px solid #000; padding:8px; text-align:right;">
+            ${Number(prod.DevisProduit?.prix_unitaire || 0).toFixed(2)}
+          </td>
+          <td style="border:1.5px solid #000; padding:8px; text-align:right;">
+            ${Number(prod.DevisProduit?.total_ligne || 0).toFixed(2)}
+          </td>
+        </tr>
+      `,
+        )
+        .join("")}
+    </tbody>
+  </table>
 
-      <table style="width:100%; border-collapse:collapse; font-size:10px; margin-bottom:15px;">
-        <thead>
-          <tr style="background-color:#2c5aa0; color:#fff;">
-            <th style="padding:6px; border:1px solid #2c5aa0;">Code</th>
-            <th style="padding:6px; border:1px solid #2c5aa0;">Désignation</th>
-            <th style="padding:6px; border:1px solid #2c5aa0;">Qté</th>
-            <th style="padding:6px; border:1px solid #2c5aa0;">Prix U</th>
-            <th style="padding:6px; border:1px solid #2c5aa0;">Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${(devis.produits || [])
-            .map(
-              (prod, i) => `
-            <tr style="${i % 2 === 0 ? "background:#f9f9f9;" : ""}">
-              <td style="border:1px solid #ddd; padding:5px;">${prod.reference || "N/A"}</td>
-              <td style="border:1px solid #ddd; padding:5px;">${prod.designation || "Produit"}</td>
-              <td style="border:1px solid #ddd; padding:5px; text-align:center;">${parseFloat(prod.DevisProduit?.quantite || 0).toFixed(2)}</td>
-              <td style="border:1px solid #ddd; padding:5px; text-align:right;">${parseFloat(prod.DevisProduit?.prix_unitaire || 0).toFixed(2)} </td>
-              <td style="border:1px solid #ddd; padding:5px; text-align:right; font-weight:bold;">${parseFloat(prod.DevisProduit?.total_ligne || 0).toFixed(2)} </td>
-            </tr>
-          `,
-            )
-            .join("")}
-        </tbody>
-      </table>
+  <div style="text-align:right; margin-top:25px;">
+    <div style="
+      display:inline-block;
+      border:2px solid #000;
+      padding:12px 18px;
+      margin-right:20px;
+      font-weight:bold;
+    ">
+      NET À PAYER : ${total.toFixed(2)} 
+    </div>
 
-      <div style="text-align:right; margin-top:20px;">
-        <p style="font-size:14px; font-weight:bold; color:#2c5aa0;">
-          Total a Payer: ${total.toFixed(2)} 
-        </p>
-        <p style="font-size:10px; font-style:italic;">
-          : <strong>${pdfTotalText}</strong>
-        </p>
-      </div>
-    `;
+    <br/>
 
-      document.body.appendChild(pdfContainer);
+    <div style="
+      display:inline-block;
+      margin-top:12px;
+      font-style:italic;
+      font-weight:bold;
+      font-size:1.1rem;
+    ">
+      ${totalText}
+    </div>
+  </div>
+`;
 
-      const canvas = await html2canvas(pdfContainer, {
+      document.body.appendChild(container);
+
+      const canvas = await html2canvas(container, {
         scale: 2,
         useCORS: true,
         backgroundColor: "#fff",
       });
 
-      document.body.removeChild(pdfContainer);
+      document.body.removeChild(container);
 
       const imgData = canvas.toDataURL("image/png");
       const pdf = new jsPDF("p", "mm", "a4");
+
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
       const imgHeight = (canvas.height * pageWidth) / canvas.width;
 
-      if (imgHeight <= pageHeight) {
-        pdf.addImage(imgData, "PNG", 0, 0, pageWidth, imgHeight);
-      } else {
-        let heightLeft = imgHeight;
-        let position = 0;
+      let heightLeft = imgHeight;
+      let position = 0;
 
+      pdf.addImage(imgData, "PNG", 0, position, pageWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
         pdf.addImage(imgData, "PNG", 0, position, pageWidth, imgHeight);
         heightLeft -= pageHeight;
-
-        while (heightLeft > 1) {
-          position = heightLeft - imgHeight;
-          pdf.addPage();
-          pdf.addImage(imgData, "PNG", 0, position, pageWidth, imgHeight);
-          heightLeft -= pageHeight;
-        }
       }
 
       pdf.save(`Devis-${devis.num_devis}.pdf`);
-      topTost("PDF téléchargé avec succès!", "success");
+      topTost("PDF généré et téléchargé !", "success");
     } catch (err) {
       console.error("Erreur PDF:", err);
       topTost("Erreur lors de la génération du PDF", "error");
     }
   };
-
-  const canEdit = ["brouillon", "en_attente", "refusé", "expiré"].includes(
-    devis.status,
-  );
 
   const formatDate = (dateInput) => {
     if (!dateInput) return "";

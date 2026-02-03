@@ -510,96 +510,63 @@ const FactureDetailsModal = ({
   };
 
   const handlePrint = () => {
+    if (!facture) return;
+
     const printWindow = window.open("", "_blank");
+    if (!printWindow) return;
 
     const formatDateWithTime = (dateString) => {
       if (!dateString) return "—";
-      try {
-        const date = new Date(dateString);
-        if (isNaN(date.getTime())) return "—";
-        return date.toLocaleString("fr-FR", {
-          day: "2-digit",
-          month: "2-digit",
-          year: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-        });
-      } catch {
-        return "—";
-      }
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return "—";
+      return date.toLocaleString("fr-FR", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
     };
 
     const creationDateFormatted = formatDateWithTime(facture.createdAt);
-
     const pdfTotalText = totalText || totalToFrenchText(totalTTC);
 
     const content = `
 <!DOCTYPE html>
-<html>
+<html lang="fr">
 <head>
+  <meta charset="UTF-8" />
   <title>Facture ${facture.clientName || facture.client?.nom_complete}</title>
 
   <style>
-    @page {
-      size: A4;
-      margin: 10mm;
-    }
-
-    body {
-      font-family: Arial, sans-serif;
-      font-size: 12px;
-      margin: 0;
-      color: #000;
-    }
-
-    .header {
-      text-align: center;
-      border-bottom: 2px solid #000;
-      padding-bottom: 10px;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin: 20px 0;
-    }
-
-    th, td {
-      border: 1px solid #ddd;
-      padding: 6px;
-      text-align: left;
-    }
-
-    th {
-      background: #f5f5f5;
-    }
-
-    .totals {
-      text-align: right;
-      margin-top: 20px;
-    }
-
-    .strong {
-      font-weight: bold;
-    }
+    @page { size: A4; margin: 10mm; }
+    * { box-sizing: border-box; text-transform: uppercase; }
+    body { font-family: Arial, sans-serif; font-size: 0.8rem; margin: 0; color: #000; }
+    .header { text-align:center; border-bottom:2px solid #000; padding-bottom:10px; margin-bottom:20px; }
+    h2 { margin:0 0 5px; font-size:1.5rem; }
+    table { width:100%; border-collapse:collapse; margin:20px 0; }
+    th, td { border:1.5px solid #000; padding:8px; text-align:left; }
+    th { background:#f2f2f2; text-align:center; }
+    .totals { margin-top:25px; text-align:right; }
+    .net-box { display:inline-block; border:2px solid #000; padding:10px 16px; font-weight:bold; text-align:right; }
+    .italic { font-style:italic; font-size:1rem; margin-top:10px; font-weight:bold; }
   </style>
 </head>
 
-<body onload="window.print(); window.onafterprint = () => window.close();">
+<body onload="window.print(); setTimeout(() => window.close(), 100);">
 
   <div class="header">
-    <h2 style="margin:0;">FACTURE</h2>
-    <p style="margin:5px 0;">ALUMINIUM OULAD BRAHIM</p>
-    <p style="margin:0;">Tél: +212 671953725</p>
+    <h2>FACTURE</h2>
+    <p>ALUMINIUM OULAD BRAHIM – Tél: +212 671953725</p>
   </div>
 
-  <div style="display:flex; justify-content:space-between; margin:20px 0;">
+  <div style="display:flex; justify-content:space-between; margin-bottom:20px;">
     <div>
-      <strong>Client:</strong> ${facture.clientName || facture.client?.nom_complete}
+      <strong>Client:</strong> ${facture.clientName || facture.client?.nom_complete || "—"}
     </div>
     <div style="text-align:right;">
       <strong>N° Facture:</strong> ${facture.invoiceNumber || facture.num_facture}<br/>
-      <strong>Date création :</strong> ${creationDateFormatted}<br/>
+      <strong>Date création:</strong> ${creationDateFormatted}
     </div>
   </div>
 
@@ -610,35 +577,29 @@ const FactureDetailsModal = ({
         <th>Désignation</th>
         <th>Qté</th>
         <th>Prix U</th>
-        <th>Total</th>
+        <th>Montant</th>
       </tr>
     </thead>
     <tbody>
-          ${(facture.products || [])
-            .map(
-              (p) => `
+      ${(facture.products || [])
+        .map(
+          (p) => `
         <tr>
           <td>${p.reference || "—"}</td>
           <td>${p.designation || "—"}</td>
-          <td>${p.FactureProduit?.quantite || 0}</td>
+          <td>${Number(p.FactureProduit?.quantite || 0).toFixed(2)}</td>
           <td>${Number(p.FactureProduit?.prix_unitaire || 0).toFixed(2)}</td>
           <td>${Number(p.FactureProduit?.total_ligne || 0).toFixed(2)}</td>
         </tr>
       `,
-            )
-            .join("")}
+        )
+        .join("")}
     </tbody>
   </table>
 
   <div class="totals">
-    <p><strong>Total HT:</strong> ${totalHTBeforeDiscount.toFixed(2)}</p>
-        <p><strong>TVA (${facture.tva || 0}%):</strong> ${montantTVA.toFixed(2)} </p>
-        <p style="font-size:13px; font-weight:bold; color:#2c5aa0;">
-          <strong>Total TTC:</strong> ${totalTTC.toFixed(2)} 
-        </p>
-    <p style="font-size:10px; font-style:italic;">
-      <strong>${pdfTotalText}</strong>
-    </p>
+    <div class="net-box">TOTAL TTC: ${totalTTC.toFixed(2)}</div>
+    <div class="italic">${pdfTotalText}</div>
   </div>
 
 </body>
@@ -652,81 +613,73 @@ const FactureDetailsModal = ({
 
   const generateAndDownloadPDF = async () => {
     try {
-      const pdfContainer = document.createElement("div");
-      pdfContainer.id = "pdf-container";
-      pdfContainer.style.width = "210mm";
-      pdfContainer.style.minHeight = "150mm";
-      pdfContainer.style.padding = "15mm 20mm";
-      pdfContainer.style.background = "white";
-      pdfContainer.style.color = "#000";
-      pdfContainer.style.fontFamily = "Arial, sans-serif";
-      pdfContainer.style.fontSize = "11px";
-      pdfContainer.style.lineHeight = "1.5";
-      pdfContainer.style.position = "absolute";
-      pdfContainer.style.left = "-9999px";
-      pdfContainer.style.top = "0";
+      if (!facture) return;
+
+      const container = document.createElement("div");
+      Object.assign(container.style, {
+        width: "210mm",
+        padding: "15mm",
+        background: "#fff",
+        color: "#000",
+        fontFamily: "Arial, sans-serif",
+        fontSize: "0.8rem",
+        textTransform: "uppercase",
+        boxSizing: "border-box",
+        position: "absolute",
+        left: "-9999px",
+        top: "0",
+      });
 
       const formatDateWithTime = (dateString) => {
         if (!dateString) return "—";
-        try {
-          const date = new Date(dateString);
-          if (isNaN(date.getTime())) return "—";
-          return date.toLocaleString("fr-FR", {
-            day: "2-digit",
-            month: "2-digit",
-            year: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-          });
-        } catch {
-          return "—";
-        }
+        const date = new Date(dateString);
+        if (isNaN(date.getTime())) return "—";
+        return date.toLocaleString("fr-FR", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
       };
 
       const creationDateFormatted = formatDateWithTime(facture.createdAt);
-
-      // Get the total text for PDF
       const pdfTotalText = totalText || totalToFrenchText(totalTTC);
 
-      pdfContainer.innerHTML = `
-      <div style="text-align:center; border-bottom:2px solid #333; padding-bottom:10px; margin-bottom:15px;">
-        <h1 style="margin:0; color:#2c5aa0;">Facture</h1>
-        <h3 style="margin:5px 0;">ALUMINIUM OULAD BRAHIM</h3>
-        <p style="font-size:10px;">Tél: +212 661-431237</p>
+      container.innerHTML = `
+      <div style="text-align:center; border-bottom:2px solid #000; padding-bottom:10px; margin-bottom:15px;">
+        <h2 style="margin:0;">FACTURE</h2>
+        <p>ALUMINIUM OULAD BRAHIM – Tél: +212 671953725</p>
       </div>
 
       <div style="display:flex; justify-content:space-between; margin-bottom:20px;">
-        <div>
-          <h4 style="margin-bottom:5px;">Client</h4>
-          <p><strong>Nom:</strong> ${facture.clientName || facture.client?.nom_complete}</p>
-        </div>
+        <div><strong>Client:</strong> ${facture.clientName || facture.client?.nom_complete || "—"}</div>
         <div style="text-align:right;">
-          <h4 style="margin-bottom:5px;">Informations de la Facture</h4>
-          <p><strong>N°:</strong> ${facture.invoiceNumber || facture.num_facture}</p>
-          <p><strong>Date facturation:</strong> ${creationDateFormatted}</p>
+          <strong>N° Facture:</strong> ${facture.invoiceNumber || facture.num_facture}<br/>
+          <strong>Date création:</strong> ${creationDateFormatted}
         </div>
       </div>
 
-      <table style="width:100%; border-collapse:collapse; font-size:10px; margin-bottom:15px;">
+      <table style="width:100%; border-collapse:collapse; margin-bottom:20px;">
         <thead>
-          <tr style="background-color:#2c5aa0; color:#fff;">
-            <th style="padding:6px; border:1px solid #2c5aa0;">Code</th>
-            <th style="padding:6px; border:1px solid #2c5aa0;">Produit</th>
-            <th style="padding:6px; border:1px solid #2c5aa0;">Qté</th>
-            <th style="padding:6px; border:1px solid #2c5aa0;">Prix U</th>
-            <th style="padding:6px; border:1px solid #2c5aa0;">Total Ligne HT</th>
+          <tr>
+            <th style="border:1.5px solid #000; padding:8px;">Code</th>
+            <th style="border:1.5px solid #000; padding:8px;">Désignation</th>
+            <th style="border:1.5px solid #000; padding:8px;">Qté</th>
+            <th style="border:1.5px solid #000; padding:8px;">Prix U</th>
+            <th style="border:1.5px solid #000; padding:8px;">Montant/th>
           </tr>
         </thead>
         <tbody>
           ${(facture.products || [])
             .map(
-              (prod, i) => `
-            <tr style="${i % 2 === 0 ? "background:#f9f9f9;" : ""}">
-              <td style="border:1px solid #ddd; padding:5px;">${prod.reference || "N/A"}</td>
-              <td style="border:1px solid #ddd; padding:5px;">${prod.designation || "Produit"}</td>
-              <td style="border:1px solid #ddd; padding:5px; text-align:center;">${prod.FactureProduit?.quantite || 0}</td>
-              <td style="border:1px solid #ddd; padding:5px; text-align:right;">${parseFloat(prod.FactureProduit?.prix_unitaire || 0).toFixed(2)} </td>
-              <td style="border:1px solid #ddd; padding:5px; text-align:right;">${parseFloat(prod.FactureProduit?.total_ligne || 0).toFixed(2)} </td>
+              (p) => `
+            <tr>
+              <td style="border:1.5px solid #000; padding:6px;">${p.reference || "—"}</td>
+              <td style="border:1.5px solid #000; padding:6px;">${p.designation || "—"}</td>
+              <td style="border:1.5px solid #000; padding:6px;">${Number(p.FactureProduit?.quantite || 0).toFixed(2)}</td>
+              <td style="border:1.5px solid #000; padding:6px;">${Number(p.FactureProduit?.prix_unitaire || 0).toFixed(2)}</td>
+              <td style="border:1.5px solid #000; padding:6px;">${Number(p.FactureProduit?.total_ligne || 0).toFixed(2)}</td>
             </tr>
           `,
             )
@@ -735,64 +688,61 @@ const FactureDetailsModal = ({
       </table>
 
       <div style="text-align:right; margin-top:20px;">
-        <p><strong>Total HT:</strong> ${totalHTBeforeDiscount.toFixed(2)} </p>
-        <p><strong>TVA (${facture.tva || 0}%):</strong> ${montantTVA.toFixed(2)} </p>
-        <p style="font-size:13px; font-weight:bold; color:#2c5aa0;">
-          <strong>Total TTC:</strong> ${totalTTC.toFixed(2)} 
-        </p>
-        <p style="font-size:10px; font-style:italic;">
-          Arrêté le présent Facture à la somme de :
-          <strong>${pdfTotalText}</strong>
-        </p>
-        
-        ${
-          totalPayments > 0
-            ? `
-          <div style="border-top:1px solid #ddd; margin-top:10px; padding-top:10px;">
-            <p><strong>Total payé:</strong> ${totalPayments.toFixed(2)} </p>
-            <p style="font-weight:bold; color:${
-              remainingAmount > 0 ? "#dc3545" : "#28a745"
-            }">
-              <strong>Reste à payer:</strong> ${remainingAmount.toFixed(2)} 
-            </p>
-          </div>
-        `
-            : ""
-        }
-
-        
+        <div class="net-box" style="display:inline-block; border:2px solid #000; padding:10px 16px; font-weight:bold;">
+          TOTAL TTC: ${totalTTC.toFixed(2)} 
+        </div>
+        <div class="italic" style="font-style:italic; font-weight:bold; margin-top:10px;">
+          ${pdfTotalText}
+        </div>
       </div>
     `;
 
-      document.body.appendChild(pdfContainer);
+      document.body.appendChild(container);
 
-      const canvas = await html2canvas(pdfContainer, {
+      const canvas = await html2canvas(container, {
         scale: 2,
-        useCORS: true,
         backgroundColor: "#fff",
       });
+      document.body.removeChild(container);
 
-      document.body.removeChild(pdfContainer);
-
-      const imgData = canvas.toDataURL("image/png");
       const pdf = new jsPDF("p", "mm", "a4");
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
       const imgHeight = (canvas.height * pageWidth) / canvas.width;
 
       if (imgHeight <= pageHeight) {
-        pdf.addImage(imgData, "PNG", 0, 0, pageWidth, imgHeight);
+        pdf.addImage(
+          canvas.toDataURL("image/png"),
+          "PNG",
+          0,
+          0,
+          pageWidth,
+          imgHeight,
+        );
       } else {
         let heightLeft = imgHeight;
         let position = 0;
-
-        pdf.addImage(imgData, "PNG", 0, position, pageWidth, imgHeight);
+        pdf.addImage(
+          canvas.toDataURL("image/png"),
+          "PNG",
+          0,
+          position,
+          pageWidth,
+          imgHeight,
+        );
         heightLeft -= pageHeight;
 
         while (heightLeft > 0) {
           position -= pageHeight;
           pdf.addPage();
-          pdf.addImage(imgData, "PNG", 0, position, pageWidth, imgHeight);
+          pdf.addImage(
+            canvas.toDataURL("image/png"),
+            "PNG",
+            0,
+            position,
+            pageWidth,
+            imgHeight,
+          );
           heightLeft -= pageHeight;
         }
       }

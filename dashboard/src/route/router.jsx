@@ -42,6 +42,7 @@ import DevisDetailsPage from "../pages/Devis/DevisDetails";
 import FactureDetailsPage from "../pages/Invoices/FactureDetails";
 import BonAchatDetailsPage from "../pages/BonAchat/BonAchatDetails";
 import BonAvoirDetailsPage from "../pages/BonAvoir/BonAvoirDetails";
+import ClientDetails from "../pages/Clients/ClientDetails";
 
 export const router = createBrowserRouter([
   {
@@ -107,6 +108,11 @@ export const router = createBrowserRouter([
         path: "clients/create",
         element: <ClientsCreate />,
       },
+      {
+        path: "clients/:id",
+        element: <ClientDetails />,
+      },
+
       {
         path: "fornisseurs",
         element: <FornisseursList />,

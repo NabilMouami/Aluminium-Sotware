@@ -9,14 +9,12 @@ import {
   FiShoppingCart,
   FiPlus,
   FiMinus,
-  FiSearch,
   FiDollarSign,
   FiCalendar,
   FiCreditCard,
   FiFileText,
   FiSave,
   FiX,
-  FiCheck,
   FiCreditCard as FiCard,
   FiDollarSign as FiCash,
   FiXCircle,
@@ -25,6 +23,7 @@ import {
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
 import api from "@/utils/axiosConfig";
+import { useNavigate } from "react-router-dom";
 
 const MySwal = withReactContent(Swal);
 
@@ -44,6 +43,7 @@ const BonLivraisonCreate = () => {
   });
 
   const selectRef = useRef();
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchClients();
@@ -546,7 +546,7 @@ const BonLivraisonCreate = () => {
           cancelButtonText: "Nouveau bon",
         }).then((result) => {
           if (result.isConfirmed) {
-            window.location.href = `/bon-livraisons/${response.data.bon.id}`;
+            navigate(`/bon-livraisons/${response.data.bon.id}`);
           } else {
             // Réinitialiser le formulaire
             setSelectedProduits([]);

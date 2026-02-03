@@ -11,23 +11,19 @@ import {
   FiMinus,
   FiSearch,
   FiDollarSign,
-  FiCalendar,
   FiFileText,
   FiSave,
   FiX,
-  FiCheck,
   FiXCircle,
-  FiRefreshCw,
   FiChevronDown,
   FiChevronUp,
   FiClipboard,
-  FiTag,
-  FiRotateCcw,
 } from "react-icons/fi";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
 import api from "@/utils/axiosConfig";
 import { format } from "date-fns";
+import { useNavigate } from "react-router-dom";
 
 const MySwal = withReactContent(Swal);
 
@@ -50,6 +46,7 @@ const BonAvoirCreate = () => {
   });
 
   const selectRef = useRef();
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchClients();
@@ -527,7 +524,7 @@ const BonAvoirCreate = () => {
           cancelButtonText: "Nouveau bon",
         }).then((result) => {
           if (result.isConfirmed) {
-            window.location.href = `/bon-avoirs/${response.data.bon.id}`;
+            navigate(`/bon-avoirs/${response.data.bon.id}`);
           } else {
             resetForm();
           }

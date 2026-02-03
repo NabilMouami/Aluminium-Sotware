@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import Table from "@/components/shared/table/Table";
-import { DateRangePicker } from "react-date-range";
 import "react-date-range/dist/styles.css";
 import "react-date-range/dist/theme/default.css";
 import { format, subDays } from "date-fns";
@@ -23,7 +22,7 @@ import Swal from "sweetalert2";
 import { Input, InputGroup, InputGroupText, Label, Badge } from "reactstrap";
 import withReactContent from "sweetalert2-react-content";
 import { Link } from "react-router-dom";
-import BonAvoirDetailsModal from "./BonAvoirDetailsModal"; // Import the modal
+import BonAvoirDetailsModal from "./BonAvoirDetailsModal";
 
 const MySwal = withReactContent(Swal);
 
@@ -36,37 +35,23 @@ const statusOptions = [
   { value: "annule", label: "Annulé" },
 ];
 
-const motifOptions = [
-  { value: "all", label: "Tous les motifs" },
-  { value: "retour_produit", label: "Retour Produit" },
-  { value: "erreur_facturation", label: "Erreur Facturation" },
-  { value: "remise_commerciale", label: "Remise Commerciale" },
-  { value: "annulation", label: "Annulation" },
-  { value: "autre", label: "Autre" },
-];
-
 const BonAvoirTable = () => {
   const [bons, setBons] = useState([]);
   const [filteredBons, setFilteredBons] = useState([]);
   const [selectedStatus, setSelectedStatus] = useState("all");
-  const [selectedMotif, setSelectedMotif] = useState("all");
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [dateRange, setDateRange] = useState([
-    {
-      startDate: subDays(new Date(), 30),
-      endDate: new Date(),
-      key: "selection",
-    },
-  ]);
+  const [startDate, setStartDate] = useState(subDays(new Date(), 30));
+  const [endDate, setEndDate] = useState(new Date());
   const [loading, setLoading] = useState(true);
-  const [selectedBonAvoir, setSelectedBonAvoir] = useState(null); // Add this state
-  const [showModal, setShowModal] = useState(false); // Add this state
+  const [selectedBonAvoir, setSelectedBonAvoir] = useState(null);
+  const [showModal, setShowModal] = useState(false);
+  const [showStartCalendar, setShowStartCalendar] = useState(false);
+  const [showEndCalendar, setShowEndCalendar] = useState(false);
 
   useEffect(() => {
     fetchBonsAvoir();
   }, []);
 
-  // Filter bons based on selected status, motif and date range
+  // Filter bons based on selected status and date range
   useEffect(() => {
     let result = [...bons];
 
@@ -75,17 +60,12 @@ const BonAvoirTable = () => {
       result = result.filter((bon) => bon.status === selectedStatus);
     }
 
-    // Filter by motif
-    if (selectedMotif !== "all") {
-      result = result.filter((bon) => bon.motif === selectedMotif);
-    }
-
     // Filter by date range
-    if (dateRange[0].startDate && dateRange[0].endDate) {
-      const start = new Date(dateRange[0].startDate);
+    if (startDate && endDate) {
+      const start = new Date(startDate);
       start.setHours(0, 0, 0, 0);
 
-      const end = new Date(dateRange[0].endDate);
+      const end = new Date(endDate);
       end.setHours(23, 59, 59, 999);
 
       result = result.filter((bon) => {
@@ -95,7 +75,7 @@ const BonAvoirTable = () => {
     }
 
     setFilteredBons(result);
-  }, [selectedStatus, selectedMotif, dateRange, bons]);
+  }, [selectedStatus, startDate, endDate, bons]);
 
   const fetchBonsAvoir = async () => {
     try {
@@ -149,7 +129,6 @@ const BonAvoirTable = () => {
             client_address: bon.client?.address || "",
             bon_livraison_ref: bonLivraisonInfo,
             montant_total: montant_total,
-            motif: bon.motif,
             status: bon.status,
             date_creation: new Date(bon.date_creation || bon.createdAt),
             date_creation_string: bon.date_creation
@@ -185,9 +164,20 @@ const BonAvoirTable = () => {
     }
   };
 
-  const handleDateRangeChange = (ranges) => {
-    setDateRange([ranges.selection]);
-    setShowDatePicker(false);
+  const handleStartDateChange = (e) => {
+    const date = new Date(e.target.value);
+    setStartDate(date);
+    setShowStartCalendar(false);
+  };
+
+  const handleEndDateChange = (e) => {
+    const date = new Date(e.target.value);
+    setEndDate(date);
+    setShowEndCalendar(false);
+  };
+
+  const formatDateForInput = (date) => {
+    return format(date, "yyyy-MM-dd");
   };
 
   const getStatusColor = (status) => {
@@ -208,28 +198,6 @@ const BonAvoirTable = () => {
       annule: "Annulé",
     };
     return texts[status] || status;
-  };
-
-  const getMotifText = (motif) => {
-    const texts = {
-      retour_produit: "Retour Produit",
-      erreur_facturation: "Erreur Facturation",
-      remise_commerciale: "Remise Commerciale",
-      annulation: "Annulation",
-      autre: "Autre",
-    };
-    return texts[motif] || motif;
-  };
-
-  const getMotifColor = (motif) => {
-    const colors = {
-      retour_produit: "info",
-      erreur_facturation: "warning",
-      remise_commerciale: "success",
-      annulation: "danger",
-      autre: "secondary",
-    };
-    return colors[motif] || "secondary";
   };
 
   const handleDeleteBon = async (bonId, num_bon_avoir) => {
@@ -462,34 +430,6 @@ const BonAvoirTable = () => {
       ),
     },
     {
-      accessorKey: "motif",
-      header: () => "Motif",
-      cell: ({ getValue }) => {
-        const motif = getValue();
-        return (
-          <Badge color={getMotifColor(motif)} className="text-capitalize">
-            <FiTag className="me-1" />
-            {getMotifText(motif)}
-          </Badge>
-        );
-      },
-    },
-    {
-      accessorKey: "status",
-      header: () => "Statut",
-      cell: ({ getValue, row }) => {
-        const status = getValue();
-        return (
-          <Badge color={getStatusColor(status)} className="text-capitalize">
-            {getStatusText(status)}
-            {status === "utilise" && row.original.utilise_le && (
-              <small className="ms-1">({row.original.utilise_le})</small>
-            )}
-          </Badge>
-        );
-      },
-    },
-    {
       accessorKey: "date_creation_string",
       header: () => "Date Création",
       cell: ({ getValue }) => <span>{getValue()}</span>,
@@ -521,31 +461,10 @@ const BonAvoirTable = () => {
               <FiEye />
             </button>
 
-            {bon.status === "brouillon" && (
-              <button
-                className="btn btn-sm btn-outline-success"
-                onClick={() => handleValiderBon(bon.id)}
-                title="Valider"
-              >
-                <FiCheck />
-              </button>
-            )}
-
-            {["brouillon", "valide"].includes(bon.status) && (
-              <button
-                className="btn btn-sm btn-outline-danger"
-                onClick={() => handleAnnulerBon(bon.id)}
-                title="Annuler"
-              >
-                <FiX />
-              </button>
-            )}
-
             <button
               className="btn btn-sm btn-outline-dark"
               onClick={() => handleDeleteBon(bon.id, bon.num_bon_avoir)}
               title="Supprimer"
-              disabled={bon.status === "utilise"}
             >
               <FiTrash />
             </button>
@@ -584,16 +503,11 @@ const BonAvoirTable = () => {
       acc[bon.status] = (acc[bon.status] || 0) + 1;
       return acc;
     }, {});
-    const statsByMotif = filteredBons.reduce((acc, bon) => {
-      acc[bon.motif] = (acc[bon.motif] || 0) + 1;
-      return acc;
-    }, {});
 
     return {
       totalBons,
       totalMontant: totalMontant.toFixed(2),
       statsByStatus,
-      statsByMotif,
     };
   };
 
@@ -603,70 +517,74 @@ const BonAvoirTable = () => {
     <>
       <div className="mb-3" style={{ marginTop: "60px" }}>
         <div className="d-flex align-items-center flex-wrap gap-3 mb-3">
-          <InputGroup size="sm" className="w-auto shadow-sm rounded">
-            <InputGroupText className="bg-white border-0">
-              <FiFilter className="text-primary fs-6" />
-            </InputGroupText>
-            <Input
-              type="select"
-              value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value)}
-              className="border-0 bg-white"
-            >
-              {statusOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </Input>
-          </InputGroup>
+          {/* Date Range Filter - Two Separate Buttons */}
+          <div className="d-flex align-items-center gap-2">
+            <div className="position-relative">
+              <button
+                className="btn btn-lg btn-outline-primary d-flex align-items-center"
+                onClick={() => {
+                  setShowStartCalendar(!showStartCalendar);
+                  setShowEndCalendar(false);
+                }}
+              >
+                <FiCalendar className="me-2" />
+                من بداية: {format(startDate, "dd/MM/yyyy")}
+              </button>
 
-          <InputGroup size="sm" className="w-auto shadow-sm rounded">
-            <InputGroupText className="bg-white border-0">
-              <FiTag className="text-primary fs-6" />
-            </InputGroupText>
-            <Input
-              type="select"
-              value={selectedMotif}
-              onChange={(e) => setSelectedMotif(e.target.value)}
-              className="border-0 bg-white"
-            >
-              {motifOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </Input>
-          </InputGroup>
+              {showStartCalendar && (
+                <div
+                  className="position-absolute mt-2"
+                  style={{ zIndex: 1050 }}
+                >
+                  <div className="bg-white p-3 rounded shadow border">
+                    <input
+                      type="date"
+                      className="form-control form-control-sm"
+                      value={formatDateForInput(startDate)}
+                      onChange={handleStartDateChange}
+                      max={formatDateForInput(endDate)}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
 
-          {/* Date Range Filter */}
-          <div className="position-relative">
-            <button
-              className="btn btn-sm btn-primary"
-              onClick={() => setShowDatePicker(!showDatePicker)}
-            >
-              <FiCalendar className="me-2" />
-              {format(dateRange[0].startDate, "dd/MM/yyyy")} -{" "}
-              {format(dateRange[0].endDate, "dd/MM/yyyy")}
-            </button>
+            <span className="text-muted">→</span>
 
-            {showDatePicker && (
-              <div className="position-absolute mt-2" style={{ zIndex: 1050 }}>
-                <DateRangePicker
-                  onChange={handleDateRangeChange}
-                  showSelectionPreview={true}
-                  moveRangeOnFirstSelection={false}
-                  months={1}
-                  ranges={dateRange}
-                  direction="horizontal"
-                />
-              </div>
-            )}
+            <div className="position-relative">
+              <button
+                className="btn btn-lg btn-outline-primary d-flex align-items-center"
+                onClick={() => {
+                  setShowEndCalendar(!showEndCalendar);
+                  setShowStartCalendar(false);
+                }}
+              >
+                <FiCalendar className="me-2" />
+                الى نهاية: {format(endDate, "dd/MM/yyyy")}
+              </button>
+
+              {showEndCalendar && (
+                <div
+                  className="position-absolute mt-2"
+                  style={{ zIndex: 1050 }}
+                >
+                  <div className="bg-white p-3 rounded shadow border">
+                    <input
+                      type="date"
+                      className="form-control form-control-sm"
+                      value={formatDateForInput(endDate)}
+                      onChange={handleEndDateChange}
+                      min={formatDateForInput(startDate)}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           <div>
             <Link to="/bon-avoir/create">
-              <button className="btn btn-sm btn-success">
+              <button className="btn btn-lg btn-success">
                 <FiPlusCircle className="me-2" />
                 Créer Nouveau Bon d'Avoir
               </button>
@@ -675,7 +593,7 @@ const BonAvoirTable = () => {
 
           {/* Refresh Button */}
           <button
-            className="btn btn-sm btn-outline-info"
+            className="btn btn-lg btn-outline-info"
             onClick={fetchBonsAvoir}
             disabled={loading}
           >
@@ -690,7 +608,7 @@ const BonAvoirTable = () => {
 
         {/* Statistics Cards */}
         <div className="row g-3 mb-4">
-          <div className="col-md-3">
+          <div className="col-md-6">
             <div className="card bg-primary text-white">
               <div className="card-body p-3">
                 <h6 className="card-title mb-1">Total Bons</h6>
@@ -701,42 +619,12 @@ const BonAvoirTable = () => {
               </div>
             </div>
           </div>
-          <div className="col-md-3">
+          <div className="col-md-6">
             <div className="card bg-success text-white">
               <div className="card-body p-3">
                 <h6 className="card-title mb-1">Montant Total</h6>
                 <h3 className="mb-0">{stats.totalMontant} DH</h3>
                 <small className="opacity-75">Valeur totale</small>
-              </div>
-            </div>
-          </div>
-          <div className="col-md-3">
-            <div className="card bg-info text-white">
-              <div className="card-body p-3">
-                <h6 className="card-title mb-1">Statuts</h6>
-                <div className="d-flex flex-wrap gap-1">
-                  {Object.entries(stats.statsByStatus).map(
-                    ([status, count]) => (
-                      <Badge key={status} color="light" className="text-dark">
-                        {getStatusText(status)}: {count}
-                      </Badge>
-                    ),
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="col-md-3">
-            <div className="card bg-warning text-dark">
-              <div className="card-body p-3">
-                <h6 className="card-title mb-1">Motifs</h6>
-                <div className="d-flex flex-wrap gap-1">
-                  {Object.entries(stats.statsByMotif).map(([motif, count]) => (
-                    <Badge key={motif} color="light" className="text-dark">
-                      {getMotifText(motif)}: {count}
-                    </Badge>
-                  ))}
-                </div>
               </div>
             </div>
           </div>

@@ -37,6 +37,13 @@ const corsOptions = {
       "http://127.0.0.1:5000",
       "http://localhost:4173",
       "http://127.0.0.1:4173",
+      // ADD THESE FOR REACT DEVELOPMENT PORTS:
+      "http://localhost:3000",
+      "http://127.0.0.1:3000",
+      "http://localhost:5174",
+      "http://127.0.0.1:5174",
+      "http://localhost:5175",
+      "http://127.0.0.1:5175",
     ];
 
     // Add production domains if defined

@@ -9,8 +9,6 @@ import {
   FiShoppingCart,
   FiPlus,
   FiMinus,
-  FiSearch,
-  FiPercent,
   FiDollarSign,
   FiCalendar,
   FiCreditCard,
@@ -20,13 +18,12 @@ import {
   FiCreditCard as FiCard,
   FiDollarSign as FiCash,
   FiXCircle,
-  FiRefreshCw,
   FiFile,
-  FiCheckCircle,
 } from "react-icons/fi";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
 import api from "@/utils/axiosConfig";
+import { useNavigate } from "react-router-dom";
 
 const MySwal = withReactContent(Swal);
 
@@ -44,6 +41,7 @@ const DevisCreate = () => {
   });
 
   const selectRef = useRef();
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchClients();
@@ -427,7 +425,7 @@ const DevisCreate = () => {
           cancelButtonText: "Nouveau devis",
         }).then((result) => {
           if (result.isConfirmed) {
-            window.location.href = `/devis/${response.data.devis.id}`;
+            navigate(`/devis/${response.data.devis.id}`);
           } else {
             setSelectedProduits([]);
             setFormData({

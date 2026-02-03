@@ -512,7 +512,7 @@ const BonAchatTable = () => {
       <div className="mb-3" style={{ marginTop: "60px" }}>
         <div className="d-flex align-items-center flex-wrap gap-3 mb-3">
           {/* Fornisseur Filter */}
-          <InputGroup size="sm" className="w-auto shadow-sm rounded">
+          <InputGroup size="lg" className="w-auto shadow-sm rounded">
             <InputGroupText className="bg-white border-0">
               <FiUser className="text-primary fs-6" />
             </InputGroupText>
@@ -542,7 +542,8 @@ const BonAchatTable = () => {
                 }}
               >
                 <FiCalendar className="me-2" />
-                De: {format(startDate, "dd/MM/yyyy")}
+                <FiCalendar className="me-2" />
+                من بداية: {format(startDate, "dd/MM/yyyy")}{" "}
               </button>
 
               {showStartCalendar && (
@@ -574,7 +575,7 @@ const BonAchatTable = () => {
                 }}
               >
                 <FiCalendar className="me-2" />
-                À: {format(endDate, "dd/MM/yyyy")}
+                الى نهاية: {format(endDate, "dd/MM/yyyy")}
               </button>
 
               {showEndCalendar && (
@@ -599,7 +600,7 @@ const BonAchatTable = () => {
           {/* Create Button */}
           <div>
             <Link to="/bon-achat/create">
-              <button className="btn btn-sm btn-success">
+              <button className="btn btn-lg btn-success">
                 <FiPlusCircle className="me-2" />
                 Nouveau Bon d'Achat
               </button>
@@ -608,7 +609,7 @@ const BonAchatTable = () => {
 
           {/* Refresh Button */}
           <button
-            className="btn btn-sm btn-outline-info"
+            className="btn btn-lg btn-outline-info"
             onClick={fetchBonsAchat}
             disabled={loading}
           >

@@ -418,84 +418,183 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
   const handlePrint = () => {
     if (!bon) return;
 
-    console.log("Bon Livraison:" + JSON.stringify(bon));
-
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
 
-    const formatDate = (dateInput) => {
-      const parsed = parseDateSafely(dateInput);
-      return parsed ? parsed.toLocaleDateString("fr-FR") : "";
+    // Date + time (same style as first function)
+    const formatDateWithTime = (dateInput) => {
+      if (!dateInput) return "—";
+      try {
+        const date = new Date(dateInput);
+        if (isNaN(date.getTime())) return "—";
+        return date.toLocaleString("fr-FR", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+      } catch {
+        return "—";
+      }
     };
 
     const txt = totalToFrenchText(sousTotal);
-    const dateCreation = bon.date_creation;
+    const creationDateFormatted = formatDateWithTime(bon.date_creation);
 
     const content = `
-  <!DOCTYPE html>
-  <html>
-  <head>
-    <title>Bon de Livraison ${bon.deliveryNumber}</title>
-    <style>
-      @page { margin: 10mm; }
-      body { font-family: Arial, sans-serif; font-size: 12px; margin: 0; color: #000; }
-      .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 12px; margin-bottom: 15px; }
-      table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-      th, td { border: 1px solid #ccc; padding: 6px; text-align: left; }
-      th { background: #f5f5f5; }
-      .totals { text-align: right; margin-top: 15px; }
-      .italic { font-style: italic; font-size: 11px; }
-    </style>
-  </head>
-  <body onload="window.print(); window.onafterprint = () => window.close();">
-    <div class="header">
-      <h2>Bon de Livraison</h2>
-      <p>ALUMINIUM OULAD BRAHIM – Tél: +212 671953725</p>
-    </div>
+<!DOCTYPE html>
+<html>
+<head>
+  <title>BON DE LIVRAISON ${bon.deliveryNumber}</title>
+  <meta charset="UTF-8">
 
-    <div style="display:flex;justify-content:space-between;margin:20px 0;">
-      <div>
-        <strong>Client :</strong> ${bon.customerName || ""}
-      </div>
-      <div style="text-align:right;">
-        <strong>N° Bon :</strong> ${bon.deliveryNumber}<br/>
-        <strong>Date création :</strong> ${formatDate(dateCreation)}
-      </div>
-    </div>
+  <style>
+    @page {
+      size: A4;
+      margin: 10mm;
+    }
 
-    <table>
-      <thead>
+    * {
+      box-sizing: border-box;
+      text-transform: uppercase;
+    }
+
+    body {
+      width: 100%;
+      margin: 0;
+      padding: 10mm;
+      font-family: Arial, sans-serif;
+      font-size: 0.8rem;
+      color: #000;
+      background: #fff;
+    }
+
+    .header {
+      text-align: center;
+      border-bottom: 3px solid #000;
+      padding-bottom: 16px;
+      margin-bottom: 20px;
+    }
+
+    h2 {
+      margin: 0 0 10px;
+      font-size: 2rem;
+      letter-spacing: 1px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+    }
+
+    th, td {
+      border: 1.5px solid #000;
+      padding: 10px;
+      vertical-align: middle;
+    }
+
+    th {
+      background: #f2f2f2;
+      text-align: center;
+    }
+
+    td {
+      text-align: left;
+    }
+
+    .totals {
+      margin-top: 25px;
+      text-align: right;
+    }
+
+    .net-box {
+      display: inline-block;
+      border: 2px solid #000;
+      padding: 10px 16px;
+      margin-right: 20px;
+      margin-top: 8px;
+      font-weight: bold;
+      text-align: right;
+    }
+
+    .italic {
+      font-style: italic;
+      font-size: 1.1rem;
+      margin: 30px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="header">
+    <h2>Bon de Livraison</h2>
+    <p>ALUMINIUM OULAD BRAHIM – Tél: +212 671953725</p>
+  </div>
+
+  <div style="display:flex;justify-content:space-between;margin:20px 0;">
+    <div>
+      <strong>Nom Client :</strong> ${bon.customerName || "—"}
+    </div>
+    <div style="text-align:right;">
+      <strong>N° Bon :</strong> ${bon.deliveryNumber}<br/>
+      <strong>Date création :</strong> ${creationDateFormatted}
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Code</th>
+        <th>Désignation</th>
+        <th>Qté</th>
+        <th>Prix U</th>
+        <th>Montant</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${(bon.produits || [])
+        .map(
+          (prod) => `
         <tr>
-          <th>Code</th>
-          <th>Désignation</th>
-          <th>Qté</th>
-          <th>Prix U</th>
-          <th>Total</th>
+          <td>${prod.reference || "—"}</td>
+          <td>${prod.designation || "—"}</td>
+          <td style="text-align:center">
+            ${prod.BonLivraisonProduit?.quantite || 0}
+          </td>
+          <td style="text-align:right">
+            ${Number(prod.BonLivraisonProduit?.prix_unitaire || 0).toFixed(2)}
+          </td>
+          <td style="text-align:right">
+            ${Number(prod.BonLivraisonProduit?.total_ligne || 0).toFixed(2)}
+          </td>
         </tr>
-      </thead>
-      <tbody>
-        ${(bon.produits || [])
-          .map(
-            (prod) => `
-          <tr>
-            <td>${prod.reference || "—"}</td>
-            <td>${prod.designation || "—"}</td>
-            <td>${prod.BonLivraisonProduit?.quantite || 0}</td>
-            <td>${Number(prod.BonLivraisonProduit?.prix_unitaire || 0).toFixed(2)}</td>
-            <td>${Number(prod.BonLivraisonProduit?.total_ligne || 0).toFixed(2)}</td>
-          </tr>
-        `,
-          )
-          .join("")}
-      </tbody>
-    </table>
+      `,
+        )
+        .join("")}
+    </tbody>
+  </table>
 
-    <div class="totals">
-      <p><strong>Total à payer :</strong> ${sousTotal.toFixed(2)}</p>
-      <p class="italic"><strong>${txt}</strong></p>
+  <div class="totals">
+    <div class="net-box">
+      NET À PAYER : ${sousTotal.toFixed(2)} DH
     </div>
-  </body>
-  </html>
+
+    <div class="italic">
+      ${txt}
+    </div>
+  </div>
+
+  <script>
+    window.onload = function () {
+      window.print();
+      setTimeout(() => window.close(), 100);
+    };
+  </script>
+</body>
+</html>
   `;
 
     printWindow.document.open();
@@ -505,127 +604,152 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
 
   const generateAndDownloadPDF = async () => {
     try {
-      const pdfContainer = document.createElement("div");
-      pdfContainer.id = "pdf-container";
-      pdfContainer.style.width = "210mm";
-      pdfContainer.style.minHeight = "150mm";
-      pdfContainer.style.padding = "15mm 20mm";
-      pdfContainer.style.background = "white";
-      pdfContainer.style.color = "#000";
-      pdfContainer.style.fontFamily = "Arial, sans-serif";
-      pdfContainer.style.fontSize = "11px";
-      pdfContainer.style.lineHeight = "1.5";
-      pdfContainer.style.position = "absolute";
-      pdfContainer.style.left = "-9999px";
-      pdfContainer.style.top = "0";
+      const container = document.createElement("div");
 
-      const formatDate = (dateInput) => {
-        const parsed = parseDateSafely(dateInput);
-        return parsed ? parsed.toLocaleDateString("fr-FR") : "";
+      container.style.width = "210mm";
+      container.style.minHeight = "150mm";
+      container.style.padding = "15mm";
+      container.style.background = "#fff";
+      container.style.fontFamily = "Arial, sans-serif";
+      container.style.fontSize = "0.8rem";
+      container.style.textTransform = "uppercase";
+      container.style.boxSizing = "border-box";
+      container.style.position = "absolute";
+      container.style.left = "-9999px";
+      container.style.top = "0";
+      container.style.color = "#000";
+
+      // Date + time (same as print)
+      const formatDateWithTime = (dateInput) => {
+        if (!dateInput) return "—";
+        try {
+          const date = new Date(dateInput);
+          if (isNaN(date.getTime())) return "—";
+          return date.toLocaleString("fr-FR", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+        } catch {
+          return "—";
+        }
       };
 
-      const issueDate = parseDateSafely(bon.date_creation) || new Date();
-      const printTotalText = totalToFrenchText(sousTotal);
+      const totalText = totalToFrenchText(sousTotal);
+      const creationDateFormatted = formatDateWithTime(bon.date_creation);
 
-      pdfContainer.innerHTML = `
-    <div style="text-align:center; border-bottom:2px solid #333; padding-bottom:10px; margin-bottom:15px;">
-      <h1 style="margin:0; color:#2c5aa0;">Bon de Livraison</h1>
-      <h3 style="margin:5px 0;">ALUMINIUM OULAD BRAHIM</h3>
-      <p style="font-size:10px;">Tél: +212 671953725</p>
+      container.innerHTML = `
+  <div style="text-align:center; border-bottom:3px solid #000; padding-bottom:15px; margin-bottom:20px;">
+    <h1 style="margin:0; letter-spacing:1px;">BON DE LIVRAISON</h1>
+    <p style="margin:8px 0; font-weight:bold;">ALUMINIUM OULAD BRAHIM</p>
+    <p>TÉL : +212 671953725</p>
+  </div>
+
+  <div style="display:flex; justify-content:space-between; margin-bottom:25px;">
+    <div>
+      <p><strong>NOM CLIENT :</strong><br/>${bon.customerName || "—"}</p>
     </div>
-
-    <div style="display:flex; justify-content:space-between; margin-bottom:20px;">
-      <div>
-        <h4 style="margin-bottom:5px;">Client</h4>
-        <p><strong>Nom:</strong> ${bon.customerName || ""}</p>
-      </div>
-      <div style="text-align:right;">
-        <h4 style="margin-bottom:5px;">Informations du Bon</h4>
-        <p><strong>N°:</strong> ${bon.deliveryNumber}</p>
-        <p><strong>Date création:</strong> ${formatDate(issueDate)}</p>
-      </div>
+    <div style="text-align:right;">
+      <p><strong>N° BON :</strong> ${bon.deliveryNumber}</p>
+      <p><strong>DATE CRÉATION :</strong> ${creationDateFormatted}</p>
     </div>
+  </div>
 
-    <table style="width:100%; border-collapse:collapse; font-size:10px; margin-bottom:15px;">
-      <thead>
-        <tr style="background-color:#2c5aa0; color:#fff;">
-          <th style="padding:6px; border:1px solid #2c5aa0;">Code</th>
-          <th style="padding:6px; border:1px solid #2c5aa0;">Produit</th>
-          <th style="padding:6px; border:1px solid #2c5aa0;">Qté</th>
-          <th style="padding:6px; border:1px solid #2c5aa0;">Prix U</th>
-          <th style="padding:6px; border:1px solid #2c5aa0;">Total</th>
+  <table style="width:100%; border-collapse:collapse; margin-bottom:25px;">
+    <thead>
+      <tr>
+        <th style="border:1.5px solid #000; padding:10px; text-align:center;">CODE</th>
+        <th style="border:1.5px solid #000; padding:10px; text-align:center;">DÉSIGNATION</th>
+        <th style="border:1.5px solid #000; padding:10px; text-align:center;">QTÉ</th>
+        <th style="border:1.5px solid #000; padding:10px; text-align:center;">PRIX U</th>
+        <th style="border:1.5px solid #000; padding:10px; text-align:center;">MONTANT</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${(bon.produits || [])
+        .map(
+          (p) => `
+        <tr>
+          <td style="border:1.5px solid #000; padding:8px;">${p.reference || "—"}</td>
+          <td style="border:1.5px solid #000; padding:8px;">${p.designation || "—"}</td>
+          <td style="border:1.5px solid #000; padding:8px; text-align:center;">
+            ${p.BonLivraisonProduit?.quantite || 0}
+          </td>
+          <td style="border:1.5px solid #000; padding:8px; text-align:right;">
+            ${Number(p.BonLivraisonProduit?.prix_unitaire || 0).toFixed(2)}
+          </td>
+          <td style="border:1.5px solid #000; padding:8px; text-align:right;">
+            ${Number(p.BonLivraisonProduit?.total_ligne || 0).toFixed(2)}
+          </td>
         </tr>
-      </thead>
-      <tbody>
-        ${(bon.produits || [])
-          .map(
-            (prod, i) => `
-          <tr style="${i % 2 === 0 ? "background:#f9f9f9;" : ""}">
-            <td style="border:1px solid #ddd; padding:5px;">${prod.reference || "N/A"}</td>
-            <td style="border:1px solid #ddd; padding:5px;">${prod.designation || "Produit"}</td>
-            <td style="border:1px solid #ddd; padding:5px; text-align:center;">${
-              prod.BonLivraisonProduit?.quantite || 0
-            }</td>
-            <td style="border:1px solid #ddd; padding:5px; text-align:right;">${parseFloat(
-              prod.BonLivraisonProduit?.prix_unitaire || 0,
-            ).toFixed(2)} </td>
-            <td style="border:1px solid #ddd; padding:5px; text-align:right;">${parseFloat(
-              prod.BonLivraisonProduit?.total_ligne || 0,
-            ).toFixed(2)} </td>
-          </tr>
-        `,
-          )
-          .join("")}
-      </tbody>
-    </table>
+      `,
+        )
+        .join("")}
+    </tbody>
+  </table>
 
-    <div style="text-align:right; margin-top:20px;">
-      <p><strong>Total a Payer:</strong> ${sousTotal.toFixed(2)} </p>
-               <p style="font-size:10px; font-style:italic;">
-    <strong>${printTotalText}</strong>
-  </p>
-
+  <div style="text-align:right; margin-top:25px;">
+    <div style="
+      display:inline-block;
+      border:2px solid #000;
+      padding:12px 18px;
+      margin-right:20px;
+      font-weight:bold;
+    ">
+      NET À PAYER : ${sousTotal.toFixed(2)}
     </div>
-    `;
 
-      document.body.appendChild(pdfContainer);
+    <br/>
 
-      const canvas = await html2canvas(pdfContainer, {
+    <div style="
+      display:inline-block;
+      margin-top:12px;
+      font-style:italic;
+      font-weight:bold;
+      font-size:1.1rem;
+    ">
+      ${totalText}
+    </div>
+  </div>
+`;
+
+      document.body.appendChild(container);
+
+      const canvas = await html2canvas(container, {
         scale: 2,
         useCORS: true,
         backgroundColor: "#fff",
       });
 
-      document.body.removeChild(pdfContainer);
+      document.body.removeChild(container);
 
       const imgData = canvas.toDataURL("image/png");
       const pdf = new jsPDF("p", "mm", "a4");
+
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
       const imgHeight = (canvas.height * pageWidth) / canvas.width;
 
-      if (imgHeight <= pageHeight) {
-        pdf.addImage(imgData, "PNG", 0, 0, pageWidth, imgHeight);
-      } else {
-        let heightLeft = imgHeight;
-        let position = 0;
+      let heightLeft = imgHeight;
+      let position = 0;
 
+      pdf.addImage(imgData, "PNG", 0, position, pageWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
         pdf.addImage(imgData, "PNG", 0, position, pageWidth, imgHeight);
         heightLeft -= pageHeight;
-
-        while (heightLeft > 0) {
-          position -= pageHeight;
-          pdf.addPage();
-          pdf.addImage(imgData, "PNG", 0, position, pageWidth, imgHeight);
-          heightLeft -= pageHeight;
-        }
       }
 
       pdf.save(`Bon-Livraison-${bon.deliveryNumber}.pdf`);
-      topTost("PDF téléchargé avec succès!", "success");
+      topTost("PDF généré et téléchargé !", "success");
     } catch (err) {
-      console.error("Erreur PDF:", err);
-      topTost("Erreur lors de la génération du PDF", "error");
+      console.error("PDF generation error:", err);
+      topTost("Erreur lors de la création du PDF", "error");
     }
   };
 
@@ -709,12 +833,6 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
       hour: "2-digit",
       minute: "2-digit",
     });
-  };
-
-  const formatDateOnly = (dateInput) => {
-    if (!dateInput) return "";
-    const d = parseDateSafely(dateInput);
-    return d ? d.toLocaleDateString("fr-FR") : "";
   };
 
   // Get date from bon

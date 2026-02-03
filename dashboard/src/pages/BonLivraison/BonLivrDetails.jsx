@@ -270,20 +270,6 @@ const BonLivraisonDetailsPage = () => {
 
   const produits = Array.isArray(bon.produits) ? bon.produits : [];
 
-  const formatDateTimeLocal = (iso) => {
-    if (!iso) return "—";
-    const d = new Date(iso);
-    const local = new Date(d.getTime() + 60 * 60 * 1000); // Morocco UTC+1
-    return local.toLocaleString("fr-FR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    });
-  };
-
   const formatDate = (dateInput) => {
     if (!dateInput) return "";
 
@@ -361,18 +347,93 @@ const BonLivraisonDetailsPage = () => {
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Bon de Livraison ${numBL}</title>
+  <title>BON DE LIVRAISON ${numBL}</title>
   <meta charset="UTF-8">
-  <style>
-    @page { margin: 10mm; }
-    body { font-family: Arial, sans-serif; font-size: 12px; margin: 0; color: #000; }
-    .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 12px; margin-bottom: 15px; }
-    table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-    th, td { border: 1px solid #ccc; padding: 6px; text-align: left; }
-    th { background: #f5f5f5; }
-    .totals { text-align: right; margin-top: 15px; }
-    .italic { font-style: italic; font-size: 11px; }
-  </style>
+<style>
+  /* PAGE SETUP */
+  @page {
+    size: A4;
+    margin: 10mm;
+  }
+
+  * {
+    box-sizing: border-box;
+    text-transform: uppercase;
+  }
+
+  body {
+    width: 100%;
+    min-height: 100%;
+    margin: 0;
+    padding: 10mm;
+    font-family: Arial, sans-serif;
+    font-size: 0.8rem;
+    color: #000;
+    background: #fff;
+  }
+
+  .header {
+    text-align: center;
+    border-bottom: 3px solid #000;
+    padding-bottom: 16px;
+    margin-bottom: 20px;
+  }
+
+  h2 {
+    margin: 0 0 10px;
+    font-size: 2rem;
+    letter-spacing: 1px;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 20px 0;
+  }
+
+  th,
+  td {
+    border: 1.5px solid #000;
+    padding: 10px;
+    vertical-align: middle;
+  }
+
+  th {
+    background: #f2f2f2;
+    text-align: center;
+  }
+
+  td {
+    text-align: left;
+  }
+
+  .totals {
+    margin-top: 25px;
+    text-align: right;
+  }
+
+  .totals p {
+    margin: 6px 0;
+  }
+
+  .italic {
+    font-style: italic;
+    font-size: 1.1rem;
+    margin: 30px;
+    font-weight: bold;
+  }
+    .net-box {
+  display: inline-block;
+  border: 2px solid #000;
+  padding: 10px 16px;
+  margin-right: 20px;
+  margin-top: 8px;
+  font-weight: bold;
+  text-align: right;
+}
+
+</style>
+
 </head>
 <body>
   <div class="header">
@@ -382,7 +443,7 @@ const BonLivraisonDetailsPage = () => {
 
   <div style="display:flex;justify-content:space-between;margin:20px 0;">
     <div>
-      <strong>Client :</strong> ${clientName}<br/>
+      <strong>Nom Client :</strong> ${clientName}<br/>
     </div>
     <div style="text-align:right;">
       <strong>N° Bon :</strong> ${numBL}<br/>
@@ -396,8 +457,8 @@ const BonLivraisonDetailsPage = () => {
         <th>Code</th>
         <th>Désignation</th>
         <th>Qté</th>
-        <th>Prix U (DH)</th>
-        <th>Total (DH)</th>
+        <th>Prix U</th>
+        <th>Montant</th>
       </tr>
     </thead>
     <tbody>
@@ -417,11 +478,16 @@ const BonLivraisonDetailsPage = () => {
     </tbody>
   </table>
 
-  <div class="totals">
-    <p><strong>Total à payer :</strong> ${montantTTC.toFixed(2)} DH</p>
-    <p class="italic"><strong>${txt}</strong></p>
+<div class="totals">
+  <div class="net-box">
+    NET À PAYER : ${montantTTC.toFixed(2)} DH
   </div>
-  
+
+  <div class="italic">
+    ${txt}
+  </div>
+</div>
+
   <script>
     window.onload = function() {
       window.print();
@@ -443,82 +509,107 @@ const BonLivraisonDetailsPage = () => {
       const container = document.createElement("div");
       container.style.width = "210mm";
       container.style.minHeight = "150mm";
-      container.style.padding = "15mm 20mm";
+      container.style.padding = "15mm";
       container.style.background = "white";
       container.style.fontFamily = "Arial, sans-serif";
-      container.style.fontSize = "11px";
+      container.style.fontSize = "0.8rem";
+      container.style.textTransform = "uppercase";
+      container.style.boxSizing = "border-box";
       container.style.position = "absolute";
       container.style.left = "-9999px";
       container.style.top = "0";
-
-      const formatDateForPDF = (dateString) => {
+      const formatDateWithTime = (dateString) => {
         if (!dateString) return "—";
         try {
           const date = new Date(dateString);
           if (isNaN(date.getTime())) return "—";
-          return date.toLocaleDateString("fr-FR");
+          return date.toLocaleString("fr-FR", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          });
         } catch {
           return "—";
         }
       };
 
       const pdfTotalText = totalToFrenchText(montantTTC);
+      const creationDateFormatted = formatDateWithTime(bon.date_creation);
 
       container.innerHTML = `
-        <div style="text-align:center; border-bottom:2px solid #333; padding-bottom:10px; margin-bottom:15px;">
-          <h1 style="margin:0; color:#2c5aa0;">Bon de Livraison</h1>
-          <h3 style="margin:5px 0;">ALUMINIUM OULAD BRAHIM</h3>
-          <p style="font-size:10px;">Tél: +212 671953725</p>
-        </div>
+  <div style="text-align:center; border-bottom:3px solid #000; padding-bottom:15px; margin-bottom:20px;">
+    <h1 style="margin:0;">BON DE LIVRAISON</h1>
+    <p style="margin:8px 0;font-weight: bold;">ALUMINIUM OULAD BRAHIM</p>
+    <p>TÉL : +212 671953725</p>
+  </div>
 
-        <div style="display:flex; justify-content:space-between; margin-bottom:20px;">
-          <div>
-            <h4 style="margin-bottom:5px;">Client</h4>
-            <p>${clientName}<br/>
-            ${clientPhone}</p>
-          </div>
-          <div style="text-align:right;">
-            <h4 style="margin-bottom:5px;">Bon de Livraison</h4>
-            <p><strong>N°:</strong> ${numBL}</p>
-            <p><strong>Date création:</strong> ${formatDateForPDF(bon.date_creation)}</p>
-            <p><strong>Date livraison:</strong> ${formatDateForPDF(bon.date_livraison)}</p>
-          </div>
-        </div>
+  <div style="display:flex; justify-content:space-between; margin-bottom:25px;">
+    <div>
+      <p><strong>NOM CLIENT :</strong><br/>${clientName}</p>
+    </div>
+    <div style="text-align:right;">
+      <p><strong>N° BON :</strong> ${numBL}</p>
+      <p><strong>DATE CRÉATION :</strong> ${creationDateFormatted}</p>
+    </div>
+  </div>
 
-        <table style="width:100%; border-collapse:collapse; font-size:10px; margin-bottom:15px;">
-          <thead>
-            <tr style="background-color:#2c5aa0; color:#fff;">
-              <th style="padding:6px; border:1px solid #2c5aa0;">Code</th>
-              <th style="padding:6px; border:1px solid #2c5aa0;">Désignation</th>
-              <th style="padding:6px; border:1px solid #2c5aa0;">Qté</th>
-              <th style="padding:6px; border:1px solid #2c5aa0;">Prix U</th>
-              <th style="padding:6px; border:1px solid #2c5aa0;">Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${produits
-              .map(
-                (p, i) => `
-              <tr style="${i % 2 === 0 ? "background:#f9f9f9;" : ""}">
-                <td style="border:1px solid #ddd; padding:5px;">${p.reference || "—"}</td>
-                <td style="border:1px solid #ddd; padding:5px;">${p.designation || "—"}</td>
-                <td style="border:1px solid #ddd; padding:5px; text-align:center;">${p.BonLivraisonProduit?.quantite || 0}</td>
-                <td style="border:1px solid #ddd; padding:5px; text-align:right;">${Number(p.BonLivraisonProduit?.prix_unitaire || 0).toFixed(2)} </td>
-                <td style="border:1px solid #ddd; padding:5px; text-align:right;">${Number(p.BonLivraisonProduit?.total_ligne || 0).toFixed(2)} </td>
-              </tr>
-            `,
-              )
-              .join("")}
-          </tbody>
-        </table>
+  <table style="width:100%; border-collapse:collapse; margin-bottom:25px;">
+    <thead>
+      <tr>
+        <th style="border:1.5px solid #000; padding:10px;">CODE</th>
+        <th style="border:1.5px solid #000; padding:10px;">DÉSIGNATION</th>
+        <th style="border:1.5px solid #000; padding:10px;">QTÉ</th>
+        <th style="border:1.5px solid #000; padding:10px;">PRIX U</th>
+        <th style="border:1.5px solid #000; padding:10px;">MONTANT</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${produits
+        .map(
+          (p) => `
+        <tr>
+          <td style="border:1.5px solid #000; padding:8px;">${p.reference || "—"}</td>
+          <td style="border:1.5px solid #000; padding:8px;">${p.designation || "—"}</td>
+          <td style="border:1.5px solid #000; padding:8px; text-align:center;">
+            ${p.BonLivraisonProduit?.quantite || 0}
+          </td>
+          <td style="border:1.5px solid #000; padding:8px; text-align:right;">
+            ${Number(p.BonLivraisonProduit?.prix_unitaire || 0).toFixed(2)}
+          </td>
+          <td style="border:1.5px solid #000; padding:8px; text-align:right;">
+            ${Number(p.BonLivraisonProduit?.total_ligne || 0).toFixed(2)}
+          </td>
+        </tr>
+      `,
+        )
+        .join("")}
+    </tbody>
+  </table>
 
-        <div style="text-align:right; margin-top:20px;">
-          <p><strong>Total à payer :</strong> ${montantTTC.toFixed(2)} DH</p>
-          <p style="font-size:10px; font-style:italic;">
-           <strong>${pdfTotalText}</strong>
-          </p>
-        </div>
-      `;
+  <div style="text-align:right; margin-top:25px;">
+    <div style="
+      display:inline-block;
+      border:2px solid #000;
+      padding:12px 18px;
+      margin-right:20px;
+      font-weight:bold;
+    ">
+      NET À PAYER : ${montantTTC.toFixed(2)}
+    </div>
+    <br/>
+    <div style="
+      display:inline-block;
+      padding:12px 18px;
+      margin-right:20px;
+      margin-top:10px;
+      font-style:italic;
+    ">
+      ${pdfTotalText}
+    </div>
+  </div>
+`;
 
       document.body.appendChild(container);
 

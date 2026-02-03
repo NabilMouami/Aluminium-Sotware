@@ -1,22 +1,15 @@
 import React, { useContext, useEffect, useRef, useState } from "react";
 import {
   FiAlignLeft,
-  FiArrowLeft,
   FiArrowRight,
-  FiChevronRight,
   FiMaximize,
   FiMinimize,
   FiMoon,
-  FiPlus,
   FiSun,
+  FiArrowLeft,
 } from "react-icons/fi";
-import LanguagesModal from "./LanguagesModal";
-import NotificationsModal from "./NotificationsModal";
-import ProfileModal from "./ProfileModal";
-import SearchModal from "./SearchModal";
-import TimesheetsModal from "./TimesheetsModal";
-import HeaderDropDownModal from "./HeaderDropDownModal";
-import MegaMenu from "./megaManu/MegaMenu";
+import { useNavigate } from "react-router-dom";
+
 import { NavigationContext } from "../../../contentApi/navigationProvider";
 
 const Header = () => {
@@ -25,6 +18,7 @@ const Header = () => {
   const [navigationExpend, setNavigationExpend] = useState(false);
   const miniButtonRef = useRef(null);
   const expendButtonRef = useRef(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (openMegaMenu) {
@@ -192,6 +186,18 @@ const Header = () => {
               <FiArrowRight size={24} />
             </a>
           </div>
+
+          <a
+            href="#"
+            className="nxl-head-back"
+            onClick={(e) => {
+              e.preventDefault();
+              navigate(-1);
+            }}
+            title="Back"
+          >
+            <FiArrowLeft size={22} />
+          </a>
 
           {/* <!--! [End] nxl-lavel-mega-menu-toggle !-->
                     <!--! [Start] nxl-lavel-mega-menu !--> */}

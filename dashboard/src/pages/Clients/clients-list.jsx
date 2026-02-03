@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import Table from "@/components/shared/table/Table";
 import axios from "axios";
 import { config_url } from "@/utils/config";
+import { useNavigate } from "react-router-dom";
 import PageHeader from "@/components/shared/pageHeader/PageHeader";
 import {
   FiEdit,
@@ -14,6 +15,7 @@ import {
   FiSave,
   FiX,
   FiUsers,
+  FiEye,
 } from "react-icons/fi";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
@@ -33,7 +35,7 @@ const ClientsList = () => {
     formData: {},
     loading: false,
   });
-
+  const navigate = useNavigate();
   useEffect(() => {
     fetchClients();
   }, []);
@@ -327,18 +329,25 @@ const ClientsList = () => {
         return (
           <div className="hstack d-flex gap-2 justify-content-center">
             <button
+              className="btn btn-sm btn-outline-success"
+              onClick={() => navigate(`/clients/${id}`)}
+              title="Details"
+            >
+              <FiEye size={20} />
+            </button>
+            <button
               className="btn btn-sm btn-outline-primary"
               onClick={() => handleEditClick(client)}
               title="Modifier"
             >
-              <FiEdit />
+              <FiEdit size={20} />
             </button>
             <button
               className="btn btn-sm btn-outline-danger"
               onClick={() => handleDeleteClient(id, nom_complete)}
               title="Supprimer"
             >
-              <FiTrash2 />
+              <FiTrash2 size={20} />
             </button>
           </div>
         );

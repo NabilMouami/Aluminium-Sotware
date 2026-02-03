@@ -20,6 +20,7 @@ import {
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
 import api from "@/utils/axiosConfig";
+import { useNavigate } from "react-router-dom";
 
 const MySwal = withReactContent(Swal);
 
@@ -37,6 +38,7 @@ const BonAchatCreate = () => {
   });
 
   const selectRef = useRef();
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchfornisseurs();
@@ -374,7 +376,7 @@ const BonAchatCreate = () => {
           cancelButtonText: "Nouveau bon",
         }).then((result) => {
           if (result.isConfirmed) {
-            window.location.href = `/bon-achat/${response.data.bon.id}`;
+            navigate(`/bon-achat/${response.data.bon.id}`);
           } else {
             resetForm();
           }

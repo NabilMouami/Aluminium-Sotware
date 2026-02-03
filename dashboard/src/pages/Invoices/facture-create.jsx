@@ -27,6 +27,7 @@ import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
 import api from "@/utils/axiosConfig";
 import { format, addDays } from "date-fns";
+import { useNavigate } from "react-router-dom";
 
 const MySwal = withReactContent(Swal);
 
@@ -54,6 +55,7 @@ const FactureCreate = () => {
   });
 
   const selectRef = useRef();
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchClients();
@@ -646,7 +648,7 @@ const FactureCreate = () => {
           cancelButtonText: "Nouvelle facture",
         }).then((result) => {
           if (result.isConfirmed) {
-            window.location.href = `/factures/${response.data.facture.id}`;
+            navigate(`/factures/${response.data.facture.id}`);
           } else if (result.isDenied) {
             // Gérer l'impression ici
             window.open(
