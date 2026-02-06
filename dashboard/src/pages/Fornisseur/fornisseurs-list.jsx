@@ -16,11 +16,12 @@ import {
   FiX,
   FiUsers,
   FiDollarSign,
+  FiEye,
 } from "react-icons/fi";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
 import api from "@/utils/axiosConfig";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 const MySwal = withReactContent(Swal);
 
@@ -40,6 +41,8 @@ const FornisseursList = () => {
     formData: {},
     loading: false,
   });
+
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchFornisseurs();
@@ -361,26 +364,27 @@ const FornisseursList = () => {
         return (
           <div className="hstack d-flex gap-2 justify-content-center">
             <button
+              className="btn btn-sm btn-outline-success"
+              onClick={() => navigate(`/fornisseurs/${id}`)}
+              title="Details"
+            >
+              <FiEye size={20} />
+            </button>
+
+            <button
               className="btn btn-sm btn-outline-primary"
               onClick={() => handleEditClick(fornisseur)}
               title="Modifier"
             >
-              <FiEdit />
+              <FiEdit size={20} />
             </button>
             <button
               className="btn btn-sm btn-outline-danger"
               onClick={() => handleDeleteFornisseur(id, nom_complete)}
               title="Supprimer"
             >
-              <FiTrash2 />
+              <FiTrash2 size={20} />
             </button>
-            <Link
-              to={`/produits?fornisseurId=${id}`}
-              className="btn btn-sm btn-outline-info"
-              title="Voir les produits"
-            >
-              <FiPackage />
-            </Link>
           </div>
         );
       },

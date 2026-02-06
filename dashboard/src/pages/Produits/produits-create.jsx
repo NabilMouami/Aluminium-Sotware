@@ -286,24 +286,6 @@ function ProduitsCreate() {
                   </div>
                 )}
 
-                {/* Observation */}
-                <div className="mb-4">
-                  <label className="form-label">
-                    <FiBarChart2 size={16} className="me-1" />
-                    Observations (optionnel)
-                  </label>
-                  <textarea
-                    className="form-control"
-                    placeholder="Notes supplémentaires, spécifications techniques, etc."
-                    value={observation}
-                    onChange={(e) => setObservation(e.target.value)}
-                    rows="3"
-                  />
-                  <small className="text-muted">
-                    Informations complémentaires sur le produit
-                  </small>
-                </div>
-
                 {/* Form Actions */}
                 <div className="d-flex justify-content-between mt-4">
                   <button

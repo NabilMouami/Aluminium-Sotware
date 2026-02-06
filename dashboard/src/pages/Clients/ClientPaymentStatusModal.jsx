@@ -18,6 +18,14 @@ import {
   FiEye,
 } from "react-icons/fi";
 
+const statusOptions = [
+  { value: "all", label: "Tous les statuts" },
+  { value: "brouillon", label: "Non Payé" },
+  { value: "payé", label: "Payé" },
+  { value: "partiellement_payée", label: "Partiellement Payé" },
+  { value: "annulée", label: "Annulé" },
+];
+
 function ClientPaymentStatusModal({ clientId, clientName, onClose }) {
   const [loading, setLoading] = useState(true);
   const [paymentData, setPaymentData] = useState(null);
@@ -66,17 +74,26 @@ function ClientPaymentStatusModal({ clientId, clientName, onClose }) {
 
   // Get status color
   const getStatusColor = (status) => {
-    switch (status) {
-      case "payé":
-      case "payée":
-        return "success";
-      case "partiellement_payée":
-        return "warning";
-      case "brouillon":
-        return "danger";
-      default:
-        return "secondary";
-    }
+    const colors = {
+      brouillon: "bg-danger text-white",
+      envoyé: "bg-primary text-white",
+      payé: "bg-success text-white",
+      partiellement_payée: "bg-warning text-dark",
+      en_retard: "bg-danger text-white",
+      annulée: "bg-dark text-white",
+      en_attente: "bg-info text-white",
+    };
+    return colors[status] || "bg-secondary text-white";
+  };
+
+  const getStatusText = (status) => {
+    const texts = {
+      brouillon: "Non Payé",
+      payé: "Payé",
+      partiellement_payée: "Partiellement Payé",
+      annulée: "Annulé",
+    };
+    return texts[status] || status;
   };
 
   // Get status icon
@@ -267,8 +284,8 @@ function ClientPaymentStatusModal({ clientId, clientName, onClose }) {
                               {paymentData.summary.totals.totalRemaining}
                             </h3>
                             <small className="text-muted">
-                              {paymentData.summary.counts.brouillon}{" "}
-                              brouillon(s),{" "}
+                              {paymentData.summary.counts.brouillon} Non
+                              Payé(s),{" "}
                               {paymentData.summary.counts.partiellement_payée}{" "}
                               partiellement payé(s)
                             </small>
@@ -350,10 +367,10 @@ function ClientPaymentStatusModal({ clientId, clientName, onClose }) {
                                     </td>
                                     <td>
                                       <span
-                                        className={`badge bg-${getStatusColor(doc.paymentStatus)}`}
+                                        className={`badge ${getStatusColor(doc.paymentStatus)}`}
                                       >
                                         {getStatusIcon(doc.paymentStatus)}
-                                        {doc.paymentStatus.replace("_", " ")}
+                                        {getStatusText(doc.paymentStatus)}
                                       </span>
                                     </td>
                                     <td>
@@ -427,73 +444,13 @@ function ClientPaymentStatusModal({ clientId, clientName, onClose }) {
                     </div>
                   </div>
                 </div>
-
-                {/* Summary Section */}
-                <div className="row mt-4">
-                  <div className="col-12">
-                    <div className="card">
-                      <div className="card-body">
-                        <h6 className="card-title mb-3">Résumé</h6>
-                        <div className="row">
-                          <div className="col-md-6">
-                            <ul className="list-unstyled">
-                              <li className="mb-2">
-                                <strong>Statut Global:</strong>{" "}
-                                <span
-                                  className={`badge bg-${getStatusColor(paymentData.summary.overallStatus)}`}
-                                >
-                                  {paymentData.summary.overallStatus.replace(
-                                    "_",
-                                    " ",
-                                  )}
-                                </span>
-                              </li>
-                              <li className="mb-2">
-                                <strong>Total Documents:</strong>{" "}
-                                {paymentData.summary.totals.count}
-                              </li>
-                              <li className="mb-2">
-                                <strong>Documents Brouillon:</strong>{" "}
-                                {paymentData.summary.counts.brouillon}
-                              </li>
-                              <li>
-                                <strong>Documents Partiellement Payés:</strong>{" "}
-                                {paymentData.summary.counts.partiellement_payée}
-                              </li>
-                            </ul>
-                          </div>
-                          <div className="col-md-6">
-                            <ul className="list-unstyled">
-                              <li className="mb-2">
-                                <strong>Montant Total des Documents:</strong>{" "}
-                                {paymentData.summary.totals.totalAmount}
-                              </li>
-                              <li className="mb-2">
-                                <strong>Total Déjà Payé:</strong>{" "}
-                                {paymentData.summary.totals.totalPaid}
-                              </li>
-                              <li>
-                                <strong>Total Restant à Payer:</strong>{" "}
-                                {paymentData.summary.totals.totalRemaining}
-                              </li>
-                            </ul>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
               </>
             )}
           </div>
 
           {/* Footer */}
           <div className="modal-footer">
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={onClose}
-            >
+            <button type="button" className="btn btn-danger" onClick={onClose}>
               Fermer
             </button>
           </div>

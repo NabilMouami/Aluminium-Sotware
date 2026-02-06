@@ -6,6 +6,7 @@ import {
   ModalFooter,
   Badge,
   Button,
+  Input,
 } from "reactstrap";
 import {
   FiX,
@@ -14,6 +15,7 @@ import {
   FiSave,
   FiCheckCircle,
   FiTruck,
+  FiCreditCard,
   FiPackage,
   FiUser,
   FiShoppingCart,
@@ -31,11 +33,10 @@ const MySwal = withReactContent(Swal);
 
 // Bon Achat status options
 const statusOptions = [
-  { value: "brouillon", label: "Brouillon" },
-  { value: "en_cours", label: "En cours" },
-  { value: "reçu", label: "Reçu" },
-  { value: "annulé", label: "Annulé" },
-  { value: "partiellement_reçu", label: "Partiellement reçu" },
+  { value: "brouillon", label: "Non Payé" },
+  { value: "payé", label: "Payé" },
+  { value: "partiellement_payée", label: "Partiellement Payé" },
+  { value: "annulée", label: "Annulé" },
 ];
 
 const totalToFrenchText = (amount) => {
@@ -244,7 +245,7 @@ const BonAchatDetailsModal = ({
         return "success";
       case "annulé":
         return "danger";
-      case "partiellement_reçu":
+      case "partiellement_payée":
         return "info";
       default:
         return "secondary";
@@ -301,23 +302,6 @@ const BonAchatDetailsModal = ({
       topTost(errorMessage, "error");
     } finally {
       setIsSubmitting(false);
-    }
-  };
-
-  const handleReceiveStock = async () => {
-    const result = await MySwal.fire({
-      title: "Réceptionner le stock ?",
-      text: "Voulez-vous marquer ce bon d'achat comme reçu et augmenter le stock des produits ?",
-      icon: "question",
-      showCancelButton: true,
-      confirmButtonColor: "#3085d6",
-      cancelButtonColor: "#d33",
-      confirmButtonText: "Oui, réceptionner",
-      cancelButtonText: "Annuler",
-    });
-
-    if (result.isConfirmed) {
-      await updateStockStatus();
     }
   };
 
@@ -685,6 +669,10 @@ const BonAchatDetailsModal = ({
           <FiPackage className="me-2" />
           Bon d'Achat #{bonAchat.num_bon_achat}
         </div>
+        <Badge color={getStatusBadge(formData.status)} className="ms-2">
+          {statusOptions.find((opt) => opt.value === formData.status)?.label ||
+            formData.status}
+        </Badge>
       </ModalHeader>
 
       <ModalBody>
@@ -730,6 +718,25 @@ const BonAchatDetailsModal = ({
                   <strong>Quantité reçue:</strong> {totalQuantiteRecue} unités
                 </p>
               </div>
+            </div>
+          </div>
+          <div className="col-md-4">
+            <div className="form-group mb-3">
+              <label className="form-label">
+                <FiCreditCard className="me-2" />
+                Statut
+              </label>
+              <Input
+                type="select"
+                value={formData.status}
+                onChange={(e) => handleInputChange("status", e.target.value)}
+              >
+                {statusOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </Input>
             </div>
           </div>
 
@@ -893,17 +900,15 @@ const BonAchatDetailsModal = ({
               Fermer
             </Button>
 
-            {canEdit && (
-              <Button
-                onClick={handleSubmit}
-                color="primary"
-                disabled={isSubmitting}
-                className="mt-4"
-              >
-                <FiSave className="me-2" />
-                {isSubmitting ? "Enregistrement..." : "Enregistrer"}
-              </Button>
-            )}
+            <Button
+              onClick={handleSubmit}
+              color="primary"
+              disabled={isSubmitting}
+              className="mt-4"
+            >
+              <FiSave className="me-2" />
+              {isSubmitting ? "Enregistrement..." : "Enregistrer"}
+            </Button>
           </div>
         </div>
       </ModalFooter>

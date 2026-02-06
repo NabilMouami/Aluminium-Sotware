@@ -15,7 +15,7 @@ import {
 } from "react-icons/fi";
 import { config_url } from "@/utils/config";
 import Swal from "sweetalert2";
-import { Input, InputGroup, InputGroupText, Label, Button } from "reactstrap";
+import { Input, InputGroup, InputGroupText } from "reactstrap";
 import withReactContent from "sweetalert2-react-content";
 import { Link } from "react-router-dom";
 import DevisDetailsModal from "./DevisDetailsModal";
@@ -25,7 +25,7 @@ const MySwal = withReactContent(Swal);
 // Devis status options
 const statusOptions = [
   { value: "all", label: "Tous les statuts" },
-  { value: "brouillon", label: "Brouillon" },
+  { value: "brouillon", label: "Non Payé" },
   { value: "envoyé", label: "Envoyé" },
   { value: "accepté", label: "Accepté" },
   { value: "refusé", label: "Refusé" },
@@ -165,14 +165,14 @@ const ListDevis = () => {
 
   const getStatusColor = (status) => {
     const colors = {
-      brouillon: "bg-secondary text-white",
+      brouillon: "bg-danger text-white",
       envoyé: "bg-primary text-white",
       accepté: "bg-success text-white",
       refusé: "bg-danger text-white",
       expiré: "bg-dark text-white",
       transformé_en_commande: "bg-info text-white",
       transformé_en_bl: "bg-info text-white",
-      transformé_en_facture: "bg-red text-white",
+      transformé_en_facture: "bg-success text-white",
       en_attente: "bg-warning text-dark",
     };
     return colors[status] || "bg-secondary text-white";
@@ -180,7 +180,7 @@ const ListDevis = () => {
 
   const getStatusText = (status) => {
     const texts = {
-      brouillon: "Brouillon",
+      brouillon: "Non Payé",
       envoyé: "Envoyé",
       accepté: "Accepté",
       refusé: "Refusé",

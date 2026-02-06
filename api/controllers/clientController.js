@@ -1,6 +1,7 @@
 const {
   Client,
   Devis,
+  Advancement,
   BonLivraison,
   Facture,
   Produit,
@@ -1631,6 +1632,8 @@ const getClientPaymentStatus = async (req, res) => {
     const { id } = req.params;
     const { includeDetails = false } = req.query;
 
+    console.log(`=== PAYMENT STATUS for client ${id} ===`);
+
     const UNPAID_STATUSES = ["brouillon", "partiellement_payée"];
 
     // ------------------ BonLivraison (UNPAID ONLY)
@@ -1639,22 +1642,24 @@ const getClientPaymentStatus = async (req, res) => {
         client_id: id,
         status: { [Op.in]: UNPAID_STATUSES },
       },
-      include:
-        includeDetails === "true"
-          ? [
-              {
-                model: Advancement,
-                as: "advancements",
-                attributes: [
-                  "id",
-                  "amount",
-                  "paymentDate",
-                  "paymentMethod",
-                  "reference",
-                ],
-              },
-            ]
-          : [],
+      include: [
+        {
+          model: Advancement,
+          as: "advancements",
+          attributes: [
+            "id",
+            "amount",
+            "paymentDate",
+            "paymentMethod",
+            "reference",
+            "bonLivraisonId",
+            "bon_livraison_id", // Try both field names
+            "factureId",
+            "facture_id",
+          ],
+          required: false, // LEFT JOIN instead of INNER JOIN
+        },
+      ],
       attributes: [
         "id",
         "num_bon_livraison",
@@ -1668,28 +1673,47 @@ const getClientPaymentStatus = async (req, res) => {
       order: [["date_creation", "DESC"]],
     });
 
+    console.log(`Found ${bonLivraisons.length} BonLivraison`);
+
+    // Debug: Check advancements for each BL
+    bonLivraisons.forEach((bl, index) => {
+      console.log(
+        `BL ${index + 1}: ${bl.num_bon_livraison} - Status: ${bl.status}`,
+      );
+      console.log(`  Advancements count: ${bl.advancements?.length || 0}`);
+      if (bl.advancements && bl.advancements.length > 0) {
+        bl.advancements.forEach((adv, i) => {
+          console.log(
+            `  Advancement ${i + 1}: ${adv.amount} - bonLivraisonId: ${adv.bonLivraisonId}, bon_livraison_id: ${adv.bon_livraison_id}`,
+          );
+        });
+      }
+    });
+
     // ------------------ Facture (UNPAID ONLY)
     const factures = await Facture.findAll({
       where: {
         client_id: id,
         status: { [Op.in]: UNPAID_STATUSES },
       },
-      include:
-        includeDetails === "true"
-          ? [
-              {
-                model: Advancement,
-                as: "advancements",
-                attributes: [
-                  "id",
-                  "amount",
-                  "paymentDate",
-                  "paymentMethod",
-                  "reference",
-                ],
-              },
-            ]
-          : [],
+      include: [
+        {
+          model: Advancement,
+          as: "advancements",
+          attributes: [
+            "id",
+            "amount",
+            "paymentDate",
+            "paymentMethod",
+            "reference",
+            "bonLivraisonId",
+            "bon_livraison_id",
+            "factureId",
+            "facture_id",
+          ],
+          required: false,
+        },
+      ],
       attributes: [
         "id",
         "num_facture",
@@ -1704,19 +1728,46 @@ const getClientPaymentStatus = async (req, res) => {
       order: [["date_creation", "DESC"]],
     });
 
-    // ------------------ Status calculator (NO PAYÉ)
+    console.log(`Found ${factures.length} Factures`);
+
+    // Debug: Check advancements for each Facture
+    factures.forEach((f, index) => {
+      console.log(
+        `Facture ${index + 1}: ${f.num_facture} - Status: ${f.status}`,
+      );
+      console.log(`  Advancements count: ${f.advancements?.length || 0}`);
+      if (f.advancements && f.advancements.length > 0) {
+        f.advancements.forEach((adv, i) => {
+          console.log(
+            `  Advancement ${i + 1}: ${adv.amount} - factureId: ${adv.factureId}, facture_id: ${adv.facture_id}`,
+          );
+        });
+      }
+    });
+
+    // ------------------ Status calculator
     const calculateDocumentStatus = (doc, type) => {
       const montantTTC = parseFloat(doc.montant_ttc) || 0;
 
       let totalPaid = 0;
       let totalRemaining = 0;
 
+      console.log(
+        `\nCalculating status for ${type} ${doc.num_bon_livraison || doc.num_facture}:`,
+      );
+      console.log(`  Montant TTC: ${montantTTC}`);
+      console.log(`  Original status: ${doc.status}`);
+
       if (type === "bon-livraison") {
-        if (doc.advancements) {
-          totalPaid = doc.advancements.reduce(
-            (sum, adv) => sum + parseFloat(adv.amount || 0),
-            0,
-          );
+        if (doc.advancements && doc.advancements.length > 0) {
+          console.log(`  Found ${doc.advancements.length} advancements`);
+          totalPaid = doc.advancements.reduce((sum, adv) => {
+            const amount = parseFloat(adv.amount || 0);
+            console.log(`    Advancement ${adv.id}: ${amount}`);
+            return sum + amount;
+          }, 0);
+        } else {
+          console.log(`  No advancements found`);
         }
         totalRemaining = montantTTC - totalPaid;
       }
@@ -1725,9 +1776,30 @@ const getClientPaymentStatus = async (req, res) => {
         totalPaid = parseFloat(doc.montant_paye) || 0;
         totalRemaining =
           parseFloat(doc.montant_restant) || montantTTC - totalPaid;
+        console.log(
+          `  From Facture: montant_paye=${doc.montant_paye}, montant_restant=${doc.montant_restant}`,
+        );
+
+        // Also check advancements for factures
+        if (doc.advancements && doc.advancements.length > 0) {
+          console.log(
+            `  Also found ${doc.advancements.length} advancements for facture`,
+          );
+          const advancementsTotal = doc.advancements.reduce(
+            (sum, adv) => sum + parseFloat(adv.amount || 0),
+            0,
+          );
+          console.log(`  Advancements total: ${advancementsTotal}`);
+          // For factures, advancements should be reflected in montant_paye already
+          // but we can double-check
+        }
       }
 
       const paymentStatus = totalPaid > 0 ? "partiellement_payée" : "brouillon";
+
+      console.log(
+        `  Result: totalPaid=${totalPaid}, totalRemaining=${totalRemaining}, paymentStatus=${paymentStatus}`,
+      );
 
       return {
         documentId: doc.id,
@@ -1770,6 +1842,13 @@ const getClientPaymentStatus = async (req, res) => {
     const overallStatus =
       totals.totalPaid > 0 ? "partiellement_payée" : "brouillon";
 
+    console.log(`\n=== FINAL RESULTS ===`);
+    console.log(`Total documents: ${totals.count}`);
+    console.log(`Total amount: ${totals.totalAmount}`);
+    console.log(`Total paid: ${totals.totalPaid}`);
+    console.log(`Total remaining: ${totals.totalRemaining}`);
+    console.log(`Overall status: ${overallStatus}`);
+
     return res.json({
       message: "Statut de paiement (documents non payés)",
       summary: {
@@ -1791,6 +1870,7 @@ const getClientPaymentStatus = async (req, res) => {
     });
   } catch (err) {
     console.error("Error in getClientPaymentStatus:", err);
+    console.error("Error stack:", err.stack);
     return res.status(500).json({
       message: "Erreur serveur",
       error: err.message,

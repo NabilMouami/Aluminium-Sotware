@@ -30,7 +30,7 @@ const MySwal = withReactContent(Swal);
 
 // Devis status options
 const statusOptions = [
-  { value: "brouillon", label: "Brouillon" },
+  { value: "brouillon", label: "Non Payé" },
   { value: "envoyé", label: "Envoyé" },
   { value: "accepté", label: "Accepté" },
   { value: "refusé", label: "Refusé" },
@@ -247,7 +247,7 @@ const DevisDetailsModal = ({
   const getStatusBadge = (status) => {
     switch (status) {
       case "brouillon":
-        return "warning";
+        return "danger";
       case "envoyé":
         return "primary";
       case "accepté":

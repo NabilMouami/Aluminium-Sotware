@@ -36,7 +36,7 @@ const MySwal = withReactContent(Swal);
 // Updated status options to match your backend
 const statusOptions = [
   { value: "all", label: "Tous les statuts" },
-  { value: "brouillon", label: "Brouillon" },
+  { value: "brouillon", label: "Non Payé" },
   { value: "payé", label: "Payé" },
   { value: "partiellement_payée", label: "Partiellement Payé" },
   { value: "annulée", label: "Annulé" },
@@ -260,7 +260,7 @@ const BonLivraisonTable = () => {
 
   const getStatusColor = (status) => {
     const colors = {
-      brouillon: "bg-secondary text-white",
+      brouillon: "bg-danger text-white",
       envoyé: "bg-primary text-white",
       payé: "bg-success text-white",
       partiellement_payée: "bg-warning text-dark",
@@ -273,13 +273,10 @@ const BonLivraisonTable = () => {
 
   const getStatusText = (status) => {
     const texts = {
-      brouillon: "Brouillon",
-      envoyé: "Envoyé",
+      brouillon: "Non Payé",
       payé: "Payé",
       partiellement_payée: "Partiellement Payé",
-      en_retard: "En Retard",
       annulée: "Annulé",
-      en_attente: "En Attente",
     };
     return texts[status] || status;
   };
@@ -720,7 +717,7 @@ const BonLivraisonTable = () => {
                   <FiClock className="text-white fs-3" />
                 </div>
                 <div>
-                  <h6 className="text-muted mb-1">Bons Brouillon</h6>
+                  <h6 className="text-muted mb-1">Bons Non Payé</h6>
                   <h3 className="mb-0">{statistics.draftBons}</h3>
                   <small className="text-muted">En attente de traitement</small>
                 </div>

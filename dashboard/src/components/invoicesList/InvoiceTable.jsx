@@ -44,7 +44,7 @@ const MySwal = withReactContent(Swal);
 // Invoice status options matching your backend
 const statusOptions = [
   { value: "all", label: "Tous les statuts" },
-  { value: "brouillon", label: "Brouillon" },
+  { value: "brouillon", label: "Non Payé" },
   { value: "payée", label: "Payée" },
   { value: "partiellement_payée", label: "Partiellement Payée" },
   { value: "annulée", label: "Annulée" },
@@ -332,7 +332,7 @@ const FactureTable = () => {
 
   const getStatusColor = (status) => {
     const colors = {
-      brouillon: "bg-secondary text-white",
+      brouillon: "bg-danger text-white",
       payée: "bg-success text-white",
       partiellement_payée: "bg-warning text-dark",
       annulée: "bg-dark text-white",
@@ -342,7 +342,7 @@ const FactureTable = () => {
 
   const getStatusText = (status) => {
     const texts = {
-      brouillon: "Brouillon",
+      brouillon: "Non Payé",
       payée: "Payée",
       partiellement_payée: "Part. Payée",
       annulée: "Annulée",

@@ -43,6 +43,7 @@ import FactureDetailsPage from "../pages/Invoices/FactureDetails";
 import BonAchatDetailsPage from "../pages/BonAchat/BonAchatDetails";
 import BonAvoirDetailsPage from "../pages/BonAvoir/BonAvoirDetails";
 import ClientDetails from "../pages/Clients/ClientDetails";
+import FornisseurDetails from "../pages/Fornisseur/FornisseurDetails";
 
 export const router = createBrowserRouter([
   {
@@ -120,6 +121,10 @@ export const router = createBrowserRouter([
       {
         path: "fornisseurs/create",
         element: <FornisseurCreate />,
+      },
+      {
+        path: "fornisseurs/:id",
+        element: <FornisseurDetails />,
       },
       {
         path: "produits/create",

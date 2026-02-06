@@ -18,14 +18,20 @@ import {
   FiCreditCard as FiCard,
   FiDollarSign as FiCash,
   FiXCircle,
-  FiRefreshCw,
 } from "react-icons/fi";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
 import api from "@/utils/axiosConfig";
 import { useNavigate } from "react-router-dom";
+import { Input } from "reactstrap";
 
 const MySwal = withReactContent(Swal);
+
+const statusOptions = [
+  { value: "brouillon", label: "Non Payé" },
+  { value: "payé", label: "Payé" },
+  { value: "partiellement_payée", label: "Partiellement Payé" },
+];
 
 const BonLivraisonCreate = () => {
   const [loading, setLoading] = useState(false);
@@ -38,6 +44,7 @@ const BonLivraisonCreate = () => {
   const [formData, setFormData] = useState({
     clientId: "",
     mode_reglement: "espèces",
+    status: "brouillon",
     notes: "",
     date_livraison: "",
   });
@@ -476,6 +483,7 @@ const BonLivraisonCreate = () => {
     const payload = {
       clientId: formData.clientId,
       mode_reglement: formData.mode_reglement,
+      status: formData.status,
       notes: formData.notes,
       date_livraison: formData.date_livraison || null,
       produits: selectedProduits.map((p) => ({
@@ -555,6 +563,7 @@ const BonLivraisonCreate = () => {
             setFormData({
               clientId: "",
               mode_reglement: "espèces",
+              status: "brouillon",
               notes: "",
               date_livraison: new Date().toISOString().split("T")[0],
             });
@@ -585,19 +594,6 @@ const BonLivraisonCreate = () => {
       icon: type,
       title: message,
     });
-  };
-
-  const handleResetForm = () => {
-    setSelectedProduits([]);
-    setAdvancements([]);
-    setShowAdvancements(false);
-    setFormData({
-      clientId: formData.clientId,
-      mode_reglement: formData.mode_reglement,
-      notes: "",
-      date_livraison: new Date().toISOString().split("T")[0],
-    });
-    topTost("Formulaire réinitialisé", "info");
   };
 
   const totals = calculateTotals();
@@ -712,6 +708,31 @@ const BonLivraisonCreate = () => {
                         })
                       }
                     />
+                  </div>
+
+                  <div className="col-6">
+                    <div className="form-group mb-3">
+                      <label className="form-label">
+                        <FiCreditCard className="me-2" />
+                        Statut
+                      </label>
+                      <Input
+                        type="select"
+                        value={formData.status}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            status: e.target.value,
+                          })
+                        }
+                      >
+                        {statusOptions.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </Input>
+                    </div>
                   </div>
 
                   <div className="col-12">

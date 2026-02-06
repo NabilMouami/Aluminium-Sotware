@@ -38,15 +38,6 @@ const statusOptions = [
   { value: "annule", label: "Annulé" },
 ];
 
-// Motif options
-const motifOptions = [
-  { value: "retour_produit", label: "Retour Produit" },
-  { value: "erreur_facturation", label: "Erreur Facturation" },
-  { value: "remise_commerciale", label: "Remise Commerciale" },
-  { value: "annulation", label: "Annulation" },
-  { value: "autre", label: "Autre" },
-];
-
 const totalToFrenchText = (amount) => {
   if (amount === 0) return "Zéro dirham";
 
@@ -245,23 +236,6 @@ const BonAvoirDetailsModal = ({
         return "success";
       case "annule":
         return "danger";
-      default:
-        return "secondary";
-    }
-  };
-
-  const getMotifBadge = (motif) => {
-    switch (motif) {
-      case "retour_produit":
-        return "info";
-      case "erreur_facturation":
-        return "warning";
-      case "remise_commerciale":
-        return "success";
-      case "annulation":
-        return "danger";
-      case "autre":
-        return "secondary";
       default:
         return "secondary";
     }
@@ -487,7 +461,6 @@ const BonAvoirDetailsModal = ({
     <div class="info-block" style="text-align:right;">
       <p><strong>N° Bon d'Avoir:</strong> ${bonAvoir.num_bon_avoir}</p>
       <p><strong>Date création:</strong> ${formatDate(issueDate)}</p>
-      <p><strong>Motif:</strong> ${getMotifLabel(bonAvoir.motif)}</p>
       <p><strong>Statut:</strong> ${getStatusLabel(bonAvoir.status)}</p>
     </div>
   </div>
@@ -591,7 +564,6 @@ const BonAvoirDetailsModal = ({
           <h4 style="margin-bottom:5px;">Informations du Bon d'Avoir</h4>
           <p><strong>N°:</strong> ${bonAvoir.num_bon_avoir}</p>
           <p><strong>Date création:</strong> ${formatDate(issueDate)}</p>
-          <p><strong>Motif:</strong> ${getMotifLabel(bonAvoir.motif)}</p>
           <p><strong>Statut:</strong> ${getStatusLabel(bonAvoir.status)}</p>
         </div>
       </div>
@@ -689,9 +661,6 @@ const BonAvoirDetailsModal = ({
           <Badge color={getStatusBadge(formData.status)} className="ms-2">
             {getStatusLabel(formData.status)}
           </Badge>
-          <Badge color={getMotifBadge(bonAvoir.motif)} className="ms-2">
-            {getMotifLabel(bonAvoir.motif)}
-          </Badge>
         </div>
       </ModalHeader>
 
@@ -742,9 +711,6 @@ const BonAvoirDetailsModal = ({
                     {new Date(bonAvoir.utilise_le).toLocaleDateString("fr-FR")}
                   </p>
                 )}
-                <p>
-                  <strong>Motif:</strong> {getMotifLabel(bonAvoir.motif)}
-                </p>
               </div>
             </div>
           </div>
@@ -760,24 +726,6 @@ const BonAvoirDetailsModal = ({
                 disabled={!canEdit || isUsed}
               >
                 {statusOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="col-md-4">
-            <div className="form-group mb-3">
-              <label className="form-label">Motif *</label>
-              <select
-                className="form-control"
-                value={formData.motif}
-                onChange={(e) => handleInputChange("motif", e.target.value)}
-                disabled={!canEdit || isUsed}
-              >
-                {motifOptions.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
                   </option>
@@ -872,9 +820,6 @@ const BonAvoirDetailsModal = ({
                   <p>
                     <strong>Statut:</strong> {getStatusLabel(formData.status)}
                   </p>
-                  <p>
-                    <strong>Motif:</strong> {getMotifLabel(formData.motif)}
-                  </p>
                 </div>
                 <div className="col-md-6 text-end">
                   <h6>Montants</h6>
@@ -915,7 +860,7 @@ const BonAvoirDetailsModal = ({
             <Button
               onClick={generateAndDownloadPDF}
               color="outline-secondary"
-              className="me-2"
+              className="mt-4"
             >
               <FiDownload className="me-2" />
               PDF
@@ -923,18 +868,6 @@ const BonAvoirDetailsModal = ({
           </div>
 
           <div>
-            {canValidate && (
-              <Button
-                onClick={handleValidate}
-                color="info"
-                className="me-2"
-                disabled={isSubmitting}
-              >
-                <FiCheck className="me-2" />
-                Valider
-              </Button>
-            )}
-
             <Button onClick={toggle} color="danger" className="me-2">
               <FiX className="me-2" />
               Fermer
@@ -945,6 +878,7 @@ const BonAvoirDetailsModal = ({
                 onClick={handleSubmit}
                 color="primary"
                 disabled={isSubmitting}
+                className="mt-4"
               >
                 <FiSave className="me-2" />
                 {isSubmitting ? "Enregistrement..." : "Enregistrer"}

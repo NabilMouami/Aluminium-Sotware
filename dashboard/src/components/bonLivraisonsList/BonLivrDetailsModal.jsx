@@ -68,7 +68,7 @@ const parseDateSafely = (dateInput) => {
 
 // Updated status options
 const statusOptions = [
-  { value: "brouillon", label: "Brouillon" },
+  { value: "brouillon", label: "Non Payé" },
   { value: "payé", label: "Payé" },
   { value: "partiellement_payée", label: "Partiellement Payé" },
   { value: "annulée", label: "Annulé" },
@@ -310,7 +310,7 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
   const getStatusBadge = (status) => {
     switch (status) {
       case "brouillon":
-        return "warning";
+        return "danger";
       case "payé":
         return "success";
       case "partiellement_payée":

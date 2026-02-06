@@ -248,23 +248,36 @@ const BonAchatTable = () => {
   };
 
   // Handle updates
+  // Handle updates
   const handleUpdate = (updatedBonAchat) => {
+    // Ensure numeric fields are properly converted
+    const formattedBon = {
+      ...updatedBonAchat,
+      montant_ht: parseFloat(updatedBonAchat.montant_ht) || 0,
+      montant_ttc: parseFloat(updatedBonAchat.montant_ttc) || 0,
+      tva: parseFloat(updatedBonAchat.tva) || 0,
+    };
+
     setBons((prev) =>
-      prev.map((bon) =>
-        bon.id === updatedBonAchat.id ? updatedBonAchat : bon,
-      ),
+      prev.map((bon) => (bon.id === formattedBon.id ? formattedBon : bon)),
     );
     topTost("Bon d'achat mis à jour avec succès!", "success");
   };
 
   // Handle stock reception
   const handleStockReceived = (bonAchat) => {
+    const formattedBon = {
+      ...bonAchat,
+      montant_ht: parseFloat(bonAchat.montant_ht) || 0,
+      montant_ttc: parseFloat(bonAchat.montant_ttc) || 0,
+      tva: parseFloat(bonAchat.tva) || 0,
+    };
+
     setBons((prev) =>
-      prev.map((bon) => (bon.id === bonAchat.id ? bonAchat : bon)),
+      prev.map((bon) => (bon.id === formattedBon.id ? formattedBon : bon)),
     );
     topTost("Stock réceptionné avec succès!", "success");
   };
-
   const handleDeleteBon = async (bonId, num_bon_achat) => {
     const result = await MySwal.fire({
       title: "Supprimer ce Bon d'Achat?",
@@ -370,11 +383,12 @@ const BonAchatTable = () => {
     {
       accessorKey: "montant_ttc",
       header: () => "Montant TTC",
-      cell: ({ getValue }) => (
-        <span className="fw-bold text-primary">
-          {parseFloat(getValue()).toFixed(2)} DH
-        </span>
-      ),
+      cell: ({ getValue }) => {
+        const value = parseFloat(getValue()) || 0;
+        return (
+          <span className="fw-bold text-primary">{value.toFixed(2)} DH</span>
+        );
+      },
     },
 
     {
@@ -462,21 +476,32 @@ const BonAchatTable = () => {
   };
 
   // Calculate statistics
+  // Calculate statistics
   const calculateStats = () => {
     const totalBons = filteredBons.length;
-    const totalMontantHT = filteredBons.reduce(
-      (sum, bon) => sum + bon.montant_ht,
-      0,
-    );
-    const totalMontantTTC = filteredBons.reduce(
-      (sum, bon) => sum + bon.montant_ttc,
-      0,
-    );
-    const totalTVA = filteredBons.reduce((sum, bon) => sum + bon.tva, 0);
-    const totalProduits = filteredBons.reduce(
-      (sum, bon) => sum + bon.totalQuantite,
-      0,
-    );
+    const totalMontantHT = filteredBons.reduce((sum, bon) => {
+      // Ensure montant_ht is a number
+      const value = parseFloat(bon.montant_ht) || 0;
+      return sum + value;
+    }, 0);
+
+    const totalMontantTTC = filteredBons.reduce((sum, bon) => {
+      // Ensure montant_ttc is a number
+      const value = parseFloat(bon.montant_ttc) || 0;
+      return sum + value;
+    }, 0);
+
+    const totalTVA = filteredBons.reduce((sum, bon) => {
+      // Ensure tva is a number
+      const value = parseFloat(bon.tva) || 0;
+      return sum + value;
+    }, 0);
+
+    const totalProduits = filteredBons.reduce((sum, bon) => {
+      // Ensure totalQuantite is a number
+      const value = parseFloat(bon.totalQuantite) || 0;
+      return sum + value;
+    }, 0);
 
     const statsByStatus = filteredBons.reduce((acc, bon) => {
       acc[bon.status] = (acc[bon.status] || 0) + 1;
@@ -490,7 +515,7 @@ const BonAchatTable = () => {
 
     // Calculate pending reception
     const pendingReception = filteredBons.filter((bon) =>
-      ["commandé", "partiellement_reçu"].includes(bon.status),
+      ["commandé", "partiellement_payée"].includes(bon.status),
     ).length;
 
     return {
@@ -504,7 +529,6 @@ const BonAchatTable = () => {
       pendingReception,
     };
   };
-
   const stats = calculateStats();
 
   return (

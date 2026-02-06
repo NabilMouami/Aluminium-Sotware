@@ -23,6 +23,8 @@ import {
   FiTag,
   FiList,
 } from "react-icons/fi";
+import { Input } from "reactstrap";
+
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
 import api from "@/utils/axiosConfig";
@@ -30,6 +32,12 @@ import { format, addDays } from "date-fns";
 import { useNavigate } from "react-router-dom";
 
 const MySwal = withReactContent(Swal);
+
+const statusOptions = [
+  { value: "brouillon", label: "Non Payé" },
+  { value: "payé", label: "Payé" },
+  { value: "partiellement_payée", label: "Partiellement Payé" },
+];
 
 const FactureCreate = () => {
   const [loading, setLoading] = useState(false);
@@ -48,6 +56,8 @@ const FactureCreate = () => {
     client_id: "",
     bon_livraison_id: "",
     mode_reglement: "espèces",
+    status: "brouillon",
+
     tva: 20, // TVA rate in percentage
     notes: "",
     date_facturation: "",
@@ -553,6 +563,8 @@ const FactureCreate = () => {
       client_id: formData.client_id,
       bon_livraison_id: formData.bon_livraison_id || null,
       mode_reglement: formData.mode_reglement,
+      status: formData.status,
+
       tva: parseFloat(formData.tva) || 0,
       notes: formData.notes,
       date_facturation: formData.date_facturation,
@@ -683,6 +695,7 @@ const FactureCreate = () => {
       client_id: formData.client_id, // Garder le même client
       bon_livraison_id: "",
       mode_reglement: "espèces",
+      status: "brouillon",
       tva: 20,
       notes: "",
       date_facturation: new Date().toISOString().split("T")[0],
@@ -919,6 +932,31 @@ const FactureCreate = () => {
                         }
                       />
                       <span className="input-group-text">%</span>
+                    </div>
+                  </div>
+
+                  <div className="col-md-6">
+                    <div className="form-group mb-3">
+                      <label className="form-label">
+                        <FiCreditCard className="me-2" />
+                        Statut
+                      </label>
+                      <Input
+                        type="select"
+                        value={formData.status}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            status: e.target.value,
+                          })
+                        }
+                      >
+                        {statusOptions.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </Input>
                     </div>
                   </div>
 
