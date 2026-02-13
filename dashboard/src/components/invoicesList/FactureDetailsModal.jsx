@@ -539,17 +539,82 @@ const FactureDetailsModal = ({
   <title>Facture ${facture.clientName || facture.client?.nom_complete}</title>
 
   <style>
-    @page { size: A4; margin: 10mm; }
-    * { box-sizing: border-box; text-transform: uppercase; }
-    body { font-family: Arial, sans-serif; font-size: 0.8rem; margin: 0; color: #000; }
-    .header { text-align:center; border-bottom:2px solid #000; padding-bottom:10px; margin-bottom:20px; }
-    h2 { margin:0 0 5px; font-size:1.5rem; }
-    table { width:100%; border-collapse:collapse; margin:20px 0; }
-    th, td { border:1.5px solid #000; padding:8px; text-align:left; }
-    th { background:#f2f2f2; text-align:center; }
-    .totals { margin-top:25px; text-align:right; }
-    .net-box { display:inline-block; border:2px solid #000; padding:10px 16px; font-weight:bold; text-align:right; }
-    .italic { font-style:italic; font-size:1rem; margin-top:10px; font-weight:bold; }
+    @page {
+      size: A4;
+      margin-left: 10mm;
+      margin-right: 10mm;
+    }
+
+    * {
+      box-sizing: border-box;
+      text-transform: uppercase;
+    }
+
+    body {
+      width: 100%;
+      margin: 0;
+      padding-left: 5mm;
+      padding-right: 5mm;
+      font-family: Arial, sans-serif;
+      font-size: 0.6rem;
+      color: #000;
+      background: #fff;
+    }
+
+    .header {
+    display:flex;
+    justify-content:space-between;
+
+      text-align: center;
+    }
+
+    h2 {
+      font-size: 0.9rem;
+      letter-spacing: 1px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+    }
+
+    th, td {
+      border: 1.5px solid #000;
+      padding: 5px;
+      vertical-align: middle;
+    }
+
+    th {
+      background: #f2f2f2;
+      text-align: center;
+    }
+
+    td {
+      text-align: left;
+    }
+
+    .totals {
+      margin-top: 25px;
+      text-align: right;
+    }
+
+    .net-box {
+      display: inline-block;
+      border: 2px solid #000;
+      padding: 10px 16px;
+      margin-right: 20px;
+      margin-top: 8px;
+      font-weight: bold;
+      text-align: right;
+    }
+
+    .italic {
+      font-style: italic;
+      font-size: 0.7rem;
+      margin: 20px;
+      font-weight: bold;
+    }
   </style>
 </head>
 

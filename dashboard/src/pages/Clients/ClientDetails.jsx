@@ -3,6 +3,8 @@ import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { config_url } from "@/utils/config";
 import ClientPaymentStatusModal from "./ClientPaymentStatusModal";
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
 
 import topTost from "@/utils/topTost";
 
@@ -27,6 +29,7 @@ import {
   FiX,
   FiBox,
   FiTrendingUp,
+  FiCalendar as FiCalendarIcon,
 } from "react-icons/fi";
 
 function ClientDetails() {
@@ -40,6 +43,12 @@ function ClientDetails() {
   const [filterType, setFilterType] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
 
+  // Date range filters for history
+  const [historyDateRange, setHistoryDateRange] = useState({
+    startDate: null,
+    endDate: null,
+  });
+
   // New state for product search
   const [showProductSearch, setShowProductSearch] = useState(false);
   const [productSearchLoading, setProductSearchLoading] = useState(false);
@@ -48,9 +57,31 @@ function ClientDetails() {
     reference: "",
     exactMatch: false,
     documentType: "all",
+    startDate: null,
+    endDate: null,
   });
   const [searchHistory, setSearchHistory] = useState([]);
   const [showPaymentStatusModal, setShowPaymentStatusModal] = useState(false);
+  const [showAllProducts, setShowAllProducts] = useState(true);
+  const [allProductsData, setAllProductsData] = useState(null);
+  const [allProductsLoading, setAllProductsLoading] = useState(false);
+  const [allProductsDateRange, setAllProductsDateRange] = useState({
+    startDate: null,
+    endDate: null,
+    documentType: "all",
+  });
+
+  // Helper function to format date for API
+  const formatDateForAPI = (date) => {
+    if (!date) return null;
+    // Create a new date to avoid mutating the original
+    const d = new Date(date);
+    // Get year, month, day in local timezone
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
 
   // Fetch client data
   useEffect(() => {
@@ -100,9 +131,7 @@ function ClientDetails() {
     try {
       setProductSearchLoading(true);
 
-      console.log("=== FIXED VERSION ===");
-
-      // Build params - ONLY include documentType if it's NOT "all"
+      // Build params
       const params = {
         reference: searchParams.reference.trim(),
       };
@@ -112,16 +141,20 @@ function ClientDetails() {
         params.documentType = searchParams.documentType;
       }
 
-      // Don't add exactMatch when it's false
+      // Add exactMatch if true
       if (searchParams.exactMatch === true) {
         params.exactMatch = "true";
       }
 
-      console.log("Params to send:", params);
-      console.log(
-        "URL:",
-        `${config_url}/api/clients/${id}/products-by-reference?reference=${params.reference}`,
-      );
+      // Add date filters if selected - FIXED DATE FORMATTING
+      if (searchParams.startDate) {
+        params.startDate = formatDateForAPI(searchParams.startDate);
+      }
+      if (searchParams.endDate) {
+        params.endDate = formatDateForAPI(searchParams.endDate);
+      }
+
+      console.log("Search params being sent:", params);
 
       const response = await axios.get(
         `${config_url}/api/clients/${id}/products-by-reference`,
@@ -130,9 +163,6 @@ function ClientDetails() {
           withCredentials: true,
         },
       );
-
-      console.log("Fixed response:", response.data);
-      console.log("History length:", response.data.history?.length || 0);
 
       if (
         response.data &&
@@ -155,6 +185,8 @@ function ClientDetails() {
           reference: searchParams.reference.trim(),
           exactMatch: searchParams.exactMatch,
           documentType: searchParams.documentType,
+          startDate: searchParams.startDate,
+          endDate: searchParams.endDate,
           timestamp: new Date().toISOString(),
           resultCount: response.data.summary?.totalEntries || 0,
         },
@@ -183,24 +215,53 @@ function ClientDetails() {
       reference: "",
       exactMatch: false,
       documentType: "all",
+      startDate: null,
+      endDate: null,
     });
   };
 
-  // Load previous search
-  const loadPreviousSearch = (search) => {
+  // Clear date filters for product search
+  const clearProductDateFilters = () => {
     setSearchParams({
-      reference: search.reference,
-      exactMatch: search.exactMatch,
-      documentType: search.documentType,
+      ...searchParams,
+      startDate: null,
+      endDate: null,
     });
-    // Trigger search automatically when loading previous search
-    setTimeout(() => handleProductSearch(), 100);
   };
 
-  // Filter history based on selected filters
+  // Clear date filters for history
+  const clearHistoryDateFilters = () => {
+    setHistoryDateRange({
+      startDate: null,
+      endDate: null,
+    });
+  };
+
+  // Filter history based on selected filters AND date range
   const filteredHistory = history.filter((doc) => {
+    // Type filter
     if (filterType !== "all" && doc.document_type !== filterType) return false;
+
+    // Status filter
     if (filterStatus !== "all" && doc.status !== filterStatus) return false;
+
+    // Date range filter
+    if (historyDateRange.startDate || historyDateRange.endDate) {
+      const docDate = new Date(doc.date_creation);
+
+      if (historyDateRange.startDate) {
+        const startDate = new Date(historyDateRange.startDate);
+        startDate.setHours(0, 0, 0, 0);
+        if (docDate < startDate) return false;
+      }
+
+      if (historyDateRange.endDate) {
+        const endDate = new Date(historyDateRange.endDate);
+        endDate.setHours(23, 59, 59, 999);
+        if (docDate > endDate) return false;
+      }
+    }
+
     return true;
   });
 
@@ -315,11 +376,84 @@ function ClientDetails() {
     }).format(num);
   };
 
-  // Safe quantity parsing (handles both string and number)
+  // Safe quantity parsing
   const parseQuantity = (qty) => {
     if (typeof qty === "number") return qty;
     if (typeof qty === "string") return parseFloat(qty) || 0;
     return 0;
+  };
+
+  const fetchAllProducts = async () => {
+    try {
+      setAllProductsLoading(true);
+
+      const params = {
+        documentType:
+          allProductsDateRange.documentType !== "all"
+            ? allProductsDateRange.documentType
+            : undefined,
+      };
+
+      // FIXED DATE FORMATTING - use the helper function
+      if (allProductsDateRange.startDate) {
+        params.startDate = formatDateForAPI(allProductsDateRange.startDate);
+      }
+      if (allProductsDateRange.endDate) {
+        params.endDate = formatDateForAPI(allProductsDateRange.endDate);
+      }
+
+      console.log("Fetching all products with params:", params);
+
+      const response = await axios.get(
+        `${config_url}/api/clients/${id}/products-by-date-range`,
+        {
+          params,
+          withCredentials: true,
+        },
+      );
+
+      console.log("All products response:", response.data);
+
+      // Debug: Check if dates in response match the filter
+      if (response.data.products && response.data.products.length > 0) {
+        const dates = response.data.products.map((p) => ({
+          date: p.date_creation,
+          formatted: new Date(p.date_creation).toLocaleDateString("fr-FR"),
+        }));
+        console.log("Sample of returned dates:", dates.slice(0, 5));
+      }
+
+      setAllProductsData(response.data);
+
+      if (response.data.summary.totalEntries > 0) {
+        topTost(
+          `Trouvé ${response.data.summary.totalEntries} produit(s)`,
+          "success",
+        );
+      } else {
+        topTost("Aucun produit trouvé pour cette période", "info");
+      }
+    } catch (error) {
+      console.error("Error fetching all products:", error);
+      topTost(
+        error.response?.data?.message ||
+          "Erreur lors du chargement des produits",
+        "error",
+      );
+      setAllProductsData(null);
+    } finally {
+      setAllProductsLoading(false);
+    }
+  };
+
+  // Add this function to clear all products filters
+  const clearAllProductsFilters = () => {
+    setAllProductsDateRange({
+      startDate: null,
+      endDate: null,
+      documentType: "all",
+    });
+    setAllProductsData(null);
   };
 
   if (loading) {
@@ -385,11 +519,24 @@ function ClientDetails() {
                 </div>
                 <div className="d-flex gap-2">
                   <button
+                    className="btn btn-info"
+                    onClick={() => {
+                      setShowAllProducts(!showAllProducts);
+                      setShowProductSearch(false);
+                    }}
+                  >
+                    <FiPackage className="me-2" />
+                    Tous les Produits
+                  </button>
+                  <button
                     className="btn btn-primary"
-                    onClick={() => setShowProductSearch(!showProductSearch)}
+                    onClick={() => {
+                      setShowProductSearch(!showProductSearch);
+                      setShowAllProducts(false);
+                    }}
                   >
                     <FiSearch className="me-2" />
-                    Recherche par Référence Produit
+                    Recherche par Référence
                   </button>
                   <button
                     className="btn btn-success"
@@ -438,7 +585,7 @@ function ClientDetails() {
               <div className="card-body">
                 {/* Search Form */}
                 <div className="row mb-4">
-                  <div className="col-md-8">
+                  <div className="col-md-6">
                     <div className="input-group">
                       <span className="input-group-text">
                         <FiBox />
@@ -477,26 +624,99 @@ function ClientDetails() {
                       </button>
                     </div>
                   </div>
+
+                  {/* Document Type Filter */}
+                  <div className="col-md-2">
+                    <select
+                      className="form-select"
+                      value={searchParams.documentType}
+                      onChange={(e) =>
+                        setSearchParams({
+                          ...searchParams,
+                          documentType: e.target.value,
+                        })
+                      }
+                    >
+                      <option value="all">Tous les documents</option>
+                      <option value="devis">Devis seulement</option>
+                      <option value="bon-livraison">BL seulement</option>
+                      <option value="facture">Factures seulement</option>
+                    </select>
+                  </div>
+
+                  {/* Date Range Filters */}
                   <div className="col-md-4">
-                    <div className="d-flex gap-3">
-                      <select
-                        className="form-select form-select-sm w-auto"
-                        value={searchParams.documentType}
-                        onChange={(e) =>
-                          setSearchParams({
-                            ...searchParams,
-                            documentType: e.target.value,
-                          })
-                        }
-                      >
-                        <option value="all">Tous les documents</option>
-                        <option value="devis">Devis seulement</option>
-                        <option value="bon-livraison">BL seulement</option>
-                        <option value="facture">Factures seulement</option>
-                      </select>
+                    <div className="d-flex gap-2">
+                      <div className="flex-grow-1">
+                        <DatePicker
+                          selected={searchParams.startDate}
+                          onChange={(date) =>
+                            setSearchParams({
+                              ...searchParams,
+                              startDate: date,
+                            })
+                          }
+                          selectsStart
+                          startDate={searchParams.startDate}
+                          endDate={searchParams.endDate}
+                          placeholderText="Date début"
+                          className="form-control"
+                          dateFormat="dd/MM/yyyy"
+                          isClearable
+                        />
+                      </div>
+                      <div className="flex-grow-1">
+                        <DatePicker
+                          selected={searchParams.endDate}
+                          onChange={(date) =>
+                            setSearchParams({ ...searchParams, endDate: date })
+                          }
+                          selectsEnd
+                          startDate={searchParams.startDate}
+                          endDate={searchParams.endDate}
+                          minDate={searchParams.startDate}
+                          placeholderText="Date fin"
+                          className="form-control"
+                          dateFormat="dd/MM/yyyy"
+                          isClearable
+                        />
+                      </div>
+                      {(searchParams.startDate || searchParams.endDate) && (
+                        <button
+                          className="btn btn-outline-secondary"
+                          onClick={clearProductDateFilters}
+                          title="Effacer les dates"
+                        >
+                          <FiX />
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
+
+                {/* Active Filters Display */}
+                {(searchParams.startDate ||
+                  searchParams.endDate ||
+                  searchParams.documentType !== "all") && (
+                  <div className="mb-3">
+                    <small className="text-muted me-2">Filtres actifs:</small>
+                    {searchParams.startDate && (
+                      <span className="badge bg-primary me-2">
+                        Du: {formatDateShort(searchParams.startDate)}
+                      </span>
+                    )}
+                    {searchParams.endDate && (
+                      <span className="badge bg-primary me-2">
+                        Au: {formatDateShort(searchParams.endDate)}
+                      </span>
+                    )}
+                    {searchParams.documentType !== "all" && (
+                      <span className="badge bg-info me-2">
+                        Type: {searchParams.documentType}
+                      </span>
+                    )}
+                  </div>
+                )}
 
                 {/* Search Results */}
                 {productSearchData ? (
@@ -594,7 +814,7 @@ function ClientDetails() {
                       </div>
                     </div>
 
-                    {/* Product Statistics */}
+                    {/* Product Statistics - keeping your existing code */}
                     {productSearchData.productStatistics &&
                       productSearchData.productStatistics.length > 0 && (
                         <div className="row mb-4">
@@ -746,12 +966,25 @@ function ClientDetails() {
                       <div className="row">
                         <div className="col-12">
                           <div className="card">
-                            <div className="card-header">
+                            <div className="card-header d-flex justify-content-between align-items-center">
                               <h6 className="card-title mb-0">
                                 <FiCalendar className="me-2" />
                                 Historique des Transactions (
                                 {productSearchData.history.length} entrée(s))
                               </h6>
+                              {(searchParams.startDate ||
+                                searchParams.endDate) && (
+                                <span className="badge bg-info">
+                                  Période:{" "}
+                                  {searchParams.startDate
+                                    ? formatDateShort(searchParams.startDate)
+                                    : "Début"}{" "}
+                                  -{" "}
+                                  {searchParams.endDate
+                                    ? formatDateShort(searchParams.endDate)
+                                    : "Aujourd'hui"}
+                                </span>
+                              )}
                             </div>
                             <div className="card-body">
                               <div className="table-responsive">
@@ -765,7 +998,6 @@ function ClientDetails() {
                                       <th>Quantité</th>
                                       <th>Prix Unitaire</th>
                                       <th>Total Ligne</th>
-                                      {/* <th>Actions</th> */}
                                     </tr>
                                   </thead>
                                   <tbody>
@@ -826,41 +1058,6 @@ function ClientDetails() {
                                               {formatCurrency(item.total_ligne)}
                                             </strong>
                                           </td>
-                                          {/* <td>
-                                            <button
-                                              className="btn btn-sm btn-outline-primary"
-                                              onClick={() =>
-                                                handleViewDocument({
-                                                  id: item.document?.id,
-                                                  document_type:
-                                                    item.document_type,
-                                                  num_devis:
-                                                    item.document_type ===
-                                                    "devis"
-                                                      ? item.document?.num
-                                                      : undefined,
-                                                  num_bon_livraison:
-                                                    item.document_type ===
-                                                    "bon-livraison"
-                                                      ? item.document?.num
-                                                      : undefined,
-                                                  num_facture:
-                                                    item.document_type ===
-                                                    "facture"
-                                                      ? item.document?.num
-                                                      : undefined,
-                                                  date_creation:
-                                                    item.date_creation,
-                                                  status: item.document?.status,
-                                                  montant_ttc:
-                                                    item.document?.montant_ttc,
-                                                })
-                                              }
-                                              title="Voir le document"
-                                            >
-                                              <FiEye size={14} />
-                                            </button>
-                                          </td> */}
                                         </tr>
                                       ),
                                     )}
@@ -872,7 +1069,6 @@ function ClientDetails() {
                         </div>
                       </div>
                     ) : (
-                      // Empty state when no history found
                       <div className="row">
                         <div className="col-12">
                           <div className="card">
@@ -894,19 +1090,21 @@ function ClientDetails() {
                     )}
                   </>
                 ) : (
-                  /* Initial search state */
                   <div className="text-center py-5">
                     <FiSearch size={48} className="text-muted mb-3" />
                     <h5>Recherche par Référence Produit</h5>
                     <p className="text-muted mb-4">
-                      Entrez une référence produit pour voir l'historique des
-                      transactions
+                      Entrez une référence produit et sélectionnez une période
+                      pour voir l'historique des transactions
                     </p>
                     <div className="text-muted small">
                       <p className="mb-1">
                         <FiFilter className="me-1" />
-                        Utilisez la case "Correspondance exacte" pour des
-                        résultats précis
+                        Utilisez les filtres de date pour une recherche précise
+                      </p>
+                      <p className="mb-1">
+                        <FiCalendarIcon className="me-1" />
+                        Sélectionnez une période (date début et date fin)
                       </p>
                       <p className="mb-0">
                         <FiBox className="me-1" />
@@ -922,376 +1120,492 @@ function ClientDetails() {
         </div>
       )}
 
-      {/* Stats Cards - Only show when NOT in product search mode */}
-      {summary && !showProductSearch && (
-        <div className="row mb-4 fs-3">
-          <div className="col-xl-3 col-md-6 mb-4">
-            <div className="card h-100">
-              <div className="card-body">
-                <div className="d-flex justify-content-between align-items-center">
-                  <div>
-                    <h6 className="text-muted mb-1">Total Devis</h6>
-                    <h3 className="mb-0">
-                      {summary.summary?.counts?.devis || 0}
-                    </h3>
-                    <small className="text-muted">
-                      {summary.summary?.financial?.totalSales || 0}
-                    </small>
-                  </div>
-                  <div className="bg-primary bg-opacity-10 p-3 rounded">
-                    <FiFileText size={24} className="text-white" />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="col-xl-3 col-md-6 mb-4">
-            <div className="card h-100">
-              <div className="card-body">
-                <div className="d-flex justify-content-between align-items-center">
-                  <div>
-                    <h6 className="text-muted mb-1">Total BL</h6>
-                    <h3 className="mb-0">
-                      {summary.summary?.counts?.bonLivraisons || 0}
-                    </h3>
-                  </div>
-                  <div className="bg-info bg-opacity-10 p-3 rounded">
-                    <FiTruck size={24} className="text-white" />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="col-xl-3 col-md-6 mb-4">
-            <div className="card h-100">
-              <div className="card-body">
-                <div className="d-flex justify-content-between align-items-center">
-                  <div>
-                    <h6 className="text-muted mb-1">Total Factures</h6>
-                    <h3 className="mb-0">
-                      {summary.summary?.counts?.factures || 0}
-                    </h3>
-                  </div>
-                  <div className="bg-success bg-opacity-10 p-3 rounded">
-                    <FiDollarSign size={24} className="text-white" />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="col-xl-3 col-md-6 mb-4">
-            <div className="card h-100">
-              <div className="card-body">
-                <div className="d-flex justify-content-between align-items-center">
-                  <div>
-                    <h6 className="text-muted mb-1">En Attente</h6>
-                    <h3 className="mb-0">
-                      {summary.summary?.financial?.totalOutstanding || 0}
-                    </h3>
-                    <small className="text-muted">
-                      {summary.summary?.financial?.paymentPercentage?.toFixed(
-                        1,
-                      ) || 0}
-                      % payé
-                    </small>
-                  </div>
-                  <div className="bg-warning bg-opacity-10 p-3 rounded">
-                    <FiCreditCard size={24} className="text-white" />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Latest Documents - Only show when NOT in product search mode */}
-      {summary && summary.summary?.latestDocuments && !showProductSearch && (
-        <div className="row mb-4 fs-5">
+      {showAllProducts && (
+        <div className="row mb-4">
           <div className="col-12">
-            <div className="card">
-              <div className="card-header">
-                <h5 className="card-title mb-0">
-                  Documents Récents (الوثائق الحديثة)
-                </h5>
-              </div>
-              <div className="card-body">
-                <div className="row">
-                  {/* Latest Devis */}
-                  <div className="col-md-4 mb-3">
-                    <div className="card border">
-                      <div className="card-body">
-                        <h6 className="card-title d-flex align-items-center">
-                          <FiFileText className="me-2 text-white" />
-                          Dernier Devis
-                        </h6>
-                        {summary.summary.latestDocuments.devis ? (
-                          <>
-                            <p className="mb-1">
-                              <strong>
-                                {
-                                  summary.summary.latestDocuments.devis
-                                    .num_devis
-                                }
-                              </strong>
-                            </p>
-                            <p className="mb-1 text-muted small">
-                              <FiCalendar className="me-1" />
-                              {formatDate(
-                                summary.summary.latestDocuments.devis
-                                  .date_creation,
-                              )}
-                            </p>
-                            <p className="mb-2">
-                              {
-                                summary.summary.latestDocuments.devis
-                                  .montant_ttc
-                              }
-                            </p>
-                            <span
-                              className={`badge bg-${getStatusColor(summary.summary.latestDocuments.devis.status)}`}
-                            >
-                              {getStatusIcon(
-                                summary.summary.latestDocuments.devis.status,
-                              )}
-                              {getStatusText(
-                                summary.summary.latestDocuments.devis.status,
-                              )}
-                            </span>
-                          </>
-                        ) : (
-                          <p className="text-muted mb-0">Aucun devis</p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Latest Bon Livraison */}
-                  <div className="col-md-4 mb-3">
-                    <div className="card border">
-                      <div className="card-body">
-                        <h6 className="card-title d-flex align-items-center">
-                          <FiTruck className="me-2 text-info" />
-                          Dernier BL
-                        </h6>
-                        {summary.summary.latestDocuments.bonLivraison ? (
-                          <>
-                            <p className="mb-1">
-                              <strong>
-                                {
-                                  summary.summary.latestDocuments.bonLivraison
-                                    .num_bon_livraison
-                                }
-                              </strong>
-                            </p>
-                            <p className="mb-1 text-muted small">
-                              <FiCalendar className="me-1" />
-                              {formatDate(
-                                summary.summary.latestDocuments.bonLivraison
-                                  .date_creation,
-                              )}
-                            </p>
-                            <p className="mb-2">
-                              {
-                                summary.summary.latestDocuments.bonLivraison
-                                  .montant_ttc
-                              }
-                            </p>
-                            <span
-                              className={`badge bg-${getStatusColor(summary.summary.latestDocuments.bonLivraison.status)}`}
-                            >
-                              {getStatusIcon(
-                                summary.summary.latestDocuments.bonLivraison
-                                  .status,
-                              )}
-                              {
-                                summary.summary.latestDocuments.bonLivraison
-                                  .status
-                              }
-                            </span>
-                          </>
-                        ) : (
-                          <p className="text-muted mb-0">
-                            Aucun bon de livraison
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Latest Facture */}
-                  <div className="col-md-4 mb-3">
-                    <div className="card border">
-                      <div className="card-body">
-                        <h6 className="card-title d-flex align-items-center">
-                          <FiDollarSign className="me-2 text-success" />
-                          Dernière Facture
-                        </h6>
-                        {summary.summary.latestDocuments.facture ? (
-                          <>
-                            <p className="mb-1">
-                              <strong>
-                                {
-                                  summary.summary.latestDocuments.facture
-                                    .num_facture
-                                }
-                              </strong>
-                            </p>
-                            <p className="mb-1 text-muted small">
-                              <FiCalendar className="me-1" />
-                              {formatDate(
-                                summary.summary.latestDocuments.facture
-                                  .date_creation,
-                              )}
-                            </p>
-                            <p className="mb-2">
-                              {
-                                summary.summary.latestDocuments.facture
-                                  .montant_ttc
-                              }
-                            </p>
-                            <span
-                              className={`badge bg-${getStatusColor(summary.summary.latestDocuments.facture.status)}`}
-                            >
-                              {getStatusIcon(
-                                summary.summary.latestDocuments.facture.status,
-                              )}
-                              {summary.summary.latestDocuments.facture.status}
-                            </span>
-                          </>
-                        ) : (
-                          <p className="text-muted mb-0">Aucune facture</p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* History Table - Only show when NOT in product search mode */}
-      {!showProductSearch && (
-        <div className="row">
-          <div className="col-12 fs-5">
             <div className="card">
               <div className="card-header d-flex justify-content-between align-items-center">
                 <h5 className="card-title mb-0">
-                  Historique des Documents (سجل الوثائق)
+                  <FiPackage className="me-2" />
+                  Tous les Produits du Client
                 </h5>
-                <div className="d-flex gap-2">
-                  {/* Filters */}
-                  <select
-                    className="form-select form-select-sm w-auto"
-                    value={filterType}
-                    onChange={(e) => setFilterType(e.target.value)}
-                  >
-                    <option value="all">Tous les types</option>
-                    <option value="devis">Devis</option>
-                    <option value="bon-livraison">Bon de Livraison</option>
-                    <option value="facture">Facture</option>
-                  </select>
-
-                  <select
-                    className="form-select form-select-sm w-auto"
-                    value={filterStatus}
-                    onChange={(e) => setFilterStatus(e.target.value)}
-                  >
-                    <option value="all">Tous les statuts</option>
-                    <option value="brouillon">Non Payé</option>
-                    <option value="payée">Payée</option>
-                    <option value="payé">Payé</option>
-                    <option value="partiellement_payée">
-                      Partiellement payée
-                    </option>
-                    <option value="envoyée">Envoyée</option>
-                    <option value="annulée">Annulée</option>
-                    <option value="accepté">Accepté</option>
-                    <option value="refusé">Refusé</option>
-                  </select>
-                </div>
+                <button
+                  className="btn btn-sm btn-outline-secondary"
+                  onClick={() => {
+                    setShowAllProducts(false);
+                    clearAllProductsFilters();
+                  }}
+                >
+                  <FiX size={16} />
+                </button>
               </div>
               <div className="card-body">
-                {filteredHistory.length === 0 ? (
-                  <div className="text-center py-5">
-                    <FiSearch size={48} className="text-muted mb-3" />
-                    <h5>Aucun document trouvé</h5>
-                    <p className="text-muted">
-                      Aucun document ne correspond aux filtres sélectionnés
-                    </p>
+                {/* Filter Section */}
+                <div className="row mb-4">
+                  <div className="col-md-3">
+                    <label className="form-label small">Type de Document</label>
+                    <select
+                      className="form-select"
+                      value={allProductsDateRange.documentType}
+                      onChange={(e) =>
+                        setAllProductsDateRange({
+                          ...allProductsDateRange,
+                          documentType: e.target.value,
+                        })
+                      }
+                    >
+                      <option value="all">Tous les documents</option>
+                      <option value="devis">Devis seulement</option>
+                      <option value="bon-livraison">BL seulement</option>
+                      <option value="facture">Factures seulement</option>
+                    </select>
                   </div>
-                ) : (
-                  <div className="table-responsive">
-                    <table className="table table-hover">
-                      <thead>
-                        <tr>
-                          <th>Type</th>
-                          <th>Numéro</th>
-                          <th>Date</th>
-                          <th>Montant TTC</th>
-                          <th>Statut</th>
-                          <th>Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filteredHistory.map((doc, index) => (
-                          <tr key={index}>
-                            <td>
-                              <span className="d-flex align-items-center">
-                                {getDocumentIcon(doc.document_type)}
-                                {doc.document_type === "devis"
-                                  ? "Devis"
-                                  : doc.document_type === "bon-livraison"
-                                    ? "Bon Livraison"
-                                    : "Facture"}
-                              </span>
-                            </td>
-                            <td>
-                              <strong>
-                                {doc.num_devis ||
-                                  doc.num_bon_livraison ||
-                                  doc.num_facture}
-                              </strong>
-                            </td>
-                            <td>
-                              <span className="d-flex align-items-center">
-                                <FiCalendar className="me-1 text-muted" />
-                                {formatDate(doc.date_creation)}
-                              </span>
-                            </td>
-                            <td>
-                              <span className="fw-semibold">
-                                {doc.montant_ttc}
-                              </span>
-                            </td>
-                            <td>
-                              <span
-                                className={`badge fs-5 ${getStatusColor(doc.status)}`}
-                              >
-                                {getStatusIcon(doc.status)}
-                                {getStatusText(doc.status)}
-                              </span>
-                            </td>
-                            <td>
-                              <div className="d-flex gap-2">
-                                <button
-                                  className="btn btn-sm btn-outline-primary"
-                                  onClick={() => handleViewDocument(doc)}
-                                  title="Voir"
-                                >
-                                  <FiEye size={14} />
-                                </button>
+
+                  <div className="col-md-6">
+                    <label className="form-label small">Période</label>
+                    <div className="d-flex gap-2">
+                      <div className="flex-grow-1">
+                        <DatePicker
+                          selected={allProductsDateRange.startDate}
+                          onChange={(date) =>
+                            setAllProductsDateRange({
+                              ...allProductsDateRange,
+                              startDate: date,
+                            })
+                          }
+                          selectsStart
+                          startDate={allProductsDateRange.startDate}
+                          endDate={allProductsDateRange.endDate}
+                          placeholderText="Date début"
+                          className="form-control"
+                          dateFormat="dd/MM/yyyy"
+                          isClearable
+                        />
+                      </div>
+                      <div className="flex-grow-1">
+                        <DatePicker
+                          selected={allProductsDateRange.endDate}
+                          onChange={(date) =>
+                            setAllProductsDateRange({
+                              ...allProductsDateRange,
+                              endDate: date,
+                            })
+                          }
+                          selectsEnd
+                          startDate={allProductsDateRange.startDate}
+                          endDate={allProductsDateRange.endDate}
+                          minDate={allProductsDateRange.startDate}
+                          placeholderText="Date fin"
+                          className="form-control"
+                          dateFormat="dd/MM/yyyy"
+                          isClearable
+                        />
+                      </div>
+                      {(allProductsDateRange.startDate ||
+                        allProductsDateRange.endDate) && (
+                        <button
+                          className="btn btn-outline-secondary"
+                          onClick={clearAllProductsFilters}
+                          title="Effacer les filtres"
+                        >
+                          <FiX />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="col-md-3">
+                    <label className="form-label small">&nbsp;</label>
+                    <button
+                      className="btn btn-primary w-100"
+                      onClick={fetchAllProducts}
+                      disabled={allProductsLoading}
+                    >
+                      {allProductsLoading ? (
+                        <>
+                          <span className="spinner-border spinner-border-sm me-2"></span>
+                          Chargement...
+                        </>
+                      ) : (
+                        <>
+                          <FiSearch className="me-2" />
+                          Afficher les Produits
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Active Filters Display */}
+                {(allProductsDateRange.startDate ||
+                  allProductsDateRange.endDate ||
+                  allProductsDateRange.documentType !== "all") && (
+                  <div className="mb-3">
+                    <small className="text-muted me-2">Filtres actifs:</small>
+                    {allProductsDateRange.startDate && (
+                      <span className="badge bg-primary me-2">
+                        Du: {formatDateShort(allProductsDateRange.startDate)}
+                      </span>
+                    )}
+                    {allProductsDateRange.endDate && (
+                      <span className="badge bg-primary me-2">
+                        Au: {formatDateShort(allProductsDateRange.endDate)}
+                      </span>
+                    )}
+                    {allProductsDateRange.documentType !== "all" && (
+                      <span className="badge bg-info me-2">
+                        Type: {allProductsDateRange.documentType}
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {/* Results Section */}
+                {allProductsData ? (
+                  <>
+                    {/* Statistics Cards */}
+                    <div className="row mb-4">
+                      <div className="col-xl-3 col-md-6 mb-3">
+                        <div className="card border-primary">
+                          <div className="card-body">
+                            <div className="d-flex justify-content-between align-items-center">
+                              <div>
+                                <h6 className="text-muted mb-1">
+                                  Total Entrées
+                                </h6>
+                                <h3 className="mb-0">
+                                  {allProductsData.summary.totalEntries}
+                                </h3>
                               </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                              <div className="bg-primary bg-opacity-10 p-3 rounded">
+                                <FiPackage size={24} className="text-white" />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="col-xl-3 col-md-6 mb-3">
+                        <div className="card border-info">
+                          <div className="card-body">
+                            <div className="d-flex justify-content-between align-items-center">
+                              <div>
+                                <h6 className="text-muted mb-1">
+                                  Produits Uniques
+                                </h6>
+                                <h3 className="mb-0">
+                                  {allProductsData.summary.totalUniqueProducts}
+                                </h3>
+                              </div>
+                              <div className="bg-info bg-opacity-10 p-3 rounded">
+                                <FiBox size={24} className="text-white" />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="col-xl-3 col-md-6 mb-3">
+                        <div className="card border-warning">
+                          <div className="card-body">
+                            <div className="d-flex justify-content-between align-items-center">
+                              <div>
+                                <h6 className="text-muted mb-1">
+                                  Quantité Totale
+                                </h6>
+                                <h3 className="mb-0">
+                                  {allProductsData.summary.totalQuantity}
+                                </h3>
+                              </div>
+                              <div className="bg-warning bg-opacity-10 p-3 rounded">
+                                <FiTrendingUp
+                                  size={24}
+                                  className="text-white"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="col-xl-3 col-md-6 mb-3">
+                        <div className="card border-success">
+                          <div className="card-body">
+                            <div className="d-flex justify-content-between align-items-center">
+                              <div>
+                                <h6 className="text-muted mb-1">
+                                  Montant Total
+                                </h6>
+                                <h3 className="mb-0">
+                                  {formatCurrency(
+                                    allProductsData.summary.totalAmount,
+                                  )}
+                                </h3>
+                              </div>
+                              <div className="bg-success bg-opacity-10 p-3 rounded">
+                                <FiDollarSign
+                                  size={24}
+                                  className="text-white"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Product Statistics Table */}
+                    {allProductsData.productStatistics &&
+                      allProductsData.productStatistics.length > 0 && (
+                        <div className="row mb-4">
+                          <div className="col-12">
+                            <div className="card">
+                              <div className="card-header">
+                                <h6 className="card-title mb-0">
+                                  <FiPackage className="me-2" />
+                                  Statistiques par Produit (
+                                  {
+                                    allProductsData.productStatistics.length
+                                  }{" "}
+                                  produit(s))
+                                </h6>
+                              </div>
+                              <div className="card-body">
+                                <div className="table-responsive">
+                                  <table className="table table-hover">
+                                    <thead>
+                                      <tr>
+                                        <th>Produit</th>
+                                        <th>Référence</th>
+                                        <th className="text-center">
+                                          Apparitions
+                                        </th>
+                                        <th className="text-end">
+                                          Quantité Totale
+                                        </th>
+                                        <th className="text-end">
+                                          Montant Total
+                                        </th>
+                                        <th className="text-center">
+                                          Première
+                                        </th>
+                                        <th className="text-center">
+                                          Dernière
+                                        </th>
+                                        <th className="text-center">
+                                          Répartition
+                                        </th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {allProductsData.productStatistics.map(
+                                        (stat, index) => (
+                                          <tr key={index}>
+                                            <td>
+                                              <strong>
+                                                {stat.product.designation}
+                                              </strong>
+                                            </td>
+                                            <td>
+                                              <span className="badge bg-secondary">
+                                                {stat.product.reference}
+                                              </span>
+                                            </td>
+                                            <td className="text-center">
+                                              <span className="badge bg-primary">
+                                                {stat.appearances}
+                                              </span>
+                                            </td>
+
+                                            <td className="text-end">
+                                              <strong>
+                                                {stat.totalQuantity}
+                                              </strong>
+                                            </td>
+                                            <td className="text-end">
+                                              <strong className="text-success">
+                                                {formatCurrency(
+                                                  stat.totalAmount,
+                                                )}
+                                              </strong>
+                                            </td>
+                                            <td className="text-center">
+                                              <small>
+                                                {formatDateShort(
+                                                  stat.firstSeen,
+                                                )}
+                                              </small>
+                                            </td>
+                                            <td className="text-center">
+                                              <small>
+                                                {formatDateShort(stat.lastSeen)}
+                                              </small>
+                                            </td>
+                                            <td className="text-center">
+                                              <div className="d-flex gap-1 justify-content-center">
+                                                {stat.byDocumentType.devis
+                                                  .count > 0 && (
+                                                  <span
+                                                    className="badge bg-primary"
+                                                    title={`Devis: ${stat.byDocumentType.devis.count}`}
+                                                  >
+                                                    D:
+                                                    {
+                                                      stat.byDocumentType.devis
+                                                        .count
+                                                    }
+                                                  </span>
+                                                )}
+                                                {stat.byDocumentType[
+                                                  "bon-livraison"
+                                                ].count > 0 && (
+                                                  <span
+                                                    className="badge bg-info"
+                                                    title={`BL: ${stat.byDocumentType["bon-livraison"].count}`}
+                                                  >
+                                                    BL:
+                                                    {
+                                                      stat.byDocumentType[
+                                                        "bon-livraison"
+                                                      ].count
+                                                    }
+                                                  </span>
+                                                )}
+                                                {stat.byDocumentType.facture
+                                                  .count > 0 && (
+                                                  <span
+                                                    className="badge bg-success"
+                                                    title={`Factures: ${stat.byDocumentType.facture.count}`}
+                                                  >
+                                                    F:
+                                                    {
+                                                      stat.byDocumentType
+                                                        .facture.count
+                                                    }
+                                                  </span>
+                                                )}
+                                              </div>
+                                            </td>
+                                          </tr>
+                                        ),
+                                      )}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                    {/* Detailed Products List */}
+                    {allProductsData.products &&
+                      allProductsData.products.length > 0 && (
+                        <div className="row">
+                          <div className="col-12">
+                            <div className="card">
+                              <div className="card-header">
+                                <h6 className="card-title mb-0">
+                                  <FiCalendar className="me-2" />
+                                  Détail des Transactions (
+                                  {allProductsData.products.length})
+                                </h6>
+                              </div>
+                              <div className="card-body">
+                                <div className="table-responsive">
+                                  <table className="table table-hover">
+                                    <thead>
+                                      <tr>
+                                        <th>Type</th>
+                                        <th>Numéro</th>
+                                        <th>Date</th>
+                                        <th>Produit</th>
+                                        <th>Quantité</th>
+                                        <th>Prix Unitaire</th>
+                                        <th>Total Ligne</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {allProductsData.products.map(
+                                        (item, index) => (
+                                          <tr key={index}>
+                                            <td>
+                                              <span className="d-flex align-items-center">
+                                                {getDocumentIcon(
+                                                  item.document_type,
+                                                )}
+                                                <span className="text-capitalize">
+                                                  {item.document_type?.replace(
+                                                    "-",
+                                                    " ",
+                                                  )}
+                                                </span>
+                                              </span>
+                                            </td>
+                                            <td>
+                                              <strong>
+                                                {item.document?.num}
+                                              </strong>
+                                              <div className="small text-muted">
+                                                {item.document?.status}
+                                              </div>
+                                            </td>
+                                            <td>
+                                              <span className="d-flex align-items-center">
+                                                <FiCalendar className="me-1 text-muted" />
+                                                {formatDate(item.date_creation)}
+                                              </span>
+                                            </td>
+                                            <td>
+                                              <div>
+                                                <strong>
+                                                  {item.produit?.designation}
+                                                </strong>
+                                                <div className="small text-muted">
+                                                  Ref: {item.produit?.reference}
+                                                </div>
+                                              </div>
+                                            </td>
+                                            <td>
+                                              <span className="badge bg-primary">
+                                                {parseQuantity(item.quantite)}
+                                              </span>
+                                            </td>
+                                            <td>
+                                              <strong>
+                                                {formatCurrency(
+                                                  item.prix_unitaire,
+                                                )}
+                                              </strong>
+                                            </td>
+                                            <td>
+                                              <strong className="text-success">
+                                                {formatCurrency(
+                                                  item.total_ligne,
+                                                )}
+                                              </strong>
+                                            </td>
+                                          </tr>
+                                        ),
+                                      )}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                  </>
+                ) : (
+                  /* Initial State */
+                  <div className="text-center py-5">
+                    <FiPackage size={48} className="text-muted mb-3" />
+                    <h5>Afficher Tous les Produits</h5>
+                    <p className="text-muted mb-4">
+                      Sélectionnez une période et un type de document pour voir
+                      tous les produits achetés par ce client
+                    </p>
                   </div>
                 )}
               </div>

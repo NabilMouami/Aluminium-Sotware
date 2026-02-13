@@ -1,2 +1,838 @@
-
 @import "../../public/assets/scss/theme.scss";
+
+// ReportsPage.scss
+@import url("https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap");
+
+// ── Variables ────────────────────────────────────────────────────────────────
+$fnt: sans-serif;
+$fnt-mono: "DM Mono", monospace;
+
+$bg: #f8fafc;
+$surface: #ffffff;
+$bdr: #e2e8f0;
+$bdr-lg: #cbd5e1;
+$txt: #0f172a;
+$muted: #64748b;
+$faint: #94a3b8;
+
+$blue: #4361ee;
+$blue-lt: #eef1fd;
+$green: #16a34a;
+$green-lt: #f0fdf4;
+$yellow: #ca8a04;
+$yellow-lt: #fefce8;
+$orange: #ea580c;
+$orange-lt: #fff7ed;
+$red: #dc2626;
+$red-lt: #fef2f2;
+$purple: #7c3aed;
+$purple-lt: #f5f3ff;
+$teal: #0d9488;
+$teal-lt: #f0fdfa;
+$cyan: #06b6d4;
+$cyan-lt: #ecfeff;
+$gray: #475569;
+$gray-lt: #f1f5f9;
+
+$r-sm: 6px;
+$r-md: 10px;
+$r-lg: 14px;
+$sh-sm:
+  0 1px 3px rgba(15, 23, 42, 0.06),
+  0 1px 2px rgba(15, 23, 42, 0.04);
+$sh-md:
+  0 4px 16px rgba(15, 23, 42, 0.08),
+  0 2px 6px rgba(15, 23, 42, 0.04);
+
+// ── Root ─────────────────────────────────────────────────────────────────────
+.rp-root {
+  font-family: $fnt;
+  background: $bg;
+  min-height: 100vh;
+  color: $txt;
+}
+
+// ── Skeleton ─────────────────────────────────────────────────────────────────
+.rp-skeleton {
+  border-radius: $r-md;
+  width: 100%;
+  background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease infinite;
+}
+@keyframes shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+// ── Header ───────────────────────────────────────────────────────────────────
+.rp-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 28px 28px 0;
+  flex-wrap: wrap;
+  &__title {
+    font-size: 1.5rem;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    margin: 0;
+  }
+  &__sub {
+    font-size: 0.84rem;
+    color: $muted;
+    margin: 4px 0 0;
+  }
+  &__right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+}
+
+.rp-filter-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: $surface;
+  border: 1px solid $bdr;
+  border-radius: $r-md;
+  padding: 6px 12px;
+  box-shadow: $sh-sm;
+  label {
+    font-size: 0.77rem;
+    color: $muted;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+}
+.rp-date-input {
+  font-family: $fnt;
+  font-size: 0.84rem;
+  border: none;
+  outline: none;
+  color: $txt;
+  background: transparent;
+  cursor: pointer;
+  &::-webkit-calendar-picker-indicator {
+    opacity: 0.5;
+    cursor: pointer;
+  }
+}
+
+.rp-btn {
+  font-family: $fnt;
+  font-size: 0.84rem;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: $r-md;
+  border: 1px solid $bdr;
+  background: $surface;
+  color: $txt;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: $sh-sm;
+  &:hover {
+    background: $gray-lt;
+  }
+  &--refresh {
+    color: $blue;
+    border-color: rgba($blue, 0.25);
+    background: $blue-lt;
+    &:hover {
+      background: darken($blue-lt, 3%);
+    }
+  }
+}
+
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+.rp-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 20px 28px 0;
+  overflow-x: auto;
+  border-bottom: 1px solid $bdr;
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+.rp-tab {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 16px;
+  border: none;
+  background: transparent;
+  border-radius: $r-md $r-md 0 0;
+  font-family: $fnt;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: $muted;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+  &:hover {
+    color: $txt;
+    background: $gray-lt;
+  }
+  &--active {
+    color: $blue;
+    background: $surface;
+    font-weight: 700;
+    border: 1px solid $bdr;
+    border-bottom: 1px solid $surface;
+    margin-bottom: -1px;
+    box-shadow: $sh-sm;
+  }
+  &__spin {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 2px solid rgba($blue, 0.3);
+    border-top-color: $blue;
+    animation: spin 0.6s linear infinite;
+    display: inline-block;
+  }
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+// ── Content ───────────────────────────────────────────────────────────────────
+.rp-content {
+  padding: 24px 28px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+// ── Section ───────────────────────────────────────────────────────────────────
+.rp-section {
+  background: $surface;
+  border: 1px solid $bdr;
+  border-radius: $r-lg;
+  padding: 20px 22px;
+  box-shadow: $sh-sm;
+  &__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  &__title {
+    font-size: 0.93rem;
+    font-weight: 700;
+    color: $txt;
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
+}
+
+// ── Grids ────────────────────────────────────────────────────────────────────
+.rp-grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  @media (max-width: 1100px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  @media (max-width: 640px) {
+    grid-template-columns: 1fr;
+  }
+}
+.rp-grid-5 {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+  @media (max-width: 1200px) {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  @media (max-width: 700px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+.rp-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+  @media (max-width: 900px) {
+    grid-template-columns: 1fr;
+  }
+}
+.rp-grid-2-tight {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+.rp-mt-12 {
+  margin-top: 14px;
+}
+.rp-mt-8 {
+  margin-top: 10px;
+}
+
+// ── Dual column layout (Dashboard & BLs tab) ─────────────────────────────────
+.rp-dual-summary {
+  display: flex;
+  gap: 0;
+  background: $surface;
+  border: 1px solid $bdr;
+  border-radius: $r-lg;
+  overflow: hidden;
+  box-shadow: $sh-sm;
+}
+.rp-dual-col {
+  flex: 1;
+  padding: 20px;
+  &--fac {
+    border-right: 1px solid $bdr;
+  }
+  &__header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: $txt;
+    margin-bottom: 14px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid;
+  }
+  &--fac &__header {
+    border-color: rgba($blue, 0.25);
+    color: $blue;
+  }
+  &--bl &__header {
+    border-color: rgba($teal, 0.25);
+    color: $teal;
+  }
+}
+.rp-dual-divider {
+  width: 1px;
+  background: $bdr;
+}
+
+// ── KPI Card ─────────────────────────────────────────────────────────────────
+.rp-kpi {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 14px 16px;
+  border-radius: $r-md;
+  border: 1px solid;
+  transition: box-shadow 0.15s;
+  &:hover {
+    box-shadow: $sh-md;
+  }
+  &__icon {
+    font-size: 1.35rem;
+    margin-top: 2px;
+    line-height: 1;
+  }
+  &__body {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+  }
+  &__label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  &__value {
+    font-size: 1.1rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  &__sub {
+    font-size: 0.76rem;
+  }
+  &__trend {
+    font-size: 0.76rem;
+    font-weight: 700;
+    &.up {
+      color: $green;
+    }
+    &.down {
+      color: $red;
+    }
+  }
+
+  @mixin v($bg, $border, $lc, $vc, $sc) {
+    background: $bg;
+    border-color: $border;
+    .rp-kpi__label {
+      color: $lc;
+    }
+    .rp-kpi__value {
+      color: $vc;
+    }
+    .rp-kpi__sub {
+      color: $sc;
+    }
+  }
+  &--blue {
+    @include v($blue-lt, rgba($blue, 0.2), darken($blue, 10%), $blue, $muted);
+  }
+  &--green {
+    @include v(
+      $green-lt,
+      rgba($green, 0.2),
+      darken($green, 10%),
+      $green,
+      $muted
+    );
+  }
+  &--yellow {
+    @include v(
+      $yellow-lt,
+      rgba($yellow, 0.2),
+      darken($yellow, 10%),
+      $yellow,
+      $muted
+    );
+  }
+  &--orange {
+    @include v(
+      $orange-lt,
+      rgba($orange, 0.2),
+      darken($orange, 10%),
+      $orange,
+      $muted
+    );
+  }
+  &--red {
+    @include v($red-lt, rgba($red, 0.2), darken($red, 10%), $red, $muted);
+  }
+  &--purple {
+    @include v(
+      $purple-lt,
+      rgba($purple, 0.2),
+      darken($purple, 10%),
+      $purple,
+      $muted
+    );
+  }
+  &--teal {
+    @include v($teal-lt, rgba($teal, 0.2), darken($teal, 10%), $teal, $muted);
+  }
+  &--cyan {
+    @include v($cyan-lt, rgba($cyan, 0.2), darken($cyan, 10%), $cyan, $muted);
+  }
+  &--gray {
+    @include v($gray-lt, rgba($gray, 0.2), $gray, $gray, $muted);
+  }
+}
+
+// ── Table ────────────────────────────────────────────────────────────────────
+.rp-table-wrap {
+  overflow: auto;
+  border-radius: $r-sm;
+  border: 1px solid $bdr;
+  max-height: 500px;
+}
+.rp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.83rem;
+  thead {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: $gray-lt;
+    tr {
+      border-bottom: 1px solid $bdr;
+    }
+    th {
+      padding: 10px 14px;
+      text-align: left;
+      white-space: nowrap;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: $muted;
+    }
+  }
+  tbody {
+    tr {
+      border-bottom: 1px solid $bdr;
+      transition: background 0.1s;
+      &:last-child {
+        border-bottom: none;
+      }
+      &:hover {
+        background: $blue-lt;
+      }
+    }
+    td {
+      padding: 10px 14px;
+      color: $txt;
+      vertical-align: middle;
+    }
+  }
+}
+
+// Column group coloring for client table
+.rp-th--fac {
+  background: rgba($blue, 0.04) !important;
+}
+.rp-th--bl {
+  background: rgba($teal, 0.05) !important;
+}
+
+.rp-bold {
+  font-weight: 700;
+}
+.rp-muted {
+  color: $muted;
+}
+.rp-num {
+  font-family: $fnt-mono;
+  font-size: 0.82rem;
+  text-align: right;
+  white-space: nowrap;
+}
+.rp-text-green {
+  color: $green;
+  font-weight: 700;
+}
+.rp-text-red {
+  color: $red;
+  font-weight: 700;
+}
+.rp-text-purple {
+  color: $purple;
+  font-weight: 700;
+}
+
+.rp-rank {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: $blue-lt;
+  color: $blue;
+  font-size: 0.73rem;
+  font-weight: 800;
+}
+.rp-ref {
+  font-family: $fnt-mono;
+  font-size: 0.77rem;
+  background: $gray-lt;
+  padding: 2px 7px;
+  border-radius: 4px;
+  color: $purple;
+}
+
+// ── Badge ─────────────────────────────────────────────────────────────────────
+.rp-badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 20px;
+  font-size: 0.71rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  &--success {
+    background: $green-lt;
+    color: $green;
+  }
+  &--warning {
+    background: $yellow-lt;
+    color: $yellow;
+  }
+  &--danger {
+    background: $red-lt;
+    color: $red;
+  }
+  &--info {
+    background: $blue-lt;
+    color: $blue;
+  }
+  &--secondary {
+    background: $gray-lt;
+    color: $gray;
+  }
+}
+
+// ── Delta ────────────────────────────────────────────────────────────────────
+.rp-delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.81rem;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 20px;
+  &--up {
+    background: $green-lt;
+    color: $green;
+  }
+  &--down {
+    background: $red-lt;
+    color: $red;
+  }
+}
+
+// ── Progress bar ──────────────────────────────────────────────────────────────
+.rp-progress-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 110px;
+  span {
+    font-size: 0.77rem;
+    font-weight: 700;
+    color: $muted;
+    white-space: nowrap;
+  }
+}
+.rp-progress-track {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: $bdr;
+  overflow: hidden;
+}
+.rp-progress-bar {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+// ── Recovery bar ──────────────────────────────────────────────────────────────
+.rp-recovery-bar-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.rp-recovery-bar {
+  position: relative;
+  height: 28px;
+  background: $bdr;
+  border-radius: 14px;
+  overflow: hidden;
+  &__fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    border-radius: 14px;
+    transition: width 0.5s ease;
+    background: $blue;
+  }
+  &__label {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.82rem;
+    font-weight: 800;
+    color: $txt;
+    z-index: 1;
+  }
+}
+.rp-recovery-legend {
+  display: flex;
+  gap: 20px;
+  &__item {
+    font-size: 0.82rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    &::before {
+      content: "";
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    &--paid {
+      color: $green;
+      &::before {
+        background: $green;
+      }
+    }
+    &--remain {
+      color: $muted;
+      &::before {
+        background: $bdr;
+      }
+    }
+  }
+}
+
+// ── Segmented control ─────────────────────────────────────────────────────────
+.rp-segmented {
+  display: flex;
+  gap: 2px;
+  background: $gray-lt;
+  border-radius: $r-sm;
+  padding: 3px;
+  border: 1px solid $bdr;
+  button {
+    padding: 5px 11px;
+    font-family: $fnt;
+    font-size: 0.77rem;
+    font-weight: 600;
+    border: none;
+    border-radius: calc(#{$r-sm} - 2px);
+    background: transparent;
+    color: $muted;
+    cursor: pointer;
+    transition: all 0.12s;
+    &.active,
+    &:hover {
+      background: $surface;
+      color: $blue;
+      box-shadow: $sh-sm;
+    }
+  }
+}
+
+// ── Mini tab (inside section) ────────────────────────────────────────────────
+.rp-tab-mini {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
+  button {
+    padding: 5px 12px;
+    font-family: $fnt;
+    font-size: 0.78rem;
+    font-weight: 600;
+    border: 1px solid $bdr;
+    border-radius: $r-sm;
+    background: $surface;
+    color: $muted;
+    cursor: pointer;
+    transition: all 0.12s;
+    &.active {
+      background: $blue;
+      color: #fff;
+      border-color: $blue;
+    }
+    &:hover:not(.active) {
+      background: $gray-lt;
+    }
+  }
+}
+
+// ── Comparison header ─────────────────────────────────────────────────────────
+.rp-comp-periods {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  background: $surface;
+  border: 1px solid $bdr;
+  border-radius: $r-lg;
+  padding: 20px 28px;
+  box-shadow: $sh-sm;
+}
+.rp-comp-period {
+  text-align: center;
+  &__label {
+    display: block;
+    font-size: 0.73rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: $muted;
+    margin-bottom: 4px;
+  }
+  &__range {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: $txt;
+  }
+  &--current &__range {
+    color: $blue;
+  }
+}
+.rp-comp-vs {
+  font-size: 1.1rem;
+  font-weight: 900;
+  color: $faint;
+  letter-spacing: 0.08em;
+}
+
+// ── Error & Empty ─────────────────────────────────────────────────────────────
+.rp-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 48px 24px;
+  background: $red-lt;
+  border: 1px solid rgba($red, 0.2);
+  border-radius: $r-lg;
+  text-align: center;
+  span {
+    font-size: 2rem;
+  }
+  p {
+    color: $red;
+    font-weight: 600;
+    margin: 0;
+  }
+}
+.rp-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 36px 24px;
+  color: $faint;
+  text-align: center;
+  span {
+    font-size: 2.2rem;
+  }
+  p {
+    font-size: 0.87rem;
+    margin: 0;
+  }
+}
+
+// ── Responsive ───────────────────────────────────────────────────────────────
+@media (max-width: 768px) {
+  .rp-header {
+    padding: 16px 16px 0;
+  }
+  .rp-tabs {
+    padding: 12px 16px 0;
+  }
+  .rp-content {
+    padding: 16px 16px 32px;
+  }
+  .rp-tab__label {
+    display: none;
+  }
+  .rp-dual-summary {
+    flex-direction: column;
+  }
+  .rp-dual-col--fac {
+    border-right: none;
+    border-bottom: 1px solid $bdr;
+  }
+}

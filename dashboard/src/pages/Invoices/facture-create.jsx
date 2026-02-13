@@ -35,7 +35,7 @@ const MySwal = withReactContent(Swal);
 
 const statusOptions = [
   { value: "brouillon", label: "Non Payé" },
-  { value: "payé", label: "Payé" },
+  { value: "payée", label: "Payé" },
   { value: "partiellement_payée", label: "Partiellement Payé" },
 ];
 
@@ -578,13 +578,6 @@ const FactureCreate = () => {
       advancements: advancementsData.length > 0 ? advancementsData : undefined,
     };
 
-    let paymentStatus = "brouillon";
-    if (totalAdvancements >= totalTTC) {
-      paymentStatus = "payée";
-    } else if (totalAdvancements > 0) {
-      paymentStatus = "partiellement_payée";
-    }
-
     const result = await MySwal.fire({
       title: "Créer la facture ?",
       html: `
@@ -597,7 +590,6 @@ const FactureCreate = () => {
               ? `
             <p><strong>Paiements:</strong> ${totals.totalAdvancements} DH</p>
             <p><strong>Reste à payer:</strong> ${totals.remaining} DH</p>
-            <p><strong>Statut paiement:</strong> ${paymentStatus}</p>
           `
               : ""
           }
@@ -817,10 +809,8 @@ const FactureCreate = () => {
                       required
                     >
                       <option value="espèces">Espèces</option>
-                      <option value="carte_bancaire">Carte Bancaire</option>
                       <option value="chèque">Chèque</option>
                       <option value="virement">Virement</option>
-                      <option value="autre">Autre</option>
                     </select>
                   </div>
 

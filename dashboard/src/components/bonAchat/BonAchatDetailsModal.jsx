@@ -367,75 +367,81 @@ const BonAchatDetailsModal = ({
 <head>
   <title>Bon d'Achat ${bonAchat.num_bon_achat}</title>
   <style>
+    @page {
+      size: A4;
+      margin-left: 10mm;
+      margin-right: 10mm;
+    }
+
+    * {
+      box-sizing: border-box;
+      text-transform: uppercase;
+    }
+
     body {
+      width: 100%;
+      margin: 0;
+      padding-left: 5mm;
+      padding-right: 5mm;
       font-family: Arial, sans-serif;
-      font-size: 10px;
-      margin: 20px;
-      color: #333;
+      font-size: 0.6rem;
+      color: #000;
+      background: #fff;
     }
+
     .header {
+    display:flex;
+    justify-content:space-between;
+
       text-align: center;
-      border-bottom: 2px solid #333;
-      padding-bottom: 10px;
-      margin-bottom: 15px;
     }
-    .company-info, .invoice-info {
-      display: flex;
-      justify-content: space-between;
-      flex-wrap: wrap;
-      margin-bottom: 20px;
+
+    h2 {
+      font-size: 0.9rem;
+      letter-spacing: 1px;
     }
-    .info-block {
-      flex: 1;
-      min-width: 220px;
-    }
-    .info-block p {
-      margin: 3px 0;
-    }
-    .table {
+
+    table {
       width: 100%;
       border-collapse: collapse;
-      margin: 15px 0;
+      margin: 20px 0;
     }
-    .table th, .table td {
-      border: 1px solid #ddd;
-      padding: 6px;
-      text-align: left;
+
+    th, td {
+      border: 1.5px solid #000;
+      padding: 5px;
+      vertical-align: middle;
     }
-    .table th {
-      background-color: #f5f5f5;
-    }
-    .totals {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-end;
-      margin-top: 20px;
-    }
-    .totals p {
-      margin: 2px 0;
-    }
-    .conditions {
-      margin-top: 25px;
-    }
-    .conditions h3 {
-      margin-bottom: 5px;
-      font-size: 12px;
-    }
-    .notes {
-      margin-top: 20px;
-    }
-    .footer {
-      margin-top: 40px;
-      border-top: 1px solid #333;
-      padding-top: 15px;
+
+    th {
+      background: #f2f2f2;
       text-align: center;
     }
-    .status-badge {
+
+    td {
+      text-align: left;
+    }
+
+    .totals {
+      margin-top: 25px;
+      text-align: right;
+    }
+
+    .net-box {
       display: inline-block;
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-size: 10px;
-      margin-left: 10px;
+      border: 2px solid #000;
+      padding: 10px 16px;
+      margin-right: 20px;
+      margin-top: 8px;
+      font-weight: bold;
+      text-align: right;
+    }
+
+    .italic {
+      font-style: italic;
+      font-size: 0.7rem;
+      margin: 20px;
+      font-weight: bold;
     }
   </style>
 </head>

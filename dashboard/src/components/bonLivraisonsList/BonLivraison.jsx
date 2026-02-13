@@ -4,7 +4,7 @@ import BonLivrDetailsModal from "./BonLivrDetailsModal";
 import Table from "@/components/shared/table/Table";
 import "react-date-range/dist/styles.css";
 import "react-date-range/dist/theme/default.css";
-import { format, subDays } from "date-fns";
+import { format, subDays, parse } from "date-fns";
 import {
   FiEye,
   FiFilter,
@@ -50,6 +50,28 @@ const safeToFixed = (value, decimals = 2) => {
   return value.toFixed(decimals);
 };
 
+// Helper function to format Date to yyyy-MM-dd for input[type=date]
+const formatDateForInput = (date) => {
+  if (!date) return "";
+  try {
+    return format(date, "yyyy-MM-dd");
+  } catch (error) {
+    console.error("Error formatting date for input:", error);
+    return "";
+  }
+};
+
+// Helper function to format Date to dd/mm/yyyy for display
+const formatToFrenchDate = (date) => {
+  if (!date) return "";
+  try {
+    return format(date, "dd/MM/yyyy");
+  } catch (error) {
+    console.error("Error formatting date to French:", error);
+    return "";
+  }
+};
+
 const BonLivraisonTable = () => {
   const [bookings, setBookings] = useState([]);
   const [filteredBookings, setFilteredBookings] = useState([]);
@@ -59,9 +81,17 @@ const BonLivraisonTable = () => {
   const [advancementPrice, setAdvancementPrice] = useState(0);
   const [bonStatus, setBonStatus] = useState("brouillon");
 
-  // États simplifiés pour les dates
+  // États pour les dates (stockées comme objets Date)
   const [startDate, setStartDate] = useState(subDays(new Date(), 30));
   const [endDate, setEndDate] = useState(new Date());
+
+  // États pour l'affichage des dates au format français
+  const [displayStartDate, setDisplayStartDate] = useState(
+    formatToFrenchDate(subDays(new Date(), 30)),
+  );
+  const [displayEndDate, setDisplayEndDate] = useState(
+    formatToFrenchDate(new Date()),
+  );
 
   // Statistics states
   const [statistics, setStatistics] = useState({
@@ -90,7 +120,7 @@ const BonLivraisonTable = () => {
 
         if (response.data.success && response.data.bons) {
           const formattedData = response.data.bons.map((bon) => {
-            // Calculate total advancements if they exist
+            // Calculer le total des acomptes
             let totalAdvancements = 0;
             if (bon.advancements && bon.advancements.length > 0) {
               totalAdvancements = bon.advancements.reduce((sum, advance) => {
@@ -98,8 +128,19 @@ const BonLivraisonTable = () => {
               }, 0);
             }
 
-            const total = parseFloat(bon.montant_ht) || 0;
-            const remainingAmount = Math.max(0, total - totalAdvancements);
+            const total = parseFloat(bon.montant_ttc) || 0;
+
+            // REMAINING AMOUNT CORRIGÉ
+            let remainingAmount;
+            if (bon.status === "annulée") {
+              remainingAmount = 0;
+            } else if (bon.status === "brouillon") {
+              remainingAmount = total;
+            } else if (bon.status === "payé") {
+              remainingAmount = 0;
+            } else {
+              remainingAmount = Math.max(0, total - totalAdvancements);
+            }
 
             return {
               id: bon.id,
@@ -111,14 +152,15 @@ const BonLivraisonTable = () => {
               remainingAmount: remainingAmount,
               status: bon.status || "brouillon",
               createdAt: new Date(bon.date_creation || bon.createdAt),
-              createdAtString: new Date(
-                bon.date_creation || bon.createdAt,
-              ).toLocaleDateString("fr-FR"),
+              createdAtString: formatToFrenchDate(
+                new Date(bon.date_creation || bon.createdAt),
+              ),
               date_livraison: bon.date_livraison,
               date_creation: bon.date_creation,
               mode_reglement: bon.mode_reglement || "espèces",
               remise: parseFloat(bon.remise) || 0,
               montant_ht: parseFloat(bon.montant_ht) || 0,
+              montant_ttc: total,
               tva: parseFloat(bon.tva) || 0,
               notes: bon.notes || "",
               produits: bon.produits || [],
@@ -155,24 +197,38 @@ const BonLivraisonTable = () => {
       return;
     }
 
-    // S'assurer que toutes les valeurs sont des nombres
     const totalBons = data.length;
+
+    // Total amount (TTC)
     const totalAmount =
       parseFloat(
         data.reduce((sum, bon) => sum + (parseFloat(bon.total) || 0), 0),
       ) || 0;
+
+    // Total des avances
     const totalAdvancements =
       parseFloat(
         data.reduce((sum, bon) => sum + (parseFloat(bon.advancement) || 0), 0),
       ) || 0;
+
+    // RESTE À PAYER CORRIGÉ
     const totalRemaining =
       parseFloat(
-        data.reduce(
-          (sum, bon) => sum + (parseFloat(bon.remainingAmount) || 0),
-          0,
-        ),
+        data.reduce((sum, bon) => {
+          if (bon.status === "annulée") {
+            return sum + 0;
+          }
+          if (bon.status === "brouillon") {
+            return sum + (parseFloat(bon.total) || 0);
+          }
+          if (bon.status === "payé") {
+            return sum + 0;
+          }
+          return sum + (parseFloat(bon.remainingAmount) || 0);
+        }, 0),
       ) || 0;
 
+    // Compter par statut
     const paidBons = data.filter((bon) => bon.status === "payé").length;
     const draftBons = data.filter((bon) => bon.status === "brouillon").length;
     const partiallyPaidBons = data.filter(
@@ -182,10 +238,11 @@ const BonLivraisonTable = () => {
 
     const averageAmount =
       totalBons > 0 ? parseFloat(totalAmount / totalBons) : 0;
+
+    // Montant collecté = total des avances UNIQUEMENT
+    const collectedAmount = totalAdvancements;
     const completionRate =
-      totalAmount > 0
-        ? parseFloat(((totalAmount - totalRemaining) / totalAmount) * 100)
-        : 0;
+      totalAmount > 0 ? parseFloat((collectedAmount / totalAmount) * 100) : 0;
 
     setStatistics({
       totalBons: totalBons || 0,
@@ -216,19 +273,32 @@ const BonLivraisonTable = () => {
     });
   };
 
-  // Fonctions simplifiées pour les dates
+  // Gestionnaires pour les dates avec popup calendar
   const handleStartDateChange = (e) => {
-    const date = new Date(e.target.value);
-    setStartDate(date);
+    const date = e.target.value ? new Date(e.target.value) : null;
+    if (date) {
+      date.setHours(0, 0, 0, 0);
+      setStartDate(date);
+      setDisplayStartDate(formatToFrenchDate(date));
+    }
   };
 
   const handleEndDateChange = (e) => {
-    const date = new Date(e.target.value);
-    setEndDate(date);
+    const date = e.target.value ? new Date(e.target.value) : null;
+    if (date) {
+      date.setHours(23, 59, 59, 999);
+      setEndDate(date);
+      setDisplayEndDate(formatToFrenchDate(date));
+    }
   };
 
-  const formatDateForInput = (date) => {
-    return format(date, "yyyy-MM-dd");
+  const resetDateFilter = () => {
+    const newStartDate = subDays(new Date(), 30);
+    const newEndDate = new Date();
+    setStartDate(newStartDate);
+    setEndDate(newEndDate);
+    setDisplayStartDate(formatToFrenchDate(newStartDate));
+    setDisplayEndDate(formatToFrenchDate(newEndDate));
   };
 
   // Filter bookings based on selected status and date range
@@ -240,7 +310,7 @@ const BonLivraisonTable = () => {
       result = result.filter((bon) => bon.status === selectedStatus);
     }
 
-    // Filter by date range (version simplifiée)
+    // Filter by date range
     if (startDate && endDate) {
       const start = new Date(startDate);
       start.setHours(0, 0, 0, 0);
@@ -250,6 +320,7 @@ const BonLivraisonTable = () => {
 
       result = result.filter((bon) => {
         const bonDate = new Date(bon.createdAt);
+        bonDate.setHours(0, 0, 0, 0);
         return bonDate >= start && bonDate <= end;
       });
     }
@@ -282,7 +353,6 @@ const BonLivraisonTable = () => {
   };
 
   const handleBonUpdate = (updatedBon) => {
-    // Update the bookings state with the updated bon
     setBookings((prevBons) =>
       prevBons.map((bon) =>
         bon.id === updatedBon.id
@@ -298,7 +368,6 @@ const BonLivraisonTable = () => {
       ),
     );
 
-    // Also update filteredBookings to reflect changes immediately
     setFilteredBookings((prevFiltered) =>
       prevFiltered.map((bon) =>
         bon.id === updatedBon.id
@@ -314,10 +383,7 @@ const BonLivraisonTable = () => {
       ),
     );
 
-    // Recalculate statistics
     calculateStatistics(filteredBookings);
-
-    // Show success message
     topTost("Bon de livraison mis à jour avec succès!", "success");
   };
 
@@ -325,7 +391,6 @@ const BonLivraisonTable = () => {
     const value = parseFloat(e.target.value) || 0;
     setAdvancementPrice(value);
 
-    // Update the selected bon if it exists
     if (selectedBon) {
       const remainingAmount = selectedBon.total - value;
       setSelectedBon({
@@ -404,7 +469,6 @@ const BonLivraisonTable = () => {
       if (response.data.success) {
         const bonData = response.data.bon;
 
-        // Calculate total advancements
         let totalAdvancements = 0;
         if (bonData.advancements && bonData.advancements.length > 0) {
           totalAdvancements = bonData.advancements.reduce((sum, advance) => {
@@ -423,9 +487,8 @@ const BonLivraisonTable = () => {
             (parseFloat(bonData.montant_ttc) || 0) - totalAdvancements,
           status: bonData.status || "brouillon",
           date_creation: bonData.date_creation,
-
           date_livraison: bonData.date_livraison
-            ? new Date(bonData.date_livraison).toLocaleDateString("fr-FR")
+            ? formatToFrenchDate(new Date(bonData.date_livraison))
             : "",
           mode_reglement: bonData.mode_reglement || "espèces",
           remise: parseFloat(bonData.remise) || 0,
@@ -587,39 +650,65 @@ const BonLivraisonTable = () => {
           </Input>
         </InputGroup>
 
-        {/* Date Range Filter - Version simplifiée */}
+        {/* Date Range Filter - With Popup Calendar */}
         <div className="d-flex align-items-center gap-2">
-          <InputGroup size="lg" className="w-auto shadow-sm rounded">
-            <InputGroupText className="bg-white border-0">
-              <FiCalendar className="text-primary fs-6" />
-            </InputGroupText>
-            <Input
-              type="date"
-              className="border-0 bg-white"
-              value={formatDateForInput(startDate)}
-              onChange={handleStartDateChange}
-              max={formatDateForInput(endDate)}
-              title="Date de début"
-            />
-          </InputGroup>
+          <div className="position-relative">
+            <InputGroup size="lg" className="w-auto shadow-sm rounded">
+              <div className="position-relative">
+                <Input
+                  type="date"
+                  className="border-0 bg-white date-input-custom"
+                  value={formatDateForInput(startDate)}
+                  onChange={handleStartDateChange}
+                  max={formatDateForInput(endDate)}
+                  style={{
+                    padding: "20px",
+                    width: "160px",
+                  }}
+                />
+                <span
+                  className="position-absolute top-50 start-0 translate-middle-y ms-5 ps-4 text-muted"
+                  style={{
+                    pointerEvents: "none",
+                    zIndex: 10,
+                    backgroundColor: "transparent",
+                  }}
+                >
+                  {displayStartDate}
+                </span>
+              </div>
+            </InputGroup>
+          </div>
 
           <span className="text-muted">حتى</span>
 
-          <InputGroup size="lg" className="w-auto shadow-sm rounded">
-            <InputGroupText className="bg-white border-0">
-              <FiCalendar className="text-primary fs-6" />
-            </InputGroupText>
-            <Input
-              type="date"
-              className="border-0 bg-white"
-              value={formatDateForInput(endDate)}
-              onChange={handleEndDateChange}
-              min={formatDateForInput(startDate)}
-              title="Date de fin"
-            />
-          </InputGroup>
-
-          {/* Bouton pour réinitialiser à 30 jours */}
+          <div className="position-relative">
+            <InputGroup size="lg" className="w-auto shadow-sm rounded">
+              <div className="position-relative">
+                <Input
+                  type="date"
+                  className="border-0 bg-white date-input-custom"
+                  value={formatDateForInput(endDate)}
+                  onChange={handleEndDateChange}
+                  min={formatDateForInput(startDate)}
+                  style={{
+                    padding: "20px",
+                    width: "160px",
+                  }}
+                />
+                <span
+                  className="position-absolute top-50 start-0 translate-middle-y ms-5 ps-4 text-muted"
+                  style={{
+                    pointerEvents: "none",
+                    zIndex: 10,
+                    backgroundColor: "transparent",
+                  }}
+                >
+                  {displayEndDate}
+                </span>
+              </div>
+            </InputGroup>
+          </div>
         </div>
 
         {/* Create Button */}
@@ -636,8 +725,7 @@ const BonLivraisonTable = () => {
       {/* Afficher la période sélectionnée */}
       <div className="mb-2 text-muted small">
         <FiCalendar className="me-1" />
-        Période : {format(startDate, "dd/MM/yyyy")} -{" "}
-        {format(endDate, "dd/MM/yyyy")}
+        Période : {displayStartDate} - {displayEndDate}
         <span className="ms-3">
           ({filteredBookings.length} bons correspondants)
         </span>
@@ -647,7 +735,7 @@ const BonLivraisonTable = () => {
       <div
         className="mb-4"
         style={{
-          marginTop: "20px", // Réduit pour tenir compte de la ligne de période
+          marginTop: "20px",
         }}
       >
         <div className="row g-3">
@@ -825,6 +913,35 @@ const BonLivraisonTable = () => {
         onUpdate={handleBonUpdate}
         bon={selectedBon}
       />
+
+      <style jsx>{`
+        .date-input-custom {
+          position: relative;
+          color: transparent !important;
+          cursor: pointer;
+        }
+
+        .date-input-custom::-webkit-calendar-picker-indicator {
+          position: absolute;
+          font-size: 26px;
+
+          left: 5px;
+          top: 50%;
+          transform: translateY(-50%);
+          opacity: 1;
+          cursor: pointer;
+          width: 20px;
+          height: 20px;
+        }
+
+        .date-input-custom::-webkit-datetime-edit {
+          display: none;
+        }
+
+        .date-input-custom:focus {
+          outline: none;
+        }
+      `}</style>
     </>
   );
 };

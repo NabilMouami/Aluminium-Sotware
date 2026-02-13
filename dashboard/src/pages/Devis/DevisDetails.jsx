@@ -364,7 +364,8 @@ const DevisDetailsPage = () => {
   <style>
     @page {
       size: A4;
-      margin: 10mm;
+      margin-left: 10mm;
+      margin-right: 10mm;
     }
 
     * {
@@ -373,31 +374,26 @@ const DevisDetailsPage = () => {
     }
 
     body {
-      font-family: Arial, sans-serif;
-      font-size: 0.8rem;
+      width: 100%;
       margin: 0;
-      padding: 10mm;
+      padding-left: 5mm;
+      padding-right: 5mm;
+      font-family: Arial, sans-serif;
+      font-size: 0.6rem;
       color: #000;
       background: #fff;
     }
 
     .header {
+    display:flex;
+    justify-content:space-between;
+
       text-align: center;
-      border-bottom: 3px solid #000;
-      padding-bottom: 16px;
-      margin-bottom: 20px;
     }
 
     h2 {
-      margin: 0 0 10px;
-      font-size: 2rem;
+      font-size: 0.9rem;
       letter-spacing: 1px;
-    }
-
-    .info {
-      display: flex;
-      justify-content: space-between;
-      margin-bottom: 20px;
     }
 
     table {
@@ -408,7 +404,7 @@ const DevisDetailsPage = () => {
 
     th, td {
       border: 1.5px solid #000;
-      padding: 10px;
+      padding: 5px;
       vertical-align: middle;
     }
 
@@ -438,8 +434,8 @@ const DevisDetailsPage = () => {
 
     .italic {
       font-style: italic;
-      font-size: 1.1rem;
-      margin: 30px;
+      font-size: 0.7rem;
+      margin: 20px;
       font-weight: bold;
     }
   </style>

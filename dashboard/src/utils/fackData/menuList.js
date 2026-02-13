@@ -219,6 +219,15 @@ export const menuList = [
   },
   {
     id: 11,
+    name: "Statistics",
+    path: "/reports",
+    icon: "feather-bar-chart-2",
+
+    dropdownMenu: [],
+  },
+
+  {
+    id: 12,
     name: "Utilisateurs",
     path: "#",
     icon: "feather-power",

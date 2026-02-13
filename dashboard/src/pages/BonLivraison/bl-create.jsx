@@ -467,18 +467,6 @@ const BonLivraisonCreate = () => {
         advance.paymentDate || new Date().toISOString().split("T")[0],
     }));
 
-    // Calculer le statut de paiement
-    const totals = calculateTotals();
-    const totalTTC = parseFloat(totals.montantTTC);
-    const totalAdvancements = calculateTotalAdvancements();
-
-    let paymentStatus = "brouillon";
-    if (totalAdvancements >= totalTTC) {
-      paymentStatus = "payé";
-    } else if (totalAdvancements > 0) {
-      paymentStatus = "partiellement_payée";
-    }
-
     // Préparer le payload
     const payload = {
       clientId: formData.clientId,
@@ -502,7 +490,6 @@ const BonLivraisonCreate = () => {
           <p><strong>Montant TTC:</strong> ${totals.montantTTC} DH</p>
           <p><strong>Acomptes:</strong> ${totals.totalAdvancements} DH</p>
           <p><strong>Reste à payer:</strong> ${totals.remaining} DH</p>
-          <p><strong>Statut paiement:</strong> ${paymentStatus}</p>
           <p><strong>Nombre de produits:</strong> ${selectedProduits.length}</p>
           <p><strong>Mode de règlement:</strong> ${formData.mode_reglement}</p>
         </div>
@@ -684,10 +671,8 @@ const BonLivraisonCreate = () => {
                       required
                     >
                       <option value="espèces">Espèces</option>
-                      <option value="carte_bancaire">Carte Bancaire</option>
                       <option value="chèque">Chèque</option>
                       <option value="virement">Virement</option>
-                      <option value="autre">Autre</option>
                     </select>
                   </div>
 

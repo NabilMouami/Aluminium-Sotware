@@ -367,36 +367,38 @@ const DevisDetailsModal = ({
   <title>DEVIS ${devis.num_devis}</title>
 
   <style>
-    @page { size: A4; margin: 10mm; }
+    @page {
+      size: A4;
+      margin-left: 10mm;
+      margin-right: 10mm;
+    }
 
-    * { box-sizing: border-box; text-transform: uppercase; }
+    * {
+      box-sizing: border-box;
+      text-transform: uppercase;
+    }
 
     body {
-      font-family: Arial, sans-serif;
-      font-size: 0.8rem;
+      width: 100%;
       margin: 0;
-      padding: 10mm;
+      padding-left: 5mm;
+      padding-right: 5mm;
+      font-family: Arial, sans-serif;
+      font-size: 0.6rem;
       color: #000;
       background: #fff;
     }
 
     .header {
+    display:flex;
+    justify-content:space-between;
+
       text-align: center;
-      border-bottom: 3px solid #000;
-      padding-bottom: 16px;
-      margin-bottom: 20px;
     }
 
     h2 {
-      margin: 0 0 10px;
-      font-size: 2rem;
+      font-size: 0.9rem;
       letter-spacing: 1px;
-    }
-
-    .info {
-      display: flex;
-      justify-content: space-between;
-      margin-bottom: 20px;
     }
 
     table {
@@ -407,10 +409,18 @@ const DevisDetailsModal = ({
 
     th, td {
       border: 1.5px solid #000;
-      padding: 10px;
+      padding: 5px;
+      vertical-align: middle;
     }
 
-    th { background: #f2f2f2; text-align: center; }
+    th {
+      background: #f2f2f2;
+      text-align: center;
+    }
+
+    td {
+      text-align: left;
+    }
 
     .totals {
       margin-top: 25px;
@@ -422,13 +432,15 @@ const DevisDetailsModal = ({
       border: 2px solid #000;
       padding: 10px 16px;
       margin-right: 20px;
+      margin-top: 8px;
       font-weight: bold;
+      text-align: right;
     }
 
     .italic {
       font-style: italic;
-      font-size: 1.1rem;
-      margin-top: 15px;
+      font-size: 0.7rem;
+      margin: 20px;
       font-weight: bold;
     }
   </style>

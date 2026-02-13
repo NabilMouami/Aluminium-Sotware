@@ -35,6 +35,28 @@ const statusOptions = [
   { value: "en_attente", label: "En Attente" },
 ];
 
+// Helper function to format Date to yyyy-MM-dd for input[type=date]
+const formatDateForInput = (date) => {
+  if (!date) return "";
+  try {
+    return format(date, "yyyy-MM-dd");
+  } catch (error) {
+    console.error("Error formatting date for input:", error);
+    return "";
+  }
+};
+
+// Helper function to format Date to dd/mm/yyyy for display
+const formatToFrenchDate = (date) => {
+  if (!date) return "";
+  try {
+    return format(date, "dd/MM/yyyy");
+  } catch (error) {
+    console.error("Error formatting date to French:", error);
+    return "";
+  }
+};
+
 const ListDevis = () => {
   const [devisList, setDevisList] = useState([]);
   const [filteredDevis, setFilteredDevis] = useState([]);
@@ -43,9 +65,17 @@ const ListDevis = () => {
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // États simplifiés pour les dates
+  // États pour les dates (stockées comme objets Date)
   const [startDate, setStartDate] = useState(subDays(new Date(), 30));
   const [endDate, setEndDate] = useState(new Date());
+
+  // États pour l'affichage des dates au format français
+  const [displayStartDate, setDisplayStartDate] = useState(
+    formatToFrenchDate(subDays(new Date(), 30)),
+  );
+  const [displayEndDate, setDisplayEndDate] = useState(
+    formatToFrenchDate(new Date()),
+  );
 
   useEffect(() => {
     fetchDevis();
@@ -83,11 +113,11 @@ const ListDevis = () => {
             montant_ttc: parseFloat(devis.montant_ttc) || 0,
             status: devis.status || "brouillon",
             date_creation: new Date(devis.date_creation || devis.createdAt),
-            date_creation_string: new Date(
-              devis.date_creation || devis.createdAt,
-            ).toLocaleDateString("fr-FR"),
+            date_creation_string: formatToFrenchDate(
+              new Date(devis.date_creation || devis.createdAt),
+            ),
             date_acceptation: devis.date_acceptation
-              ? new Date(devis.date_acceptation).toLocaleDateString("fr-FR")
+              ? formatToFrenchDate(new Date(devis.date_acceptation))
               : "",
             mode_reglement: devis.mode_reglement || "espèces",
             notes: devis.notes || "",
@@ -122,19 +152,32 @@ const ListDevis = () => {
     }
   };
 
-  // Fonctions simplifiées pour les dates
+  // Gestionnaires pour les dates avec popup calendar
   const handleStartDateChange = (e) => {
-    const date = new Date(e.target.value);
-    setStartDate(date);
+    const date = e.target.value ? new Date(e.target.value) : null;
+    if (date) {
+      date.setHours(0, 0, 0, 0);
+      setStartDate(date);
+      setDisplayStartDate(formatToFrenchDate(date));
+    }
   };
 
   const handleEndDateChange = (e) => {
-    const date = new Date(e.target.value);
-    setEndDate(date);
+    const date = e.target.value ? new Date(e.target.value) : null;
+    if (date) {
+      date.setHours(23, 59, 59, 999);
+      setEndDate(date);
+      setDisplayEndDate(formatToFrenchDate(date));
+    }
   };
 
-  const formatDateForInput = (date) => {
-    return format(date, "yyyy-MM-dd");
+  const resetDateFilter = () => {
+    const newStartDate = subDays(new Date(), 30);
+    const newEndDate = new Date();
+    setStartDate(newStartDate);
+    setEndDate(newEndDate);
+    setDisplayStartDate(formatToFrenchDate(newStartDate));
+    setDisplayEndDate(formatToFrenchDate(newEndDate));
   };
 
   // Filter devis based on selected status and date range
@@ -156,6 +199,7 @@ const ListDevis = () => {
 
       result = result.filter((devis) => {
         const devisDate = new Date(devis.date_creation);
+        devisDate.setHours(0, 0, 0, 0);
         return devisDate >= start && devisDate <= end;
       });
     }
@@ -199,7 +243,6 @@ const ListDevis = () => {
       ),
     );
 
-    // Also update filtered list (important!)
     setFilteredDevis((prev) =>
       prev.map((item) =>
         item.id === updatedDevis.id ? { ...item, ...updatedDevis } : item,
@@ -270,11 +313,11 @@ const ListDevis = () => {
           date_creation: new Date(
             devisData.date_creation || devisData.createdAt,
           ),
-          date_creation_string: new Date(
-            devisData.date_creation || devisData.createdAt,
-          ).toLocaleDateString("fr-FR"),
+          date_creation_string: formatToFrenchDate(
+            new Date(devisData.date_creation || devisData.createdAt),
+          ),
           date_acceptation: devisData.date_acceptation
-            ? new Date(devisData.date_acceptation).toLocaleDateString("fr-FR")
+            ? formatToFrenchDate(new Date(devisData.date_acceptation))
             : "",
           mode_reglement: devisData.mode_reglement || "espèces",
           notes: devisData.notes || "",
@@ -307,7 +350,6 @@ const ListDevis = () => {
       );
 
       if (response.data.success) {
-        // Update the local state
         setDevisList((prev) =>
           prev.map((devis) =>
             devis.id === devisId
@@ -316,7 +358,7 @@ const ListDevis = () => {
                   status: newStatus,
                   date_acceptation:
                     newStatus === "accepté"
-                      ? new Date().toISOString()
+                      ? formatToFrenchDate(new Date())
                       : devis.date_acceptation,
                 }
               : devis,
@@ -324,7 +366,7 @@ const ListDevis = () => {
         );
 
         topTost(`Statut mis à jour: ${getStatusText(newStatus)}`, "success");
-        fetchDevis(); // Refresh the list
+        fetchDevis();
       }
     } catch (error) {
       console.error("Error updating status:", error);
@@ -512,37 +554,67 @@ const ListDevis = () => {
           </Input>
         </InputGroup>
 
-        {/* Date Range Filter - Version simplifiée */}
+        {/* Date Range Filter - With Popup Calendar */}
         <div className="d-flex align-items-center gap-2">
-          <InputGroup size="lg" className="w-auto shadow-sm rounded">
-            <InputGroupText className="bg-white border-0">
-              <FiCalendar className="text-primary fs-6" />
-            </InputGroupText>
-            <Input
-              type="date"
-              className="border-0 bg-white"
-              value={formatDateForInput(startDate)}
-              onChange={handleStartDateChange}
-              max={formatDateForInput(endDate)}
-              title="Date de début"
-            />
-          </InputGroup>
+          <div className="position-relative">
+            <InputGroup size="lg" className="w-auto shadow-sm rounded">
+              <div className="position-relative">
+                <Input
+                  type="date"
+                  className="border-0 bg-white date-input-custom"
+                  value={formatDateForInput(startDate)}
+                  onChange={handleStartDateChange}
+                  max={formatDateForInput(endDate)}
+                  style={{
+                    paddingRight: "10px",
+                    width: "160px",
+                  }}
+                />
+                <span
+                  className="position-absolute top-50 start-0 translate-middle-y ms-5 ps-4 text-muted"
+                  style={{
+                    pointerEvents: "none",
+                    zIndex: 10,
+                    backgroundColor: "transparent",
+                  }}
+                >
+                  {displayStartDate}
+                </span>
+              </div>
+            </InputGroup>
+          </div>
 
           <span className="text-muted">حتى</span>
 
-          <InputGroup size="lg" className="w-auto shadow-sm rounded">
-            <InputGroupText className="bg-white border-0">
-              <FiCalendar className="text-primary fs-6" />
-            </InputGroupText>
-            <Input
-              type="date"
-              className="border-0 bg-white"
-              value={formatDateForInput(endDate)}
-              onChange={handleEndDateChange}
-              min={formatDateForInput(startDate)}
-              title="Date de fin"
-            />
-          </InputGroup>
+          <div className="position-relative">
+            <InputGroup size="lg" className="w-auto shadow-sm rounded">
+              <div className="position-relative">
+                <Input
+                  type="date"
+                  className="border-0 bg-white date-input-custom"
+                  value={formatDateForInput(endDate)}
+                  onChange={handleEndDateChange}
+                  min={formatDateForInput(startDate)}
+                  style={{
+                    paddingRight: "10px",
+                    width: "160px",
+                  }}
+                />
+                <span
+                  className="position-absolute top-50 start-0 translate-middle-y ms-5 ps-4 text-muted"
+                  style={{
+                    pointerEvents: "none",
+                    zIndex: 10,
+                    backgroundColor: "transparent",
+                  }}
+                >
+                  {displayEndDate}
+                </span>
+              </div>
+            </InputGroup>
+          </div>
+
+          {/* Reset button */}
         </div>
 
         <div className="ms-auto d-flex gap-2">
@@ -568,8 +640,7 @@ const ListDevis = () => {
       {/* Afficher la période sélectionnée */}
       <div className="mb-2 text-muted small">
         <FiCalendar className="me-1" />
-        Période : {format(startDate, "dd/MM/yyyy")} -{" "}
-        {format(endDate, "dd/MM/yyyy")}
+        Période : {displayStartDate} - {displayEndDate}
         <span className="ms-3">
           ({filteredDevis.length} devis correspondants)
         </span>
@@ -650,6 +721,35 @@ const ListDevis = () => {
         }
         onDevisUpdated={handleDevisUpdated}
       />
+
+      <style jsx>{`
+        .date-input-custom {
+          position: relative;
+          color: transparent !important;
+          cursor: pointer;
+        }
+
+        .date-input-custom::-webkit-calendar-picker-indicator {
+          position: absolute;
+          font-size: 26px;
+
+          left: 5px;
+          top: 50%;
+          transform: translateY(-50%);
+          opacity: 1;
+          cursor: pointer;
+          width: 20px;
+          height: 20px;
+        }
+
+        .date-input-custom::-webkit-datetime-edit {
+          display: none;
+        }
+
+        .date-input-custom:focus {
+          outline: none;
+        }
+      `}</style>
     </>
   );
 };

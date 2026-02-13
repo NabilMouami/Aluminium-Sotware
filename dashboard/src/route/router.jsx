@@ -44,6 +44,7 @@ import BonAchatDetailsPage from "../pages/BonAchat/BonAchatDetails";
 import BonAvoirDetailsPage from "../pages/BonAvoir/BonAvoirDetails";
 import ClientDetails from "../pages/Clients/ClientDetails";
 import FornisseurDetails from "../pages/Fornisseur/FornisseurDetails";
+import ReportsPage from "../pages/Reports/ReportsPage";
 
 export const router = createBrowserRouter([
   {
@@ -199,6 +200,10 @@ export const router = createBrowserRouter([
       {
         path: "bon-achat/:id",
         element: <BonAchatDetailsPage />,
+      },
+      {
+        path: "reports",
+        element: <ReportsPage />,
       },
     ],
   },

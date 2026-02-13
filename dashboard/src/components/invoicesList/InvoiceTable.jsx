@@ -50,6 +50,28 @@ const statusOptions = [
   { value: "annulée", label: "Annulée" },
 ];
 
+// Helper function to format Date to yyyy-MM-dd for input[type=date]
+const formatDateForInput = (date) => {
+  if (!date) return "";
+  try {
+    return format(date, "yyyy-MM-dd");
+  } catch (error) {
+    console.error("Error formatting date for input:", error);
+    return "";
+  }
+};
+
+// Helper function to format Date to dd/mm/yyyy for display
+const formatToFrenchDate = (date) => {
+  if (!date) return "";
+  try {
+    return format(date, "dd/MM/yyyy");
+  } catch (error) {
+    console.error("Error formatting date to French:", error);
+    return "";
+  }
+};
+
 const FactureTable = () => {
   const [factures, setFactures] = useState([]);
   const [filteredFactures, setFilteredFactures] = useState([]);
@@ -62,9 +84,17 @@ const FactureTable = () => {
   const [clients, setClients] = useState([]);
   const [selectedClient, setSelectedClient] = useState("all");
 
-  // États simplifiés pour les dates
+  // États pour les dates (stockées comme objets Date)
   const [startDate, setStartDate] = useState(subDays(new Date(), 30));
   const [endDate, setEndDate] = useState(new Date());
+
+  // États pour l'affichage des dates au format français
+  const [displayStartDate, setDisplayStartDate] = useState(
+    formatToFrenchDate(subDays(new Date(), 30)),
+  );
+  const [displayEndDate, setDisplayEndDate] = useState(
+    formatToFrenchDate(new Date()),
+  );
 
   // Statistics states
   const [statistics, setStatistics] = useState({
@@ -126,11 +156,27 @@ const FactureTable = () => {
 
       if (response.data.success && response.data.factures) {
         const formattedData = response.data.factures.map((facture) => {
-          // Calculate payment status
-          const isFullyPaid = facture.isFullyPaid || false;
+          // Calculer le total des paiements
+          const paidAmount = parseFloat(facture.montant_paye) || 0;
+          const totalTTC = parseFloat(facture.montant_ttc) || 0;
+
+          // CORRECTION: Calcul du montant restant selon le statut
+          let remainingAmount;
+          if (facture.status === "annulée") {
+            remainingAmount = 0;
+          } else if (facture.status === "brouillon") {
+            remainingAmount = totalTTC;
+          } else if (facture.status === "payée") {
+            remainingAmount = 0;
+          } else {
+            remainingAmount = Math.max(0, totalTTC - paidAmount);
+          }
+
+          // Check if overdue
           const isOverdue = facture.date_echeance
             ? isBefore(parseISO(facture.date_echeance), new Date()) &&
-              !isFullyPaid
+              facture.status !== "payée" &&
+              facture.status !== "annulée"
             : false;
 
           return {
@@ -142,20 +188,20 @@ const FactureTable = () => {
             totalHT: parseFloat(facture.montant_ht) || 0,
             tva: parseFloat(facture.tva) || 0,
             montantTVA: parseFloat(facture.montant_tva) || 0,
-            totalTTC: parseFloat(facture.montant_ttc) || 0,
-            paidAmount: parseFloat(facture.montant_paye) || 0,
-            remainingAmount: parseFloat(facture.montant_restant) || 0,
+            totalTTC: totalTTC,
+            paidAmount: paidAmount,
+            remainingAmount: remainingAmount,
             status: facture.status || "brouillon",
             paymentStatus: facture.paymentStatus || "impayée",
             createdAt: parseISO(facture.date_creation || facture.createdAt),
-            createdAtString: new Date(
-              facture.date_creation || facture.createdAt,
-            ).toLocaleDateString("fr-FR"),
+            createdAtString: formatToFrenchDate(
+              parseISO(facture.date_creation || facture.createdAt),
+            ),
             invoiceDate: facture.date_facturation
-              ? new Date(facture.date_facturation).toLocaleDateString("fr-FR")
+              ? formatToFrenchDate(parseISO(facture.date_facturation))
               : "",
             dueDate: facture.date_echeance
-              ? new Date(facture.date_echeance).toLocaleDateString("fr-FR")
+              ? formatToFrenchDate(parseISO(facture.date_echeance))
               : "",
             dueDateRaw: facture.date_echeance,
             mode_reglement: facture.mode_reglement || "espèces",
@@ -163,7 +209,7 @@ const FactureTable = () => {
             products: facture.produits || [],
             advancements: facture.advancements || [],
             bon_livraison: facture.bon_livraison,
-            isFullyPaid: isFullyPaid,
+            isFullyPaid: remainingAmount <= 0,
             isOverdue: isOverdue,
             isLinkedToBL: !!facture.bon_livraison_id,
           };
@@ -203,10 +249,20 @@ const FactureTable = () => {
       0,
     );
     const totalPaid = data.reduce((sum, f) => sum + (f.paidAmount || 0), 0);
-    const totalRemaining = data.reduce(
-      (sum, f) => sum + (f.remainingAmount || 0),
-      0,
-    );
+
+    // CORRECTION: Calcul du reste à payer
+    const totalRemaining = data.reduce((sum, f) => {
+      if (f.status === "annulée") {
+        return sum + 0;
+      }
+      if (f.status === "brouillon") {
+        return sum + (f.totalTTC || 0);
+      }
+      if (f.status === "payée") {
+        return sum + 0;
+      }
+      return sum + (f.remainingAmount || 0);
+    }, 0);
 
     const paidFactures = data.filter((f) => f.status === "payée").length;
     const draftFactures = data.filter((f) => f.status === "brouillon").length;
@@ -214,11 +270,17 @@ const FactureTable = () => {
       (f) => f.status === "partiellement_payée",
     ).length;
     const cancelledFactures = data.filter((f) => f.status === "annulée").length;
-    const overdueFactures = data.filter((f) => f.isOverdue).length;
+
+    const overdueFactures = data.filter(
+      (f) => f.isOverdue && f.status !== "payée" && f.status !== "annulée",
+    ).length;
+
     const linkedToBLCount = data.filter((f) => f.isLinkedToBL).length;
 
     const overdueAmount = data
-      .filter((f) => f.isOverdue)
+      .filter(
+        (f) => f.isOverdue && f.status !== "payée" && f.status !== "annulée",
+      )
       .reduce((sum, f) => sum + (f.remainingAmount || 0), 0);
 
     const averageInvoiceAmount =
@@ -265,19 +327,32 @@ const FactureTable = () => {
     });
   };
 
-  // Fonctions simplifiées pour les dates
+  // Gestionnaires pour les dates avec popup calendar
   const handleStartDateChange = (e) => {
-    const date = new Date(e.target.value);
-    setStartDate(date);
+    const date = e.target.value ? new Date(e.target.value) : null;
+    if (date) {
+      date.setHours(0, 0, 0, 0);
+      setStartDate(date);
+      setDisplayStartDate(formatToFrenchDate(date));
+    }
   };
 
   const handleEndDateChange = (e) => {
-    const date = new Date(e.target.value);
-    setEndDate(date);
+    const date = e.target.value ? new Date(e.target.value) : null;
+    if (date) {
+      date.setHours(23, 59, 59, 999);
+      setEndDate(date);
+      setDisplayEndDate(formatToFrenchDate(date));
+    }
   };
 
-  const formatDateForInput = (date) => {
-    return format(date, "yyyy-MM-dd");
+  const resetDateFilter = () => {
+    const newStartDate = subDays(new Date(), 30);
+    const newEndDate = new Date();
+    setStartDate(newStartDate);
+    setEndDate(newEndDate);
+    setDisplayStartDate(formatToFrenchDate(newStartDate));
+    setDisplayEndDate(formatToFrenchDate(newEndDate));
   };
 
   // Filter factures based on selected criteria
@@ -315,6 +390,7 @@ const FactureTable = () => {
 
       result = result.filter((facture) => {
         const invoiceDate = new Date(facture.createdAt);
+        invoiceDate.setHours(0, 0, 0, 0);
         return invoiceDate >= start && invoiceDate <= end;
       });
     }
@@ -351,7 +427,6 @@ const FactureTable = () => {
   };
 
   const handleFactureUpdate = (updatedFacture) => {
-    // Update the factures state with the updated invoice
     setFactures((prevFactures) =>
       prevFactures.map((facture) =>
         facture.id === updatedFacture.id
@@ -369,7 +444,6 @@ const FactureTable = () => {
       ),
     );
 
-    // Also update filteredFactures to reflect changes immediately
     setFilteredFactures((prevFiltered) =>
       prevFiltered.map((facture) =>
         facture.id === updatedFacture.id
@@ -387,10 +461,7 @@ const FactureTable = () => {
       ),
     );
 
-    // Recalculate statistics
     calculateStatistics(filteredFactures);
-
-    // Show success message
     topTost("Facture mise à jour avec succès!", "success");
   };
 
@@ -398,7 +469,6 @@ const FactureTable = () => {
     const value = parseFloat(e.target.value) || 0;
     setPaymentAmount(value);
 
-    // Update the selected facture if it exists
     if (selectedFacture) {
       const remainingAmount =
         selectedFacture.totalTTC - (selectedFacture.paidAmount + value);
@@ -470,10 +540,8 @@ const FactureTable = () => {
       );
 
       if (response.data.success) {
-        // Refresh the facture data
         fetchFactures();
 
-        // Update selected facture
         const updatedFacture = {
           ...selectedFacture,
           paidAmount: response.data.facture.montant_paye,
@@ -524,10 +592,8 @@ const FactureTable = () => {
         },
       );
 
-      // Refresh the list
       fetchFactures();
 
-      // If the cancelled facture is the selected one, close the modal
       if (selectedFacture && selectedFacture.id === factureId) {
         setIsDetailsModalOpen(false);
       }
@@ -597,7 +663,6 @@ const FactureTable = () => {
       if (response.data.success) {
         const factureData = response.data.facture;
 
-        // Check if overdue
         const isOverdue = factureData.date_echeance
           ? isBefore(parseISO(factureData.date_echeance), new Date()) &&
             !factureData.isFullyPaid
@@ -611,7 +676,6 @@ const FactureTable = () => {
           clientId: factureData.client_id,
           totalHT: parseFloat(factureData.montant_ht) || 0,
           tva: parseFloat(factureData.tva) || 0,
-
           montantTVA: parseFloat(factureData.montant_tva) || 0,
           totalTTC: parseFloat(factureData.montant_ttc) || 0,
           paidAmount: parseFloat(factureData.montant_paye) || 0,
@@ -621,14 +685,14 @@ const FactureTable = () => {
           createdAt: parseISO(
             factureData.date_creation || factureData.createdAt,
           ),
-          createdAtString: new Date(
-            factureData.date_creation || factureData.createdAt,
-          ).toLocaleDateString("fr-FR"),
+          createdAtString: formatToFrenchDate(
+            parseISO(factureData.date_creation || factureData.createdAt),
+          ),
           invoiceDate: factureData.date_facturation
-            ? new Date(factureData.date_facturation).toLocaleDateString("fr-FR")
+            ? formatToFrenchDate(parseISO(factureData.date_facturation))
             : "",
           dueDate: factureData.date_echeance
-            ? new Date(factureData.date_echeance).toLocaleDateString("fr-FR")
+            ? formatToFrenchDate(parseISO(factureData.date_echeance))
             : "",
           dueDateRaw: factureData.date_echeance,
           mode_reglement: factureData.mode_reglement || "espèces",
@@ -739,13 +803,6 @@ const FactureTable = () => {
           {row.original.status !== "annulée" && (
             <>
               <button
-                className="btn btn-sm btn-outline-warning"
-                onClick={() => handleCancelFacture(row.original.id)}
-                title="Annuler"
-              >
-                <FiXCircle />
-              </button>
-              <button
                 className="btn btn-sm btn-outline-danger"
                 onClick={() => handleDeleteFacture(row.original.id)}
                 title="Supprimer"
@@ -842,49 +899,67 @@ const FactureTable = () => {
           </Input>
         </InputGroup>
 
-        {/* Date Range Filter - Version simplifiée */}
+        {/* Date Range Filter - With Popup Calendar */}
         <div className="d-flex align-items-center gap-2">
-          <InputGroup size="sm" className="w-auto shadow-sm rounded">
-            <InputGroupText className="bg-white border-0">
-              <FiCalendar className="text-primary fs-6" />
-            </InputGroupText>
-            <Input
-              type="date"
-              className="border-0 bg-white"
-              value={formatDateForInput(startDate)}
-              onChange={handleStartDateChange}
-              max={formatDateForInput(endDate)}
-              title="Date de début"
-            />
-          </InputGroup>
+          <div className="position-relative">
+            <InputGroup size="sm" className="w-auto shadow-sm rounded">
+              <div className="position-relative">
+                <Input
+                  type="date"
+                  className="border-0 bg-white date-input-custom"
+                  value={formatDateForInput(startDate)}
+                  onChange={handleStartDateChange}
+                  max={formatDateForInput(endDate)}
+                  style={{
+                    paddingRight: "10px",
+                    width: "140px",
+                  }}
+                />
+                <span
+                  className="position-absolute top-50 start-0 translate-middle-y ms-5 ps-4 text-muted"
+                  style={{
+                    pointerEvents: "none",
+                    zIndex: 10,
+                    backgroundColor: "transparent",
+                    fontSize: "0.875rem",
+                  }}
+                >
+                  {displayStartDate}
+                </span>
+              </div>
+            </InputGroup>
+          </div>
 
           <span className="text-muted">à</span>
 
-          <InputGroup size="sm" className="w-auto shadow-sm rounded">
-            <InputGroupText className="bg-white border-0">
-              <FiCalendar className="text-primary fs-6" />
-            </InputGroupText>
-            <Input
-              type="date"
-              className="border-0 bg-white"
-              value={formatDateForInput(endDate)}
-              onChange={handleEndDateChange}
-              min={formatDateForInput(startDate)}
-              title="Date de fin"
-            />
-          </InputGroup>
-
-          {/* Bouton pour réinitialiser à 30 jours */}
-          <button
-            className="btn btn-sm btn-outline-secondary"
-            onClick={() => {
-              setStartDate(subDays(new Date(), 30));
-              setEndDate(new Date());
-            }}
-            title="30 derniers jours"
-          >
-            30j
-          </button>
+          <div className="position-relative">
+            <InputGroup size="sm" className="w-auto shadow-sm rounded">
+              <div className="position-relative">
+                <Input
+                  type="date"
+                  className="border-0 bg-white date-input-custom"
+                  value={formatDateForInput(endDate)}
+                  onChange={handleEndDateChange}
+                  min={formatDateForInput(startDate)}
+                  style={{
+                    paddingRight: "10px",
+                    width: "140px",
+                  }}
+                />
+                <span
+                  className="position-absolute top-50 start-0 translate-middle-y ms-5 ps-4 text-muted"
+                  style={{
+                    pointerEvents: "none",
+                    zIndex: 10,
+                    backgroundColor: "transparent",
+                    fontSize: "0.875rem",
+                  }}
+                >
+                  {displayEndDate}
+                </span>
+              </div>
+            </InputGroup>
+          </div>
         </div>
 
         {/* Create Button */}
@@ -901,8 +976,7 @@ const FactureTable = () => {
       {/* Afficher la période sélectionnée */}
       <div className="mb-2 text-muted small">
         <FiCalendar className="me-1" />
-        Période : {format(startDate, "dd/MM/yyyy")} -{" "}
-        {format(endDate, "dd/MM/yyyy")}
+        Période : {displayStartDate} - {displayEndDate}
         <span className="ms-3">
           ({filteredFactures.length} facture(s) correspondante(s))
         </span>
@@ -1114,6 +1188,35 @@ const FactureTable = () => {
         onUpdate={handleFactureUpdate}
         facture={selectedFacture}
       />
+
+      <style jsx>{`
+        .date-input-custom {
+          position: relative;
+          color: transparent !important;
+          cursor: pointer;
+        }
+
+        .date-input-custom::-webkit-calendar-picker-indicator {
+          position: absolute;
+          font-size: 26px;
+
+          left: 5px;
+          top: 50%;
+          transform: translateY(-50%);
+          opacity: 1;
+          cursor: pointer;
+          width: 20px;
+          height: 20px;
+        }
+
+        .date-input-custom::-webkit-datetime-edit {
+          display: none;
+        }
+
+        .date-input-custom:focus {
+          outline: none;
+        }
+      `}</style>
     </>
   );
 };

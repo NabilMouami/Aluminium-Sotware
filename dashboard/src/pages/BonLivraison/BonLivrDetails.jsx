@@ -349,90 +349,84 @@ const BonLivraisonDetailsPage = () => {
 <head>
   <title>BON DE LIVRAISON ${numBL}</title>
   <meta charset="UTF-8">
-<style>
-  /* PAGE SETUP */
-  @page {
-    size: A4;
-    margin: 10mm;
-  }
+  <style>
+    @page {
+      size: A4;
+      margin-left: 10mm;
+      margin-right: 10mm;
+    }
 
-  * {
-    box-sizing: border-box;
-    text-transform: uppercase;
-  }
+    * {
+      box-sizing: border-box;
+      text-transform: uppercase;
+    }
 
-  body {
-    width: 100%;
-    min-height: 100%;
-    margin: 0;
-    padding: 10mm;
-    font-family: Arial, sans-serif;
-    font-size: 0.8rem;
-    color: #000;
-    background: #fff;
-  }
+    body {
+      width: 100%;
+      margin: 0;
+      padding-left: 5mm;
+      padding-right: 5mm;
+      font-family: Arial, sans-serif;
+      font-size: 0.6rem;
+      color: #000;
+      background: #fff;
+    }
 
-  .header {
-    text-align: center;
-    border-bottom: 3px solid #000;
-    padding-bottom: 16px;
-    margin-bottom: 20px;
-  }
+    .header {
+    display:flex;
+    justify-content:space-between;
 
-  h2 {
-    margin: 0 0 10px;
-    font-size: 2rem;
-    letter-spacing: 1px;
-  }
+      text-align: center;
+    }
 
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 20px 0;
-  }
+    h2 {
+      font-size: 0.9rem;
+      letter-spacing: 1px;
+    }
 
-  th,
-  td {
-    border: 1.5px solid #000;
-    padding: 10px;
-    vertical-align: middle;
-  }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+    }
 
-  th {
-    background: #f2f2f2;
-    text-align: center;
-  }
+    th, td {
+      border: 1.5px solid #000;
+      padding: 5px;
+      vertical-align: middle;
+    }
 
-  td {
-    text-align: left;
-  }
+    th {
+      background: #f2f2f2;
+      text-align: center;
+    }
 
-  .totals {
-    margin-top: 25px;
-    text-align: right;
-  }
+    td {
+      text-align: left;
+    }
 
-  .totals p {
-    margin: 6px 0;
-  }
+    .totals {
+      margin-top: 25px;
+      text-align: right;
+    }
 
-  .italic {
-    font-style: italic;
-    font-size: 1.1rem;
-    margin: 30px;
-    font-weight: bold;
-  }
     .net-box {
-  display: inline-block;
-  border: 2px solid #000;
-  padding: 10px 16px;
-  margin-right: 20px;
-  margin-top: 8px;
-  font-weight: bold;
-  text-align: right;
-}
+      display: inline-block;
+      border: 2px solid #000;
+      padding: 10px 16px;
+      margin-right: 20px;
+      margin-top: 8px;
+      font-weight: bold;
+      text-align: right;
+    }
 
-</style>
+    .italic {
+      font-style: italic;
+      font-size: 0.7rem;
+      margin: 20px;
+      font-weight: bold;
+    }
+  </style>
 
 </head>
 <body>
@@ -512,7 +506,7 @@ const BonLivraisonDetailsPage = () => {
       container.style.padding = "15mm";
       container.style.background = "white";
       container.style.fontFamily = "Arial, sans-serif";
-      container.style.fontSize = "0.8rem";
+      container.style.fontSize = "0.5rem";
       container.style.textTransform = "uppercase";
       container.style.boxSizing = "border-box";
       container.style.position = "absolute";
@@ -539,13 +533,13 @@ const BonLivraisonDetailsPage = () => {
       const creationDateFormatted = formatDateWithTime(bon.date_creation);
 
       container.innerHTML = `
-  <div style="text-align:center; border-bottom:3px solid #000; padding-bottom:15px; margin-bottom:20px;">
-    <h1 style="margin:0;">BON DE LIVRAISON</h1>
+  <div style="text-align:center; border-bottom:3px solid #000; padding-bottom:5px; margin-bottom:10px;">
+    <h3 style="margin:0;">BON DE LIVRAISON</h3>
     <p style="margin:8px 0;font-weight: bold;">ALUMINIUM OULAD BRAHIM</p>
     <p>TÉL : +212 671953725</p>
   </div>
 
-  <div style="display:flex; justify-content:space-between; margin-bottom:25px;">
+  <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
     <div>
       <p><strong>NOM CLIENT :</strong><br/>${clientName}</p>
     </div>
@@ -555,7 +549,7 @@ const BonLivraisonDetailsPage = () => {
     </div>
   </div>
 
-  <table style="width:100%; border-collapse:collapse; margin-bottom:25px;">
+  <table style="width:100%; border-collapse:collapse; margin-bottom:5px;">
     <thead>
       <tr>
         <th style="border:1.5px solid #000; padding:10px;">CODE</th>
@@ -570,9 +564,9 @@ const BonLivraisonDetailsPage = () => {
         .map(
           (p) => `
         <tr>
-          <td style="border:1.5px solid #000; padding:8px;">${p.reference || "—"}</td>
-          <td style="border:1.5px solid #000; padding:8px;">${p.designation || "—"}</td>
-          <td style="border:1.5px solid #000; padding:8px; text-align:center;">
+          <td style="border:1.5px solid #000; padding:5px;">${p.reference || "—"}</td>
+          <td style="border:1.5px solid #000; padding:5px;">${p.designation || "—"}</td>
+          <td style="border:1.5px solid #000; padding:5px; text-align:center;">
             ${p.BonLivraisonProduit?.quantite || 0}
           </td>
           <td style="border:1.5px solid #000; padding:8px; text-align:right;">
