@@ -335,13 +335,13 @@ const FactureDetailsPage = () => {
     };
 
     const creationDateFormatted = formatDateWithTime(facture.date_creation);
-
     const printTotalText = totalToFrenchText(total);
 
     const content = `
 <!DOCTYPE html>
-<html>
+<html lang="fr">
 <head>
+  <meta charset="UTF-8" />
   <title>Facture ${numFacture}</title>
 
   <style>
@@ -368,9 +368,8 @@ const FactureDetailsPage = () => {
     }
 
     .header {
-    display:flex;
-    justify-content:space-between;
-
+      display: flex;
+      justify-content: space-between;
       text-align: center;
     }
 
@@ -382,7 +381,7 @@ const FactureDetailsPage = () => {
     table {
       width: 100%;
       border-collapse: collapse;
-      margin: 20px 0;
+      margin: 5px 0;
     }
 
     th, td {
@@ -398,27 +397,68 @@ const FactureDetailsPage = () => {
 
     td {
       text-align: left;
+      font-size: 0.8rem;
     }
 
     .totals {
-      margin-top: 25px;
       text-align: right;
+      margin-top: 20px;
+    }
+
+    .totals-table {
+      width: auto;
+      margin-left: auto;
+      border-collapse: collapse;
+    }
+
+    .totals-table td {
+      border: none;
+      padding: 5px 10px;
+      text-align: right;
+      font-size: 0.75rem;
+    }
+
+    .totals-table td.label {
+      font-weight: bold;
+    }
+
+    .totals-table td.amount {
+      min-width: 100px;
+    }
+
+    .totals-table tr.total-ttc td {
+      font-weight: bold;
+      font-size: 0.85rem;
+      border-top: 2px solid #000;
+      padding-top: 10px;
     }
 
     .net-box {
-      display: inline-block;
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 20px;
+      font-weight: bold;
+      min-width: 260px;
+      margin-top: 15px;
+    }
+
+    .net-label {
+      font-size: 0.75rem;
       border: 2px solid #000;
       padding: 10px 16px;
-      margin-right: 20px;
-      margin-top: 8px;
-      font-weight: bold;
-      text-align: right;
+    }
+
+    .net-amount {
+      font-size: 0.85rem;
+      padding: 10px 16px;
+      border: 2px solid #000;
     }
 
     .italic {
       font-style: italic;
       font-size: 0.7rem;
-      margin: 20px;
+      margin-top: 20px;
       font-weight: bold;
     }
   </style>
@@ -428,8 +468,7 @@ const FactureDetailsPage = () => {
 
   <div class="header">
     <h2 style="margin:0;">FACTURE</h2>
-    <p style="margin:5px 0;">ALUMINIUM OULAD BRAHIM</p>
-    <p style="margin:0;">Tél: +212 671953725</p>
+    <p style="margin:5px 0;">ALUMINIUM OULAD BRAHIM – Tél: +212 671953725</p>
   </div>
 
   <div style="display:flex; justify-content:space-between; margin:20px 0;">
@@ -438,7 +477,7 @@ const FactureDetailsPage = () => {
     </div>
     <div style="text-align:right;">
       <strong>N° Facture:</strong> ${numFacture}<br/>
-      <strong>Date création :</strong> ${creationDateFormatted}<br/>
+      <strong>Date création :</strong> ${creationDateFormatted}
     </div>
   </div>
 
@@ -459,9 +498,9 @@ const FactureDetailsPage = () => {
         <tr>
           <td>${p.reference || "—"}</td>
           <td>${p.designation || "—"}</td>
-          <td>${p.FactureProduit?.quantite || 0}</td>
-          <td>${Number(p.FactureProduit?.prix_unitaire || 0).toFixed(2)}</td>
-          <td>${Number(p.FactureProduit?.montant_ht_ligne || 0).toFixed(2)}</td>
+          <td style="text-align:center">${p.FactureProduit?.quantite || 0}</td>
+          <td style="text-align:right">${Number(p.FactureProduit?.prix_unitaire || 0).toFixed(2)}</td>
+          <td style="text-align:right">${Number(p.FactureProduit?.montant_ht_ligne || 0).toFixed(2)}</td>
         </tr>
       `,
         )
@@ -470,12 +509,27 @@ const FactureDetailsPage = () => {
   </table>
 
   <div class="totals">
-    <p><strong>Total HT:</strong> ${montantHT.toFixed(2)}</p>
-    <p><strong>TVA ${tvaRate}%:</strong> ${montantTVA.toFixed(2)}</p>
-    <p class="strong">Total TTC: ${montantTTC.toFixed(2)}</p>
-    <p style="font-size:10px; font-style:italic;">
-      <strong>${printTotalText}</strong>
-    </p>
+    <table class="totals-table">
+      <tr>
+        <td class="label">TOTAL HT:</td>
+        <td class="amount">${montantHT.toFixed(2)} DH</td>
+      </tr>
+      <tr>
+        <td class="label">TVA ${tvaRate}%:</td>
+        <td class="amount">${montantTVA.toFixed(2)} DH</td>
+      </tr>
+      <tr class="total-ttc">
+        <td class="label">TOTAL TTC:</td>
+        <td class="amount">${montantTTC.toFixed(2)} DH</td>
+      </tr>
+    </table>
+
+    <div class="net-box">
+      <span class="net-label">NET À PAYER</span>
+      <span class="net-amount">${montantTTC.toFixed(2)} DH</span>
+    </div>
+
+    <div class="italic">${printTotalText}</div>
   </div>
 
 </body>
@@ -508,26 +562,20 @@ const FactureDetailsPage = () => {
     try {
       const pdfContainer = document.createElement("div");
       pdfContainer.id = "pdf-container";
+
+      /* ===== A4 PAGE SETUP ===== */
       pdfContainer.style.width = "210mm";
       pdfContainer.style.minHeight = "150mm";
-      pdfContainer.style.padding = "15mm 20mm";
-      pdfContainer.style.background = "white";
-      pdfContainer.style.color = "#000";
+      pdfContainer.style.padding = "10mm";
+      pdfContainer.style.background = "#fff";
       pdfContainer.style.fontFamily = "Arial, sans-serif";
-      pdfContainer.style.fontSize = "11px";
-      pdfContainer.style.lineHeight = "1.5";
+      pdfContainer.style.fontSize = "0.6rem";
+      pdfContainer.style.color = "#000";
+      pdfContainer.style.boxSizing = "border-box";
+      pdfContainer.style.textTransform = "uppercase";
       pdfContainer.style.position = "absolute";
       pdfContainer.style.left = "-9999px";
       pdfContainer.style.top = "0";
-
-      const formatDate = (date) => {
-        if (!date) return "";
-        return new Date(date).toLocaleDateString("fr-FR");
-      };
-
-      const issueDate = facture.date_facturation
-        ? new Date(facture.date_facturation)
-        : facture.createdAt || new Date();
 
       const formatDateWithTime = (dateString) => {
         if (!dateString) return "—";
@@ -547,66 +595,119 @@ const FactureDetailsPage = () => {
       };
 
       const creationDateFormatted = formatDateWithTime(facture.date_creation);
-
-      // Get the total text for PDF
       const printTotalText = totalToFrenchText(total);
       const produits = Array.isArray(facture.produits) ? facture.produits : [];
 
       pdfContainer.innerHTML = `
-        <div style="text-align:center; border-bottom:2px solid #333; padding-bottom:10px; margin-bottom:15px;">
-          <h1 style="margin:0; color:#2c5aa0;">Facture</h1>
-          <h3 style="margin:5px 0;">ALUMINIUM OULAD BRAHIM</h3>
-          <p style="font-size:10px;">Tél: +212 671953725</p>
+      <!-- HEADER -->
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;">
+        <h2 style="font-size:0.9rem;margin:0;">FACTURE</h2>
+        <div style="font-size:0.7rem;">
+ALUMINIUM OULAD BRAHIM – Tél: +212 671953725        </div>
+      </div>
+
+      <!-- CLIENT / META -->
+      <div style="display:flex;justify-content:space-between;margin-bottom:15px;">
+        <div>
+          <strong>Client :</strong><br/>
+          ${facture.clientName || facture.client?.nom_complete}
         </div>
-  
-        <div style="display:flex; justify-content:space-between; margin-bottom:20px;">
-          <div>
-            <h4 style="margin-bottom:5px;">Client</h4>
-            <p><strong>Client:</strong> ${facture.clientName || facture.client?.nom_complete}</p>
-          </div>
-          <div style="text-align:right;">
-            <h4 style="margin-bottom:5px;">Informations de la Facture</h4>
-            <p><strong>N°:</strong> ${facture.invoiceNumber || facture.num_facture}</p>
-      <strong>Date création :</strong> ${creationDateFormatted}<br/>
-          </div>
+        <div style="text-align:right;">
+          <strong>N° Facture :</strong> ${facture.invoiceNumber || facture.num_facture}<br/>
+          <strong>Date création :</strong> ${creationDateFormatted}
         </div>
-  
-        <table style="width:100%; border-collapse:collapse; font-size:10px; margin-bottom:15px;">
-          <thead>
-            <tr style="background-color:#2c5aa0; color:#fff;">
-              <th style="padding:6px; border:1px solid #2c5aa0;">Code</th>
-              <th style="padding:6px; border:1px solid #2c5aa0;">Produit</th>
-              <th style="padding:6px; border:1px solid #2c5aa0;">Qté</th>
-              <th style="padding:6px; border:1px solid #2c5aa0;">Prix U</th>
-              <th style="padding:6px; border:1px solid #2c5aa0;">Total Ligne</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${produits
+      </div>
+
+      <!-- TABLE -->
+      <table style="width:100%;border-collapse:collapse;">
+        <thead>
+          <tr>
+            ${["Code", "Désignation", "Qté", "Prix U", "Total"]
               .map(
-                (p, i) => `
-                  <tr style="${i % 2 === 0 ? "background:#f9f9f9;" : ""}">
-              <td style="border:1px solid #ddd; padding:5px;">${p.reference || "N/A"}</td>
-              <td style="border:1px solid #ddd; padding:5px;">${p.designation || "Produit"}</td>
-              <td style="border:1px solid #ddd; padding:5px; text-align:center;">${p.FactureProduit?.quantite || 0}</td>
-              <td style="border:1px solid #ddd; padding:5px; text-align:right;">${parseFloat(p.FactureProduit?.prix_unitaire || 0).toFixed(2)}</td>
-              <td style="border:1px solid #ddd; padding:5px; text-align:right;">${parseFloat(p.FactureProduit?.total_ligne || 0).toFixed(2)}</td>
-            </tr>
-            `,
+                (h) => `
+              <th style="
+                border:1.5px solid #000;
+                padding:5px;
+                background:#f2f2f2;
+                text-align:center;
+              ">
+                ${h}
+              </th>`,
               )
               .join("")}
-          </tbody>
+          </tr>
+        </thead>
+        <tbody>
+          ${produits
+            .map(
+              (p) => `
+            <tr style="font-size: 0.8rem;">
+              <td style="border:1.5px solid #000;padding:5px;">
+                ${p.reference || "—"}
+              </td>
+              <td style="border:1.5px solid #000;padding:5px;">
+                ${p.designation || "—"}
+              </td>
+              <td style="border:1.5px solid #000;padding:5px;text-align:center;">
+                ${p.FactureProduit?.quantite || 0}
+              </td>
+              <td style="border:1.5px solid #000;padding:5px;text-align:center;">
+                ${Number(p.FactureProduit?.prix_unitaire || 0).toFixed(2)}
+              </td>
+              <td style="border:1.5px solid #000;padding:5px;text-align:center;">
+                ${Number(p.FactureProduit?.montant_ht_ligne || 0).toFixed(2)}
+              </td>
+            </tr>
+          `,
+            )
+            .join("")}
+        </tbody>
+      </table>
+
+      <!-- TOTALS WITH TVA -->
+      <div style="margin-top:20px;text-align:right;">
+        <table style="width:auto;margin-left:auto;border-collapse:collapse;">
+          <tr>
+            <td style="border:none;padding:5px 10px;text-align:right;font-weight:bold;font-size:0.75rem;">TOTAL HT:</td>
+            <td style="border:none;padding:5px 10px;text-align:right;min-width:100px;font-size:0.75rem;">${montantHT.toFixed(2)} DH</td>
+          </tr>
+          <tr>
+            <td style="border:none;padding:5px 10px;text-align:right;font-weight:bold;font-size:0.75rem;">TVA ${tvaRate}%:</td>
+            <td style="border:none;padding:5px 10px;text-align:right;font-size:0.75rem;">${montantTVA.toFixed(2)} DH</td>
+          </tr>
+          <tr>
+            <td style="border:none;padding:5px 10px;text-align:right;font-weight:bold;font-size:0.85rem;border-top:2px solid #000;padding-top:10px;">TOTAL TTC:</td>
+            <td style="border:none;padding:5px 10px;text-align:right;font-size:0.85rem;border-top:2px solid #000;padding-top:10px;">${montantTTC.toFixed(2)} DH</td>
+          </tr>
         </table>
-  
-        <div class="totals">
-          <p><strong>Total HT:</strong> ${montantHT.toFixed(2)} </p>
-          <p><strong>TVA ${tvaRate}%:</strong> ${montantTVA.toFixed(2)} </p>
-          <p class="strong">Total TTC: ${montantTTC.toFixed(2)} </p>
-    <p style="font-size:10px; font-style:italic;">
-      <strong>${printTotalText}</strong>
-    </p>
+
+        <!-- NET BOX -->
+        <div style="
+          display:inline-flex;
+          gap:15px;
+          align-items:center;
+          font-weight:bold;
+          margin-top:15px;
+        ">
+          <span style="border:2px solid #000;padding:8px 14px;font-size:0.75rem;">
+            NET À PAYER
+          </span>
+          <span style="border:2px solid #000;padding:8px 14px;font-size:0.85rem;">
+            ${montantTTC.toFixed(2)} DH
+          </span>
         </div>
-      `;
+
+        <!-- TEXT AMOUNT -->
+        <div style="
+          margin-top:10px;
+          font-style:italic;
+          font-weight:bold;
+          font-size:0.7rem;
+        ">
+          ${printTotalText}
+        </div>
+      </div>
+    `;
 
       document.body.appendChild(pdfContainer);
 
@@ -624,21 +725,17 @@ const FactureDetailsPage = () => {
       const pageHeight = pdf.internal.pageSize.getHeight();
       const imgHeight = (canvas.height * pageWidth) / canvas.width;
 
-      if (imgHeight <= pageHeight) {
-        pdf.addImage(imgData, "PNG", 0, 0, pageWidth, imgHeight);
-      } else {
-        let heightLeft = imgHeight;
-        let position = 0;
+      let heightLeft = imgHeight;
+      let position = 0;
 
+      pdf.addImage(imgData, "PNG", 0, position, pageWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft > 0) {
+        position -= pageHeight;
+        pdf.addPage();
         pdf.addImage(imgData, "PNG", 0, position, pageWidth, imgHeight);
         heightLeft -= pageHeight;
-
-        while (heightLeft > 0) {
-          position -= pageHeight;
-          pdf.addPage();
-          pdf.addImage(imgData, "PNG", 0, position, pageWidth, imgHeight);
-          heightLeft -= pageHeight;
-        }
       }
 
       pdf.save(`Facture-${facture.invoiceNumber || facture.num_facture}.pdf`);

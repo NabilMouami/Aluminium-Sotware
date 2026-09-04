@@ -43,8 +43,32 @@ const getAllBons = async (req, res) => {
 
     // Filtrer par date
     if (startDate && endDate) {
+      const s = new Date(startDate);
+      s.setHours(0, 0, 0, 0);
+      const e = new Date(endDate);
+      e.setHours(23, 59, 59, 999);
       whereClause.date_creation = {
-        [Op.between]: [new Date(startDate), new Date(endDate)],
+        [Op.between]: [s, e],
+      };
+    } else {
+      // Default range: same-day previous month -> today (include full end day)
+      const now = new Date();
+      const end = new Date(now);
+      end.setHours(23, 59, 59, 999);
+
+      // Calculate previous month same day (or last day of prev month if shorter)
+      let prevMonth = now.getMonth() - 1;
+      let year = now.getFullYear();
+      if (prevMonth < 0) {
+        prevMonth = 11;
+        year -= 1;
+      }
+      const daysInPrevMonth = new Date(year, prevMonth + 1, 0).getDate();
+      const day = Math.min(now.getDate(), daysInPrevMonth);
+      const start = new Date(year, prevMonth, day, 0, 0, 0, 0);
+
+      whereClause.date_creation = {
+        [Op.between]: [start, end],
       };
     }
 
@@ -895,6 +919,160 @@ const updateStatus = async (req, res) => {
     });
   }
 };
+// Gestion de la page Caissier — retourner les BL avec montants calculés pour une plage de date
+const getBonLivraisonsByDate = async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+
+    // Build date range in local timezone (00:00:00 -> 23:59:59)
+    let dateRange = null;
+    if (startDate || endDate) {
+      const s = startDate ? new Date(startDate) : new Date();
+      s.setHours(0, 0, 0, 0);
+      const e = endDate ? new Date(endDate) : new Date();
+      e.setHours(23, 59, 59, 999);
+      dateRange = [s, e];
+    }
+
+    // Find bonLivraisonIds that have advancements in the date range
+    let matchedIds = [];
+    if (dateRange) {
+      const advancementMatches = await Advancement.findAll({
+        where: {
+          paymentDate: { [Op.between]: dateRange },
+          bonLivraisonId: { [Op.not]: null },
+        },
+        attributes: ["bonLivraisonId"],
+        group: ["bonLivraisonId"],
+        raw: true,
+      });
+      matchedIds = advancementMatches.map((a) => a.bonLivraisonId);
+    }
+
+    // Build where for BonLivraison: date_creation between OR id in matchedIds
+    const whereCondition = {};
+    if (dateRange) {
+      whereCondition[Op.or] = [
+        { date_creation: { [Op.between]: dateRange } },
+        ...(matchedIds.length ? [{ id: { [Op.in]: matchedIds } }] : []),
+      ];
+    }
+
+    // Include advancements filtered by dateRange when provided (so we can compute paidOnDate)
+    const advancementsInclude = {
+      model: Advancement,
+      as: "advancements",
+      required: false,
+      attributes: ["id", "amount", "paymentDate", "paymentMethod", "bonLivraisonId"],
+    };
+    if (dateRange) {
+      advancementsInclude.where = { paymentDate: { [Op.between]: dateRange } };
+    }
+
+    const bonLivraisons = await BonLivraison.findAll({
+      where: whereCondition,
+      include: [
+        { model: Client, as: "client", attributes: ["id", "nom_complete", "telephone"] },
+        advancementsInclude,
+      ],
+      order: [["date_creation", "DESC"]],
+    });
+
+    // Map and compute totals expected by frontend
+    const result = await Promise.all(
+      bonLivraisons.map(async (bon) => {
+        const b = bon.toJSON();
+
+        // Sum of advancements included (i.e. in the requested date range)
+        const filteredAdvancementTotal = (b.advancements || []).reduce(
+          (s, a) => s + parseFloat(a.amount || 0),
+          0,
+        );
+
+        // Sum of all advancements for remainingAmount calculation
+        const allAdvancements = await Advancement.findAll({
+          where: { bonLivraisonId: b.id },
+          attributes: ["amount"],
+          raw: true,
+        });
+        const totalAdvAll = allAdvancements.reduce(
+          (s, a) => s + parseFloat(a.amount || 0),
+          0,
+        );
+
+        const montantTTC = parseFloat(b.montant_ttc || 0);
+        const remainingAmount = Math.max(0, montantTTC - totalAdvAll);
+
+        // Determine paidOnDate: prefer advancements made in the date range
+        let paidOnDate = filteredAdvancementTotal;
+
+        // If no advancements in the filtered range, try other cues:
+        if (paidOnDate === 0 && dateRange) {
+          // 1) If there exists any advancement for this bon inside the range, use its amount
+          const anyMatch = await Advancement.findOne({
+            where: { bonLivraisonId: b.id, paymentDate: { [Op.between]: dateRange } },
+            attributes: ["amount"],
+          });
+          if (anyMatch) {
+            paidOnDate = parseFloat(anyMatch.amount || 0);
+          }
+
+          // 2) If still zero but the bon is marked fully paid, and the bon's creation date
+          // falls inside the requested date range, assume the full total was paid on that date.
+          // This covers BLs created as paid without Advancement entries.
+          if (paidOnDate === 0) {
+            const created = new Date(b.date_creation);
+            if (
+              (b.status === "payé" || b.status === "payée" || b.status === "payee" || b.status === "paid") &&
+              created >= dateRange[0] &&
+              created <= dateRange[1]
+            ) {
+              paidOnDate = montantTTC;
+            }
+          }
+        }
+
+        // Map fields to the frontend expected keys
+        const statusMap = {
+          payé: "payée",
+          partiellement_payée: "partiellement_payée",
+          brouillon: "brouillon",
+          envoyée: "envoyée",
+          annulée: "annulée",
+        };
+
+        const paymentTypeMap = {
+          "espèces": "espece",
+          cheque: "cheque",
+          virement: "virement",
+          carte_bancaire: "carte",
+          autre: "autre",
+        };
+
+        return {
+          id: b.id,
+          deliveryNumber: b.num_bon_livraison,
+          customerName: b.client?.nom_complete || "",
+          customerPhone: b.client?.telephone || "",
+          total: montantTTC,
+          advancement: totalAdvAll,
+          remainingAmount: remainingAmount.toFixed(2),
+          status: statusMap[b.status] || b.status,
+          paymentDate: null, // BonLivraison does not have a direct paymentDate column
+          paymentType: paymentTypeMap[b.mode_reglement] || b.mode_reglement,
+          createdAt: b.date_creation,
+          advancements: b.advancements || [],
+          paidOnDate,
+        };
+      }),
+    );
+
+    return res.json(result);
+  } catch (err) {
+    console.error("Get delivery notes by date error:", err);
+    return res.status(500).json({ message: "Server error", error: err.message });
+  }
+};
 
 // Supprimer un bon de livraison
 const deleteBon = async (req, res) => {
@@ -910,11 +1088,6 @@ const deleteBon = async (req, res) => {
         success: false,
         message: "Bon de livraison non trouvé",
       });
-    }
-
-    // Vérifier si le bon peut être supprimé
-    if (bonLivraison.status === "livré" || bonLivraison.status === "facturé") {
-      throw new Error(`Impossible de supprimer un bon ${bonLivraison.status}`);
     }
 
     // Restaurer le stock - CORRECTED COLUMN NAME
@@ -1107,4 +1280,5 @@ module.exports = {
   deleteBon,
   getStats,
   getBonsByClient,
+  getBonLivraisonsByDate,
 };

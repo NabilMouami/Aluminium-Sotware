@@ -19,6 +19,7 @@ import FornisseursList from "../pages/Fornisseur/fornisseurs-list";
 import FornisseurCreate from "../pages/Fornisseur/fornisseur-create";
 import ProduitsCreate from "../pages/Produits/produits-create";
 import ProduitsList from "../pages/Produits/produits-list";
+import ProduitDetails from "../pages/Produits/ProduitDetails";
 
 import LayoutAuth from "../layout/layoutAuth";
 import LoginCreative from "../pages/login-creative";
@@ -45,6 +46,7 @@ import BonAvoirDetailsPage from "../pages/BonAvoir/BonAvoirDetails";
 import ClientDetails from "../pages/Clients/ClientDetails";
 import FornisseurDetails from "../pages/Fornisseur/FornisseurDetails";
 import ReportsPage from "../pages/Reports/ReportsPage";
+import CaissierPage from "../pages/BonLivraison/Caissierpage";
 
 export const router = createBrowserRouter([
   {
@@ -136,7 +138,10 @@ export const router = createBrowserRouter([
         path: "produits",
         element: <ProduitsList />,
       },
-
+      {
+        path: "produits/:id",
+        element: <ProduitDetails />,
+      },
       {
         path: "facture/create",
         element: <FactureCreate />,
@@ -204,6 +209,10 @@ export const router = createBrowserRouter([
       {
         path: "reports",
         element: <ReportsPage />,
+      },
+      {
+        path: "caissiers",
+        element: <CaissierPage />,
       },
     ],
   },

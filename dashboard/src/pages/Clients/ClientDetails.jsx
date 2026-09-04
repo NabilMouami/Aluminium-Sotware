@@ -18,7 +18,6 @@ import {
   FiSearch,
   FiPhone,
   FiMapPin,
-  FiEye,
   FiCheckCircle,
   FiClock,
   FiXCircle,
@@ -68,8 +67,9 @@ function ClientDetails() {
   const [allProductsDateRange, setAllProductsDateRange] = useState({
     startDate: null,
     endDate: null,
-    documentType: "all",
+    documentType: "bon-livraison",
   });
+  const [initialProductsFetched, setInitialProductsFetched] = useState(false);
 
   // Helper function to format date for API
   const formatDateForAPI = (date) => {
@@ -87,6 +87,14 @@ function ClientDetails() {
   useEffect(() => {
     fetchClientData();
   }, [id]);
+
+  // Auto-fetch BonLivraison products after client data is loaded
+  useEffect(() => {
+    if (!loading && client && !initialProductsFetched) {
+      setInitialProductsFetched(true);
+      fetchAllProducts();
+    }
+  }, [loading, client, initialProductsFetched]);
 
   const fetchClientData = async () => {
     try {
@@ -1377,6 +1385,9 @@ function ClientDetails() {
                                       <tr>
                                         <th>Produit</th>
                                         <th>Référence</th>
+                                        <th className="text-end">
+                                          Prix Vente
+                                        </th>
                                         <th className="text-center">
                                           Apparitions
                                         </th>
@@ -1410,6 +1421,13 @@ function ClientDetails() {
                                               <span className="badge bg-secondary">
                                                 {stat.product.reference}
                                               </span>
+                                            </td>
+                                            <td className="text-end">
+                                              <strong className="text-info">
+                                                {formatCurrency(
+                                                  stat.product?.prix_vente,
+                                                )}
+                                              </strong>
                                             </td>
                                             <td className="text-center">
                                               <span className="badge bg-primary">
@@ -1521,7 +1539,9 @@ function ClientDetails() {
                                         <th>Date</th>
                                         <th>Produit</th>
                                         <th>Quantité</th>
-                                        <th>Prix Unitaire</th>
+                                        <th>Prix Unitaire (BL)</th>
+                                                                                <th>Prix Vente (Produit)</th>
+
                                         <th>Total Ligne</th>
                                       </tr>
                                     </thead>
@@ -1570,6 +1590,13 @@ function ClientDetails() {
                                               <span className="badge bg-primary">
                                                 {parseQuantity(item.quantite)}
                                               </span>
+                                            </td>
+                                            <td>
+                                              <strong className="text-info">
+                                                {formatCurrency(
+                                                  item.produit?.prix_vente,
+                                                )}
+                                              </strong>
                                             </td>
                                             <td>
                                               <strong>

@@ -247,4 +247,11 @@ export const menuList = [
       },
     ],
   },
+  {
+    id: 13,
+    name: "Gestion Caissier",
+    path: "/caissiers",
+    icon: "feather-dollar-sign",
+    dropdownMenu: [],
+  },
 ];

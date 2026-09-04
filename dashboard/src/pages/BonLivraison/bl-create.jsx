@@ -23,7 +23,7 @@ import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
 import api from "@/utils/axiosConfig";
 import { useNavigate } from "react-router-dom";
-import { Input } from "reactstrap";
+import { Input, Modal, ModalHeader, ModalBody, ModalFooter } from "reactstrap";
 
 const MySwal = withReactContent(Swal);
 
@@ -41,6 +41,13 @@ const BonLivraisonCreate = () => {
   const [showAdvancements, setShowAdvancements] = useState(false);
   const [advancements, setAdvancements] = useState([]);
   const [loadingProduits, setLoadingProduits] = useState(true);
+  
+  // Modal state for product details
+  const [showProductModal, setShowProductModal] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [productQty, setProductQty] = useState(1);
+  const [productPrice, setProductPrice] = useState(0);
+  
   const [formData, setFormData] = useState({
     clientId: "",
     mode_reglement: "espèces",
@@ -115,12 +122,10 @@ const BonLivraisonCreate = () => {
   };
 
   const loadProduits = async (inputValue) => {
-    // Si pas de recherche, retourner tous les produits
     if (!inputValue) {
       return allProduits;
     }
 
-    // Filtrer localement les produits existants
     const filtered = allProduits.filter((option) => {
       const searchTerm = inputValue.toLowerCase();
       const produit = option.data;
@@ -131,7 +136,6 @@ const BonLivraisonCreate = () => {
       );
     });
 
-    // Si aucun résultat local, faire une recherche API
     if (filtered.length === 0 && inputValue.length >= 2) {
       try {
         const token =
@@ -217,66 +221,63 @@ const BonLivraisonCreate = () => {
     );
   };
 
-  const handleProduitSelect = (selectedOptions) => {
-    if (!selectedOptions) return;
+  // Open modal when product is selected
+  const handleProduitSelect = (selectedOption) => {
+    if (!selectedOption) return;
 
-    // Si c'est un tableau (multi-sélection)
-    if (Array.isArray(selectedOptions)) {
-      selectedOptions.forEach((selectedOption) => {
-        if (!selectedOption) return;
-
-        if (selectedProduits.some((p) => p.id === selectedOption.value)) {
-          return;
-        }
-
-        const produitData = selectedOption.data;
-        const newProduit = {
-          ...produitData,
-          quantite: 1,
-          prix_unitaire: produitData.prix_vente,
-          total_ligne: produitData.prix_vente,
-        };
-
-        setSelectedProduits((prev) => [...prev, newProduit]);
-      });
-
-      // Réinitialiser le champ de sélection
+    // Check if product already exists
+    if (selectedProduits.some((p) => p.id === selectedOption.value)) {
+      topTost("Produit déjà ajouté", "warning");
       if (selectRef.current) {
         selectRef.current.setValue(null);
       }
-
-      if (selectedOptions.length > 0) {
-        topTost(`${selectedOptions.length} produit(s) ajouté(s)`, "success");
-      }
+      return;
     }
-    // Si c'est une seule sélection
-    else {
-      if (selectedProduits.some((p) => p.id === selectedOptions.value)) {
-        topTost("Produit déjà ajouté", "warning");
 
-        if (selectRef.current) {
-          selectRef.current.setValue(null);
-        }
+    // Set selected product and open modal
+    setSelectedProduct(selectedOption.data);
+    setProductQty(1);
+    setProductPrice(selectedOption.data.prix_vente);
+    setShowProductModal(true);
 
-        return;
-      }
-
-      const produitData = selectedOptions.data;
-      const newProduit = {
-        ...produitData,
-        quantite: 1,
-        prix_unitaire: produitData.prix_vente,
-        total_ligne: produitData.prix_vente,
-      };
-
-      setSelectedProduits((prev) => [...prev, newProduit]);
-
-      if (selectRef.current) {
-        selectRef.current.setValue(null);
-      }
-
-      topTost("Produit ajouté", "success");
+    // Clear the select input
+    if (selectRef.current) {
+      selectRef.current.setValue(null);
     }
+  };
+
+  // Add product with quantity and price to the table
+  const addProductToTable = () => {
+    if (!selectedProduct) return;
+
+    // Validate quantity
+    if (productQty < 1) {
+      topTost("La quantité doit être au moins 1", "warning");
+      return;
+    }
+
+    if (productQty > selectedProduct.qty) {
+      topTost(`Stock insuffisant. Disponible: ${selectedProduct.qty}`, "warning");
+      return;
+    }
+
+    // Validate price
+    if (productPrice <= 0) {
+      topTost("Le prix unitaire doit être supérieur à 0", "warning");
+      return;
+    }
+
+    const newProduit = {
+      ...selectedProduct,
+      quantite: productQty,
+      prix_unitaire: productPrice,
+      total_ligne: productPrice * productQty,
+    };
+
+    setSelectedProduits((prev) => [...prev, newProduit]);
+    setShowProductModal(false);
+    setSelectedProduct(null);
+    topTost("Produit ajouté avec succès", "success");
   };
 
   const removeProduit = (index) => {
@@ -311,13 +312,6 @@ const BonLivraisonCreate = () => {
     setSelectedProduits(newProduits);
   };
 
-  const updateProduitDiscount = (index, discount) => {
-    const newProduits = [...selectedProduits];
-    newProduits[index].total_ligne =
-      newProduits[index].prix_unitaire * newProduits[index].quantite;
-    setSelectedProduits(newProduits);
-  };
-
   const addAdvancement = () => {
     const newAdvancement = {
       id: Date.now(),
@@ -341,19 +335,16 @@ const BonLivraisonCreate = () => {
     const newAdvancements = [...advancements];
     newAdvancements[index][field] = value;
 
-    // Validation du montant de l'acompte
     if (field === "amount") {
       const amount = parseFloat(value) || 0;
       const totalTTC = parseFloat(calculateTotals().montantTTC);
       const totalAdvancements = calculateTotalAdvancements();
 
-      // Vérifier si le nouvel acompte ne dépasse pas le total TTC
       if (amount > totalTTC) {
         topTost(
           "Le montant d'un acompte ne peut pas dépasser le montant total",
           "warning",
         );
-        // Réinitialiser à 0
         newAdvancements[index].amount = 0;
       } else if (
         totalAdvancements - parseFloat(advancements[index].amount) + amount >
@@ -363,7 +354,6 @@ const BonLivraisonCreate = () => {
           "Le total des acomptes ne peut pas dépasser le montant total",
           "warning",
         );
-        // Réinitialiser à la valeur précédente
         newAdvancements[index].amount = advancements[index].amount;
       }
     }
@@ -439,7 +429,6 @@ const BonLivraisonCreate = () => {
       return;
     }
 
-    // Vérifier le stock
     for (const produit of selectedProduits) {
       if (produit.quantite > produit.qty) {
         topTost(
@@ -450,14 +439,12 @@ const BonLivraisonCreate = () => {
       }
     }
 
-    // Valider les acomptes
     const advancementValidation = validateAdvancements();
     if (!advancementValidation.valid) {
       topTost(advancementValidation.message, "error");
       return;
     }
 
-    // Préparer les données des acomptes
     const advancementsData = advancements.map((advance) => ({
       amount: parseFloat(advance.amount) || 0,
       paymentMethod: advance.paymentMethod,
@@ -467,7 +454,6 @@ const BonLivraisonCreate = () => {
         advance.paymentDate || new Date().toISOString().split("T")[0],
     }));
 
-    // Préparer le payload
     const payload = {
       clientId: formData.clientId,
       mode_reglement: formData.mode_reglement,
@@ -482,7 +468,6 @@ const BonLivraisonCreate = () => {
       advancements: advancementsData.length > 0 ? advancementsData : undefined,
     };
 
-    // Confirmation
     const result = await MySwal.fire({
       title: "Créer le bon de livraison ?",
       html: `
@@ -543,7 +528,6 @@ const BonLivraisonCreate = () => {
           if (result.isConfirmed) {
             navigate(`/bon-livraisons/${response.data.bon.id}`);
           } else {
-            // Réinitialiser le formulaire
             setSelectedProduits([]);
             setAdvancements([]);
             setShowAdvancements(false);
@@ -605,6 +589,114 @@ const BonLivraisonCreate = () => {
           Annuler
         </button>
       </PageHeader>
+
+      {/* Product Details Modal */}
+      <Modal isOpen={showProductModal} toggle={() => setShowProductModal(false)} size="md">
+        <ModalHeader toggle={() => setShowProductModal(false)}>
+          Détails du produit
+        </ModalHeader>
+        <ModalBody>
+          {selectedProduct && (
+            <div>
+              <div className="mb-3">
+                <label className="form-label fw-bold">Produit</label>
+                <p className="form-control-static bg-light p-2 rounded">
+                  <strong>{selectedProduct.reference}</strong> - {selectedProduct.designation}
+                </p>
+              </div>
+              
+              <div className="mb-3">
+                <label className="form-label fw-bold">
+                  Stock disponible
+                </label>
+                <p className={`form-control-static p-2 rounded ${selectedProduct.qty <= 0 ? 'bg-danger text-white' : 'bg-info text-white'}`}>
+                  {selectedProduct.qty} {selectedProduct.unite || "unités"}
+                </p>
+              </div>
+
+              <div className="mb-3">
+                <label className="form-label fw-bold">
+                  Quantité <span className="text-danger">*</span>
+                </label>
+                <div className="d-flex align-items-center gap-2">
+                  <button
+                    type="button"
+                    className="btn btn-outline-secondary"
+                    onClick={() => setProductQty(Math.max(1, productQty - 1))}
+                  >
+                    <FiMinus />
+                  </button>
+                  <input
+                    type="number"
+                    className="form-control text-center"
+                    style={{ width: "100px" }}
+                    min="1"
+                    max={selectedProduct.qty}
+                    value={productQty}
+                    onChange={(e) => setProductQty(Math.min(selectedProduct.qty, Math.max(1, parseInt(e.target.value) || 1)))}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-outline-secondary"
+                    onClick={() => setProductQty(Math.min(selectedProduct.qty, productQty + 1))}
+                    disabled={productQty >= selectedProduct.qty}
+                  >
+                    <FiPlus />
+                  </button>
+                </div>
+                {productQty > selectedProduct.qty && (
+                  <small className="text-danger">Quantité dépasse le stock disponible</small>
+                )}
+              </div>
+
+              <div className="mb-3">
+                <label className="form-label fw-bold">
+                  Prix unitaire (DH) <span className="text-danger">*</span>
+                </label>
+                <div className="input-group">
+                  <input
+                    type="number"
+                    className="form-control"
+                    step="0.01"
+                    min="0"
+                    value={productPrice}
+                    onChange={(e) => setProductPrice(parseFloat(e.target.value) || 0)}
+                  />
+                  <span className="input-group-text">DH</span>
+                </div>
+                <small className="text-muted">
+                  Prix par défaut: {selectedProduct.prix_vente} DH
+                </small>
+              </div>
+
+              <div className="alert alert-info mt-3">
+                <strong>Total ligne:</strong> {(productPrice * productQty).toFixed(2)} DH
+              </div>
+            </div>
+          )}
+        </ModalBody>
+        <ModalFooter>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => {
+              setShowProductModal(false);
+              setSelectedProduct(null);
+            }}
+          >
+            Annuler
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={addProductToTable}
+            disabled={!selectedProduct || productQty < 1 || productQty > selectedProduct.qty || productPrice <= 0}
+          >
+            <FiPlus className="me-1" />
+            Ajouter au bon
+          </button>
+        </ModalFooter>
+      </Modal>
 
       <div className="col">
         <div className="col-lg-12 mt-4">
@@ -961,7 +1053,7 @@ const BonLivraisonCreate = () => {
                     loadOptions={loadProduits}
                     defaultOptions={true}
                     onChange={handleProduitSelect}
-                    placeholder="Commencez à taper pour rechercher..."
+                    placeholder="Sélectionnez un produit..."
                     noOptionsMessage={({ inputValue }) =>
                       !inputValue
                         ? "Commencez à taper pour rechercher"
@@ -1143,7 +1235,7 @@ const BonLivraisonCreate = () => {
                   </div>
                   <h5>Aucun produit sélectionné</h5>
                   <p className="text-muted">
-                    Recherchez et ajoutez des produits dans le champ ci-dessus
+                    Sélectionnez un produit ci-dessus pour l'ajouter
                   </p>
                 </div>
               )}

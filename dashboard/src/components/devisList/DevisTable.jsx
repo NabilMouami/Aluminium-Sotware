@@ -112,7 +112,7 @@ const ListDevis = () => {
             montant_ht: parseFloat(devis.montant_ht) || 0,
             montant_ttc: parseFloat(devis.montant_ttc) || 0,
             status: devis.status || "brouillon",
-            date_creation: new Date(devis.date_creation || devis.createdAt),
+            date_creation: new Date(devis.createdAt),
             date_creation_string: formatToFrenchDate(
               new Date(devis.date_creation || devis.createdAt),
             ),
@@ -310,9 +310,7 @@ const ListDevis = () => {
           montant_ht: parseFloat(devisData.montant_ht) || 0,
           montant_ttc: parseFloat(devisData.montant_ttc) || 0,
           status: devisData.status || "brouillon",
-          date_creation: new Date(
-            devisData.date_creation || devisData.createdAt,
-          ),
+          date_creation: new Date(devisData.createdAt),
           date_creation_string: formatToFrenchDate(
             new Date(devisData.date_creation || devisData.createdAt),
           ),

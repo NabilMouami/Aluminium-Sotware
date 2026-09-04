@@ -24,6 +24,7 @@ import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
 import api from "@/utils/axiosConfig";
 import { useNavigate } from "react-router-dom";
+import { Modal, ModalHeader, ModalBody, ModalFooter } from "reactstrap";
 
 const MySwal = withReactContent(Swal);
 
@@ -33,6 +34,15 @@ const DevisCreate = () => {
   const [allProduits, setAllProduits] = useState([]);
   const [selectedProduits, setSelectedProduits] = useState([]);
   const [loadingProduits, setLoadingProduits] = useState(true);
+  
+  // Modal state for product details
+  const [showProductModal, setShowProductModal] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [productQty, setProductQty] = useState(1);
+  const [productPrice, setProductPrice] = useState(0);
+  const [productDescription, setProductDescription] = useState("");
+  const [productUnite, setProductUnite] = useState("unité");
+  
   const [formData, setFormData] = useState({
     client_id: "",
     mode_reglement: "espèces",
@@ -59,7 +69,6 @@ const DevisCreate = () => {
       const clientOptions = (response.data?.clients || []).map((client) => {
         const refPart = client.reference ? `(${client.reference}) ` : "";
 
-        // Ensure all required properties exist with fallback values
         const nom_complete = client.nom_complete || "";
         const telephone = client.telephone || "";
         const reference = client.reference || "";
@@ -84,7 +93,7 @@ const DevisCreate = () => {
     } catch (error) {
       console.error("Error fetching clients:", error);
       topTost("Erreur lors du chargement des clients", "error");
-      setClients([]); // Set empty array on error
+      setClients([]);
     }
   };
 
@@ -116,12 +125,10 @@ const DevisCreate = () => {
   };
 
   const loadProduits = async (inputValue) => {
-    // Si pas de recherche, retourner tous les produits
     if (!inputValue) {
       return allProduits;
     }
 
-    // Filtrer localement les produits existants
     const filtered = allProduits.filter((option) => {
       const searchTerm = inputValue.toLowerCase();
       const produit = option.data;
@@ -132,7 +139,6 @@ const DevisCreate = () => {
       );
     });
 
-    // Si aucun résultat local, faire une recherche API
     if (filtered.length === 0 && inputValue.length >= 2) {
       try {
         const token =
@@ -218,70 +224,62 @@ const DevisCreate = () => {
     );
   };
 
-  const handleProduitSelect = (selectedOptions) => {
-    if (!selectedOptions) return;
+  // Open modal when product is selected
+  const handleProduitSelect = (selectedOption) => {
+    if (!selectedOption) return;
 
-    // Si c'est un tableau (multi-sélection)
-    if (Array.isArray(selectedOptions)) {
-      selectedOptions.forEach((selectedOption) => {
-        if (!selectedOption) return;
-
-        if (selectedProduits.some((p) => p.id === selectedOption.value)) {
-          return;
-        }
-
-        const produitData = selectedOption.data;
-        const newProduit = {
-          ...produitData,
-          quantite: 1,
-          prix_unitaire: produitData.prix_vente,
-          total_ligne: produitData.prix_vente,
-          description: "",
-          unite: "unité",
-        };
-
-        setSelectedProduits((prev) => [...prev, newProduit]);
-      });
-
-      // Réinitialiser le champ de sélection
+    // Check if product already exists
+    if (selectedProduits.some((p) => p.id === selectedOption.value)) {
+      topTost("Produit déjà ajouté", "warning");
       if (selectRef.current) {
         selectRef.current.setValue(null);
       }
-
-      if (selectedOptions.length > 0) {
-        topTost(`${selectedOptions.length} produit(s) ajouté(s)`, "success");
-      }
+      return;
     }
-    // Si c'est une seule sélection
-    else {
-      if (selectedProduits.some((p) => p.id === selectedOptions.value)) {
-        topTost("Produit déjà ajouté", "warning");
 
-        if (selectRef.current) {
-          selectRef.current.setValue(null);
-        }
+    // Set selected product and open modal
+    setSelectedProduct(selectedOption.data);
+    setProductQty(1);
+    setProductPrice(selectedOption.data.prix_vente);
+    setProductDescription("");
+    setProductUnite(selectedOption.data.unite || "unité");
+    setShowProductModal(true);
 
-        return;
-      }
-
-      const produitData = selectedOptions.data;
-      const newProduit = {
-        ...produitData,
-        quantite: 1,
-        prix_unitaire: produitData.prix_vente,
-        total_ligne: produitData.prix_vente,
-        description: "",
-        unite: "unité",
-      };
-
-      setSelectedProduits((prev) => [...prev, newProduit]);
-
-      if (selectRef.current) {
-        selectRef.current.setValue(null);
-      }
-
-      topTost("Produit ajouté", "success");
+    // Clear the select input
+    if (selectRef.current) {
+      selectRef.current.setValue(null);
     }
+  };
+
+  // Add product with quantity and price to the table
+  const addProductToTable = () => {
+    if (!selectedProduct) return;
+
+    // Validate quantity
+    if (productQty < 1) {
+      topTost("La quantité doit être au moins 1", "warning");
+      return;
+    }
+
+    // Validate price
+    if (productPrice <= 0) {
+      topTost("Le prix unitaire doit être supérieur à 0", "warning");
+      return;
+    }
+
+    const newProduit = {
+      ...selectedProduct,
+      quantite: productQty,
+      prix_unitaire: productPrice,
+      total_ligne: productPrice * productQty,
+      description: productDescription,
+      unite: productUnite,
+    };
+
+    setSelectedProduits((prev) => [...prev, newProduit]);
+    setShowProductModal(false);
+    setSelectedProduct(null);
+    topTost("Produit ajouté avec succès", "success");
   };
 
   const removeProduit = (index) => {
@@ -305,13 +303,6 @@ const DevisCreate = () => {
   const updateProduitPrice = (index, newPrice) => {
     const newProduits = [...selectedProduits];
     newProduits[index].prix_unitaire = parseFloat(newPrice) || 0;
-    newProduits[index].total_ligne =
-      newProduits[index].prix_unitaire * newProduits[index].quantite;
-    setSelectedProduits(newProduits);
-  };
-
-  const updateProduitDiscount = (index, discount) => {
-    const newProduits = [...selectedProduits];
     newProduits[index].total_ligne =
       newProduits[index].prix_unitaire * newProduits[index].quantite;
     setSelectedProduits(newProduits);
@@ -373,7 +364,7 @@ const DevisCreate = () => {
       })),
     };
 
-    console.log("Payload to send:", payload); // Debug log
+    console.log("Payload to send:", payload);
 
     const result = await MySwal.fire({
       title: "Créer le devis ?",
@@ -483,6 +474,135 @@ const DevisCreate = () => {
         </button>
       </PageHeader>
 
+      {/* Product Details Modal */}
+      <Modal isOpen={showProductModal} toggle={() => setShowProductModal(false)} size="md">
+        <ModalHeader toggle={() => setShowProductModal(false)}>
+          Détails du produit
+        </ModalHeader>
+        <ModalBody>
+          {selectedProduct && (
+            <div>
+              <div className="mb-3">
+                <label className="form-label fw-bold">Produit</label>
+                <p className="form-control-static bg-light p-2 rounded">
+                  <strong>{selectedProduct.reference}</strong> - {selectedProduct.designation}
+                </p>
+              </div>
+              
+              <div className="mb-3">
+                <label className="form-label fw-bold">
+                  Stock disponible
+                </label>
+                <p className={`form-control-static p-2 rounded ${selectedProduct.qty <= 0 ? 'bg-danger text-white' : 'bg-info text-white'}`}>
+                  {selectedProduct.qty} {selectedProduct.unite || "unités"}
+                </p>
+              </div>
+
+              <div className="mb-3">
+                <label className="form-label fw-bold">
+                  Quantité <span className="text-danger">*</span>
+                </label>
+                <div className="d-flex align-items-center gap-2">
+                  <button
+                    type="button"
+                    className="btn btn-outline-secondary"
+                    onClick={() => setProductQty(Math.max(1, productQty - 1))}
+                  >
+                    <FiMinus />
+                  </button>
+                  <input
+                    type="number"
+                    className="form-control text-center"
+                    style={{ width: "100px" }}
+                    min="1"
+                    value={productQty}
+                    onChange={(e) => setProductQty(Math.max(1, parseInt(e.target.value) || 1))}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-outline-secondary"
+                    onClick={() => setProductQty(productQty + 1)}
+                  >
+                    <FiPlus />
+                  </button>
+                </div>
+              </div>
+
+              <div className="mb-3">
+                <label className="form-label fw-bold">
+                  Prix unitaire (DH) <span className="text-danger">*</span>
+                </label>
+                <div className="input-group">
+                  <input
+                    type="number"
+                    className="form-control"
+                    step="0.01"
+                    min="0"
+                    value={productPrice}
+                    onChange={(e) => setProductPrice(parseFloat(e.target.value) || 0)}
+                  />
+                  <span className="input-group-text">DH</span>
+                </div>
+                <small className="text-muted">
+                  Prix par défaut: {selectedProduct.prix_vente} DH
+                </small>
+              </div>
+
+              <div className="mb-3">
+                <label className="form-label fw-bold">
+                  Unité
+                </label>
+                <input
+                  type="text"
+                  className="form-control"
+                  value={productUnite}
+                  onChange={(e) => setProductUnite(e.target.value)}
+                  placeholder="Ex: pièce, kg, mètre..."
+                />
+              </div>
+
+              <div className="mb-3">
+                <label className="form-label fw-bold">
+                  Description (Optionnel)
+                </label>
+                <textarea
+                  className="form-control"
+                  rows="2"
+                  value={productDescription}
+                  onChange={(e) => setProductDescription(e.target.value)}
+                  placeholder="Description spécifique pour ce produit dans le devis..."
+                />
+              </div>
+
+              <div className="alert alert-info mt-3">
+                <strong>Total ligne:</strong> {(productPrice * productQty).toFixed(2)} DH
+              </div>
+            </div>
+          )}
+        </ModalBody>
+        <ModalFooter>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => {
+              setShowProductModal(false);
+              setSelectedProduct(null);
+            }}
+          >
+            Annuler
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={addProductToTable}
+            disabled={!selectedProduct || productQty < 1 || productPrice <= 0}
+          >
+            <FiPlus className="me-1" />
+            Ajouter au devis
+          </button>
+        </ModalFooter>
+      </Modal>
+
       <div className="col">
         <div className="col-lg-12 mt-4">
           <div className="card">
@@ -521,7 +641,6 @@ const DevisCreate = () => {
                         if (!rawInput) return true;
                         const search = rawInput.toLowerCase().trim();
 
-                        // Create search text from available properties
                         const searchableText = [
                           option.data?.nom_complete || "",
                           option.data?.telephone || "",
@@ -542,7 +661,7 @@ const DevisCreate = () => {
                           "&:hover": { borderColor: "#405189" },
                         }),
                       }}
-                    />{" "}
+                    />
                   </div>
 
                   <div className="col-md-6">
@@ -629,7 +748,7 @@ const DevisCreate = () => {
                     loadOptions={loadProduits}
                     defaultOptions={true}
                     onChange={handleProduitSelect}
-                    placeholder="Commencez à taper pour rechercher..."
+                    placeholder="Sélectionnez un produit..."
                     noOptionsMessage={({ inputValue }) =>
                       !inputValue
                         ? "Commencez à taper pour rechercher"
@@ -688,17 +807,23 @@ const DevisCreate = () => {
                   <table className="table table-hover">
                     <thead>
                       <tr>
-                        <th width="25%">Produit</th>
-                        <th width="12%" className="text-center">
+                        <th width="20%">Produit</th>
+                        <th width="10%" className="text-center">
                           Prix U.
                         </th>
-                        <th width="15%" className="text-center">
+                        <th width="12%" className="text-center">
                           Quantité
                         </th>
-                        <th width="12%" className="text-center">
+                        <th width="10%" className="text-center">
+                          Unité
+                        </th>
+                        <th width="15%" className="text-center">
+                          Description
+                        </th>
+                        <th width="10%" className="text-center">
                           Total
                         </th>
-                        <th width="12%" className="text-center">
+                        <th width="5%" className="text-center">
                           Actions
                         </th>
                       </tr>
@@ -774,6 +899,28 @@ const DevisCreate = () => {
                             </div>
                           </td>
                           <td className="text-center">
+                            <input
+                              type="text"
+                              className="form-control form-control-sm text-center"
+                              style={{ width: "80px" }}
+                              value={produit.unite || "unité"}
+                              onChange={(e) =>
+                                updateProduitUnite(index, e.target.value)
+                              }
+                            />
+                          </td>
+                          <td>
+                            <input
+                              type="text"
+                              className="form-control form-control-sm"
+                              value={produit.description || ""}
+                              onChange={(e) =>
+                                updateProduitDescription(index, e.target.value)
+                              }
+                              placeholder="Description..."
+                            />
+                          </td>
+                          <td className="text-center">
                             <strong className="text-primary">
                               {produit.total_ligne.toFixed(2)} DH
                             </strong>
@@ -791,7 +938,7 @@ const DevisCreate = () => {
                         </tr>
                       ))}
                     </tbody>
-                  </table>
+                   </table>
                 </div>
               ) : (
                 <div className="text-center py-5">
@@ -802,7 +949,7 @@ const DevisCreate = () => {
                   </div>
                   <h5>Aucun produit sélectionné</h5>
                   <p className="text-muted">
-                    Recherchez et ajoutez des produits dans le champ ci-dessus
+                    Sélectionnez un produit ci-dessus pour l'ajouter
                   </p>
                 </div>
               )}

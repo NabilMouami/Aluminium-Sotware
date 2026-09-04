@@ -6,8 +6,8 @@ import { useDispatch } from "react-redux";
 import { detailsUser } from "../../slices/userInfo";
 
 const LoginForm = () => {
-  const [email, setEmail] = useState("hassan@admin.com");
-  const [password, setPassword] = useState("admin");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
   const navigate = useNavigate();
@@ -43,7 +43,6 @@ const LoginForm = () => {
 
   return (
     <>
-      <h2 className="fs-20 fw-bolder mb-4">Urban Services Auth</h2>
       <h4 className="fs-13 fw-bold mb-2">Authenticated to your account</h4>
 
       <form onSubmit={handleSubmit} className="w-100 mt-4 pt-2">

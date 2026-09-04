@@ -19,8 +19,11 @@ import {
   FiCalendar,
   FiCreditCard,
   FiDollarSign,
+  FiShoppingCart,
 } from "react-icons/fi";
 import DatePicker from "react-datepicker";
+import Select from "react-select";
+import AsyncSelect from "react-select/async";
 import axios from "axios";
 import { config_url } from "@/utils/config";
 import topTost from "@/utils/topTost";
@@ -225,7 +228,7 @@ const totalToFrenchText = (amount) => {
   return text.charAt(0).toUpperCase() + text.slice(1);
 };
 
-const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
+const BonLivrDetailsModal = ({ isOpen, toggle, bon, bonId, onUpdate }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     status: "brouillon",
@@ -234,21 +237,206 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
   });
   const [totalText, setTotalText] = useState("");
   const [isCalculatingTotal, setIsCalculatingTotal] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [bonData, setBonData] = useState(bon);
+
+  // Product management state
+  const [lineItems, setLineItems] = useState([]);
+  const [allProduits, setAllProduits] = useState([]);
+  const [loadingProduits, setLoadingProduits] = useState(true);
+  const [isEditProductsMode, setIsEditProductsMode] = useState(false);
+
+  // Fetch bon by ID if not provided as prop
+  useEffect(() => {
+    if (isOpen && bonId && !bon) {
+      const fetchBonById = async () => {
+        setLoading(true);
+        try {
+          const token =
+            localStorage.getItem("token") || sessionStorage.getItem("token");
+          const response = await axios.get(
+            `${config_url}/api/bon-livraisons/${bonId}`,
+            {
+              headers: { Authorization: `Bearer ${token}` },
+            },
+          );
+
+          if (response.data.success && response.data.bon) {
+            setBonData(response.data.bon);
+          }
+        } catch (error) {
+          console.error("Error fetching bon by ID:", error);
+          topTost("Erreur lors du chargement du bon de livraison", "error");
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      fetchBonById();
+    } else if (bon) {
+      setBonData(bon);
+      setLoading(false);
+    }
+  }, [isOpen, bonId, bon]);
+
+  // Fetch products when opening product edit mode
+  useEffect(() => {
+    if (isEditProductsMode && isOpen) {
+      fetchAllProduits();
+    }
+  }, [isEditProductsMode, isOpen]);
+
+  const fetchAllProduits = async () => {
+    try {
+      setLoadingProduits(true);
+      const token =
+        localStorage.getItem("token") || sessionStorage.getItem("token");
+      const response = await axios.get(`${config_url}/api/produits`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const options = (response.data?.produits || []).map((produit) => ({
+        value: produit.id,
+        label: `${produit.reference} - ${produit.designation}`,
+        data: {
+          ...produit,
+          displayText: `${produit.reference} - ${produit.designation} (Stock: ${produit.qty}, Prix: ${produit.prix_vente} DH)`,
+        },
+      }));
+
+      setAllProduits(options);
+    } catch (error) {
+      console.error("Error loading produits:", error);
+    } finally {
+      setLoadingProduits(false);
+    }
+  };
+
+  const loadProduits = async (inputValue) => {
+    if (!inputValue) {
+      return allProduits;
+    }
+
+    const filtered = allProduits.filter((option) => {
+      const searchTerm = inputValue.toLowerCase();
+      const produit = option.data;
+      return (
+        produit.reference?.toLowerCase().includes(searchTerm) ||
+        produit.designation?.toLowerCase().includes(searchTerm) ||
+        produit.categorie?.toLowerCase().includes(searchTerm)
+      );
+    });
+
+    if (filtered.length === 0 && inputValue.length >= 2) {
+      try {
+        const token =
+          localStorage.getItem("token") || sessionStorage.getItem("token");
+        const response = await axios.get(
+          `${config_url}/api/produits/search?q=${inputValue}`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          },
+        );
+
+        const options = (response.data.produits || []).map((produit) => ({
+          value: produit.id,
+          label: `${produit.reference} - ${produit.designation}`,
+          data: {
+            ...produit,
+            displayText: `${produit.reference} - ${produit.designation} (Stock: ${produit.qty}, Prix: ${produit.prix_vente} DH)`,
+          },
+        }));
+
+        return options;
+      } catch (error) {
+        console.error("Error searching produits:", error);
+        return [];
+      }
+    }
+
+    return filtered;
+  };
+
+  // Calculate line item total
+  const calculateLineTotal = (quantite, prix_unitaire) => {
+    return (parseFloat(quantite) || 0) * (parseFloat(prix_unitaire) || 0);
+  };
+
+  // Add new product line
+  const handleAddProduct = (selectedOption) => {
+    if (!selectedOption) return;
+
+    const produit = selectedOption.data;
+
+    if (lineItems.some((item) => item.produit_id === produit.id)) {
+      topTost("Ce produit existe déjà dans le bon de livraison", "warning");
+      return;
+    }
+
+    const newItem = {
+      id: Date.now(),
+      produit_id: produit.id,
+      reference: produit.reference,
+      designation: produit.designation,
+      quantite: 1,
+      prix_unitaire: parseFloat(produit.prix_vente) || 0,
+      total_ligne: parseFloat(produit.prix_vente) || 0,
+    };
+
+    setLineItems((prev) => [...prev, newItem]);
+  };
+
+  // Remove product line
+  const handleRemoveProduct = (index) => {
+    const updatedItems = [...lineItems];
+    updatedItems.splice(index, 1);
+    setLineItems(updatedItems);
+  };
+
+  // Update line item field
+  const handleLineItemChange = (index, field, value) => {
+    const updatedItems = [...lineItems];
+    updatedItems[index][field] = value;
+
+    if (field === "quantite" || field === "prix_unitaire") {
+      updatedItems[index].total_ligne = calculateLineTotal(
+        updatedItems[index].quantite,
+        updatedItems[index].prix_unitaire,
+      );
+    }
+
+    setLineItems(updatedItems);
+  };
+
+  // Calculate totals
+  const calculateTotals = () => {
+    const montant_ht = lineItems.reduce(
+      (sum, item) => sum + (item.total_ligne || 0),
+      0,
+    );
+    const montant_ttc = montant_ht;
+    return {
+      montant_ht: montant_ht.toFixed(2),
+      montant_ttc: montant_ttc.toFixed(2),
+    };
+  };
+
+  const totals = calculateTotals();
 
   // Initialize form data when bon changes
   useEffect(() => {
-    if (bon) {
+    if (bonData) {
       console.log("Bon data for debugging:", {
-        id: bon.id,
-        montant_ht: bon.montant_ht,
-        montant_ttc: bon.montant_ttc,
-        produits: bon.produits?.length,
-        advancements: bon.advancements?.length,
-        totalProduits: calculateTotalFromProduits(bon.produits),
+        id: bonData.id,
+        montant_ht: bonData.montant_ht,
+        montant_ttc: bonData.montant_ttc,
+        produits: bonData.produits?.length,
+        advancements: bonData.advancements?.length,
+        totalProduits: calculateTotalFromProduits(bonData.produits),
       });
 
-      const formattedAdvancements = bon.advancements
-        ? bon.advancements.map((adv) => ({
+      const formattedAdvancements = bonData.advancements
+        ? bonData.advancements.map((adv) => ({
             id: adv.id,
             amount: parseFloat(adv.amount) || 0,
             paymentDate: adv.paymentDate
@@ -261,12 +449,24 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
         : [];
 
       setFormData({
-        status: bon.status || "brouillon",
-        notes: bon.notes || "",
+        status: bonData.status || "brouillon",
+        notes: bonData.notes || "",
         advancements: formattedAdvancements,
       });
+
+      // Initialize line items from existing products
+      const existingProducts = (bonData.produits || []).map((prod) => ({
+        id: prod.id,
+        produit_id: prod.id,
+        reference: prod.reference,
+        designation: prod.designation,
+        quantite: parseFloat(prod.BonLivraisonProduit?.quantite || 0),
+        prix_unitaire: parseFloat(prod.BonLivraisonProduit?.prix_unitaire || 0),
+        total_ligne: parseFloat(prod.BonLivraisonProduit?.total_ligne || 0),
+      }));
+      setLineItems(existingProducts);
     }
-  }, [bon]);
+  }, [bonData]);
 
   // Fonction pour calculer le total à partir des produits
   const calculateTotalFromProduits = (produits) => {
@@ -281,8 +481,8 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
   // Calculate total in French text
   useEffect(() => {
     const calculateTotalText = () => {
-      if (bon) {
-        const total = parseFloat(bon.montant_ttc) || 0;
+      if (bonData) {
+        const total = parseFloat(bonData.montant_ttc) || 0;
         if (total > 0) {
           setIsCalculatingTotal(true);
           try {
@@ -300,10 +500,10 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
       }
     };
 
-    if (bon) {
+    if (bonData) {
       calculateTotalText();
     }
-  }, [bon]);
+  }, [bonData]);
 
   if (!bon) return null;
 
@@ -415,8 +615,14 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
     }));
   };
 
+  const formatAmount = (value) =>
+    Number(value || 0).toLocaleString("fr-FR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+
   const handlePrint = () => {
-    if (!bon) return;
+    if (!bonData) return;
 
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
@@ -440,13 +646,13 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
     };
 
     const txt = totalToFrenchText(sousTotal);
-    const creationDateFormatted = formatDateWithTime(bon.date_creation);
+    const creationDateFormatted = formatDateWithTime(bonData.date_creation);
 
     const content = `
 <!DOCTYPE html>
 <html>
 <head>
-  <title>BON DE LIVRAISON ${bon.deliveryNumber}</title>
+  <title>BON DE LIVRAISON ${bonData.deliveryNumber}</title>
   <meta charset="UTF-8">
 
   <style>
@@ -487,7 +693,7 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
     table {
       width: 100%;
       border-collapse: collapse;
-      margin: 20px 0;
+      margin: 5px 0;
     }
 
     th, td {
@@ -503,27 +709,45 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
 
     td {
       text-align: left;
+      font-size: 0.8rem;
+
     }
 
     .totals {
-      margin-top: 25px;
       text-align: right;
     }
 
-    .net-box {
-      display: inline-block;
-      border: 2px solid #000;
+
+.net-box {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 20px;
+  font-size: 20px;
+  font-weight: bold;
+  min-width: 260px;
+}
+
+.net-label {
+  font-size: 0.75rem;
+    border: 2px solid #000;
       padding: 10px 16px;
-      margin-right: 20px;
-      margin-top: 8px;
-      font-weight: bold;
-      text-align: right;
-    }
+
+}
+
+.net-amount {
+  font-size: 20px;
+  
+  padding: 10px 16px;
+
+    border: 2px solid #000;
+}
+
 
     .italic {
       font-style: italic;
       font-size: 0.7rem;
-      margin: 20px;
+      margin-top: 20px;
       font-weight: bold;
     }
   </style>
@@ -537,10 +761,10 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
 
   <div style="display:flex;justify-content:space-between;margin:20px 0;">
     <div>
-      <strong>Nom Client :</strong> ${bon.customerName || "—"}
+      <strong>Nom Client :</strong> ${bonData.customerName || "—"}
     </div>
     <div style="text-align:right;">
-      <strong>N° Bon :</strong> ${bon.deliveryNumber}<br/>
+      <strong>N° Bon :</strong> ${bonData.deliveryNumber}<br/>
       <strong>Date création :</strong> ${creationDateFormatted}
     </div>
   </div>
@@ -556,7 +780,7 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
       </tr>
     </thead>
     <tbody>
-      ${(bon.produits || [])
+      ${(bonData.produits || [])
         .map(
           (prod) => `
         <tr>
@@ -568,7 +792,7 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
           <td style="text-align:right">
             ${Number(prod.BonLivraisonProduit?.prix_unitaire || 0).toFixed(2)}
           </td>
-          <td style="text-align:right">
+          <td style="text-align:center;font-weight: bold">
             ${Number(prod.BonLivraisonProduit?.total_ligne || 0).toFixed(2)}
           </td>
         </tr>
@@ -579,9 +803,12 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
   </table>
 
   <div class="totals">
-    <div class="net-box">
-      NET À PAYER : ${sousTotal.toFixed(2)} DH
-    </div>
+<div class="net-box">
+  <span class="net-label">NET À PAYER</span>
+  <span class="net-amount">
+    ${formatAmount(sousTotal)} DH
+  </span>
+</div>
 
     <div class="italic">
       ${txt}
@@ -602,122 +829,140 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
     printWindow.document.write(content);
     printWindow.document.close();
   };
-
   const generateAndDownloadPDF = async () => {
     try {
+      if (!bonData) return;
+
       const container = document.createElement("div");
 
+      /* ===== A4 PAGE SETUP ===== */
       container.style.width = "210mm";
       container.style.minHeight = "150mm";
-      container.style.padding = "15mm";
+      container.style.padding = "10mm";
       container.style.background = "#fff";
       container.style.fontFamily = "Arial, sans-serif";
-      container.style.fontSize = "0.8rem";
-      container.style.textTransform = "uppercase";
+      container.style.fontSize = "0.6rem";
+      container.style.color = "#000";
       container.style.boxSizing = "border-box";
+      container.style.textTransform = "uppercase";
       container.style.position = "absolute";
       container.style.left = "-9999px";
       container.style.top = "0";
-      container.style.color = "#000";
 
-      // Date + time (same as print)
+      /* ===== DATE FORMAT ===== */
       const formatDateWithTime = (dateInput) => {
         if (!dateInput) return "—";
-        try {
-          const date = new Date(dateInput);
-          if (isNaN(date.getTime())) return "—";
-          return date.toLocaleString("fr-FR", {
-            day: "2-digit",
-            month: "2-digit",
-            year: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-          });
-        } catch {
-          return "—";
-        }
+        const date = new Date(dateInput);
+        if (isNaN(date.getTime())) return "—";
+        return date.toLocaleString("fr-FR", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
       };
 
+      const creationDateFormatted = formatDateWithTime(bonData.date_creation);
       const totalText = totalToFrenchText(sousTotal);
-      const creationDateFormatted = formatDateWithTime(bon.date_creation);
 
+      /* ===== HTML CONTENT ===== */
       container.innerHTML = `
-  <div style="text-align:center; border-bottom:3px solid #000; padding-bottom:15px; margin-bottom:20px;">
-    <h1 style="margin:0; letter-spacing:1px;">BON DE LIVRAISON</h1>
-    <p style="margin:8px 0; font-weight:bold;">ALUMINIUM OULAD BRAHIM</p>
-    <p>TÉL : +212 671953725</p>
-  </div>
+      <!-- HEADER -->
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;">
+        <h2 style="font-size:0.9rem;margin:0;">Bon de Livraison</h2>
+        <div style="font-size:0.7rem;">
+ALUMINIUM OULAD BRAHIM – Tél: +212 671953725        </div>
+      </div>
 
-  <div style="display:flex; justify-content:space-between; margin-bottom:25px;">
-    <div>
-      <p><strong>NOM CLIENT :</strong><br/>${bon.customerName || "—"}</p>
-    </div>
-    <div style="text-align:right;">
-      <p><strong>N° BON :</strong> ${bon.deliveryNumber}</p>
-      <p><strong>DATE CRÉATION :</strong> ${creationDateFormatted}</p>
-    </div>
-  </div>
+      <!-- CLIENT / META -->
+      <div style="display:flex;justify-content:space-between;margin-bottom:15px;">
+        <div>
+          <strong>Nom Client :</strong><br/>
+          ${bonData.customerName || "—"}
+        </div>
+        <div style="text-align:right;">
+          <strong>N° Bon :</strong> ${bonData.deliveryNumber}<br/>
+          <strong>Date création :</strong> ${creationDateFormatted}
+        </div>
+      </div>
 
-  <table style="width:100%; border-collapse:collapse; margin-bottom:25px;">
-    <thead>
-      <tr>
-        <th style="border:1.5px solid #000; padding:10px; text-align:center;">CODE</th>
-        <th style="border:1.5px solid #000; padding:10px; text-align:center;">DÉSIGNATION</th>
-        <th style="border:1.5px solid #000; padding:10px; text-align:center;">QTÉ</th>
-        <th style="border:1.5px solid #000; padding:10px; text-align:center;">PRIX U</th>
-        <th style="border:1.5px solid #000; padding:10px; text-align:center;">MONTANT</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${(bon.produits || [])
-        .map(
-          (p) => `
-        <tr>
-          <td style="border:1.5px solid #000; padding:8px;">${p.reference || "—"}</td>
-          <td style="border:1.5px solid #000; padding:8px;">${p.designation || "—"}</td>
-          <td style="border:1.5px solid #000; padding:8px; text-align:center;">
-            ${p.BonLivraisonProduit?.quantite || 0}
-          </td>
-          <td style="border:1.5px solid #000; padding:8px; text-align:right;">
-            ${Number(p.BonLivraisonProduit?.prix_unitaire || 0).toFixed(2)}
-          </td>
-          <td style="border:1.5px solid #000; padding:8px; text-align:right;">
-            ${Number(p.BonLivraisonProduit?.total_ligne || 0).toFixed(2)}
-          </td>
-        </tr>
-      `,
-        )
-        .join("")}
-    </tbody>
-  </table>
+      <!-- TABLE -->
+      <table style="width:100%;border-collapse:collapse;">
+        <thead>
+          <tr>
+            ${["Code", "Désignation", "Qté", "Prix U", "Montant"]
+              .map(
+                (h) => `
+              <th style="
+                border:1.5px solid #000;
+                padding:5px;
+                background:#f2f2f2;
+                text-align:center;
+              ">
+                ${h}
+              </th>`,
+              )
+              .join("")}
+          </tr>
+        </thead>
+        <tbody>
+          ${(bonData.produits || [])
+            .map(
+              (p) => `
+            <tr style="font-size: 0.8rem;">
+              <td style="border:1.5px solid #000;padding:5px;">
+                ${p.reference || "—"}
+              </td>
+              <td style="border:1.5px solid #000;padding:5px;">
+                ${p.designation || "—"}
+              </td>
+              <td style="border:1.5px solid #000;padding:5px;text-align:center;">
+                ${p.BonLivraisonProduit?.quantite || 0}
+              </td>
+              <td style="border:1.5px solid #000;padding:5px;text-align:center;">
+                ${Number(p.BonLivraisonProduit?.prix_unitaire || 0).toFixed(2)}
+              </td>
+              <td style="border:1.5px solid #000;padding:5px;text-align:center;">
+                ${Number(p.BonLivraisonProduit?.total_ligne || 0).toFixed(2)}
+              </td>
+            </tr>
+          `,
+            )
+            .join("")}
+        </tbody>
+      </table>
 
-  <div style="text-align:right; margin-top:25px;">
-    <div style="
-      display:inline-block;
-      border:2px solid #000;
-      padding:12px 18px;
-      margin-right:20px;
-      font-weight:bold;
-    ">
-      NET À PAYER : ${sousTotal.toFixed(2)}
-    </div>
+      <!-- TOTAL -->
+      <div style="margin-top:20px;text-align:right;">
+        <div style="
+          display:inline-flex;
+          gap:15px;
+          align-items:center;
+          font-weight:bold;
+        ">
+          <span style="border:2px solid #000;padding:8px 14px;font-size:0.75rem;">
+            Net à payer
+          </span>
+          <span style="border:2px solid #000;padding:8px 14px;font-size:0.85rem;">
+            ${formatAmount(sousTotal)} DH
+          </span>
+        </div>
 
-    <br/>
-
-    <div style="
-      display:inline-block;
-      margin-top:12px;
-      font-style:italic;
-      font-weight:bold;
-      font-size:1.1rem;
-    ">
-      ${totalText}
-    </div>
-  </div>
-`;
+        <div style="
+          margin-top:10px;
+          font-style:italic;
+          font-weight:bold;
+          font-size:0.7rem;
+        ">
+          ${totalText}
+        </div>
+      </div>
+    `;
 
       document.body.appendChild(container);
 
+      /* ===== RENDER CANVAS ===== */
       const canvas = await html2canvas(container, {
         scale: 2,
         useCORS: true,
@@ -726,6 +971,7 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
 
       document.body.removeChild(container);
 
+      /* ===== PDF ===== */
       const imgData = canvas.toDataURL("image/png");
       const pdf = new jsPDF("p", "mm", "a4");
 
@@ -740,16 +986,16 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
       heightLeft -= pageHeight;
 
       while (heightLeft > 0) {
-        position = heightLeft - imgHeight;
+        position -= pageHeight;
         pdf.addPage();
         pdf.addImage(imgData, "PNG", 0, position, pageWidth, imgHeight);
         heightLeft -= pageHeight;
       }
 
-      pdf.save(`Bon-Livraison-${bon.deliveryNumber}.pdf`);
+      pdf.save(`Bon-Livraison-${bonData.deliveryNumber}.pdf`);
       topTost("PDF généré et téléchargé !", "success");
     } catch (err) {
-      console.error("PDF generation error:", err);
+      console.error(err);
       topTost("Erreur lors de la création du PDF", "error");
     }
   };
@@ -776,6 +1022,31 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
       }
     }
 
+    // Validate products if in product edit mode
+    if (isEditProductsMode) {
+      if (lineItems.length === 0) {
+        topTost("Veuillez ajouter au moins un produit", "warning");
+        return;
+      }
+
+      for (const item of lineItems) {
+        if (!item.quantite || item.quantite <= 0) {
+          topTost(
+            `La quantité doit être positive pour ${item.designation}`,
+            "warning",
+          );
+          return;
+        }
+        if (!item.prix_unitaire || item.prix_unitaire < 0) {
+          topTost(
+            `Le prix doit être positif pour ${item.designation}`,
+            "warning",
+          );
+          return;
+        }
+      }
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -793,10 +1064,19 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
         })),
       };
 
+      // Add products if in product edit mode
+      if (isEditProductsMode && lineItems.length > 0) {
+        updateData.produits = lineItems.map((item) => ({
+          produitId: item.produit_id,
+          quantite: item.quantite,
+          prix_unitaire: item.prix_unitaire,
+        }));
+      }
+
       const token =
         localStorage.getItem("token") || sessionStorage.getItem("token");
       const response = await axios.put(
-        `${config_url}/api/bon-livraisons/${bon.id}`,
+        `${config_url}/api/bon-livraisons/${bonData.id}`,
         updateData,
         {
           headers: { Authorization: `Bearer ${token}` },
@@ -809,6 +1089,7 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
         onUpdate(response.data.bon || response.data);
       }
 
+      setIsEditProductsMode(false);
       toggle();
     } catch (error) {
       console.error("Error updating bon:", error);
@@ -836,15 +1117,28 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
     });
   };
 
-  // Get date from bon
-  const issueDate = parseDateSafely(bon.date_creation) || new Date();
+  // Get date from bonData
+  const issueDate = parseDateSafely(bonData?.date_creation) || new Date();
+
+  if (!bonData || loading) {
+    return (
+      <Modal isOpen={isOpen} toggle={toggle} size="xl">
+        <ModalHeader toggle={toggle}>Chargement...</ModalHeader>
+        <ModalBody className="text-center py-5">
+          <div className="spinner-border" role="status">
+            <span className="visually-hidden">Chargement...</span>
+          </div>
+        </ModalBody>
+      </Modal>
+    );
+  }
 
   return (
     <Modal isOpen={isOpen} toggle={toggle} size="xl">
       <ModalHeader toggle={toggle}>
         <div className="d-flex align-items-center">
           <FiPrinter className="me-2" />
-          Bon de Livraison #{bon.num_bon_livraison}
+          Bon de Livraison #{bonData.num_bon_livraison}
           <Badge color={getStatusBadge(formData.status)} className="ms-2">
             {statusOptions.find((opt) => opt.value === formData.status)
               ?.label || formData.status}
@@ -863,11 +1157,12 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
               </h6>
               <div className="p-3 bg-light rounded">
                 <p>
-                  <strong>Nom:</strong> {bon.customerName || "Client inconnu"}
+                  <strong>Nom:</strong>{" "}
+                  {bonData.customerName || "Client inconnu"}
                 </p>
                 <p>
                   <strong>Téléphone:</strong>{" "}
-                  {bon.customerPhone || "Non spécifié"}
+                  {bonData.customerPhone || "Non spécifié"}
                 </p>
               </div>
             </div>
@@ -886,7 +1181,7 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
 
                 <p>
                   <strong>Mode règlement:</strong>{" "}
-                  {bon.mode_reglement || "Non spécifié"}
+                  {bonData.mode_reglement || "Non spécifié"}
                 </p>
               </div>
             </div>
@@ -1064,39 +1359,197 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
 
           {/* Products Section */}
           <div className="col-12 mt-4">
-            <h6>Produits</h6>
-            <div className="table-responsive">
-              <table className="table table-bordered">
-                <thead>
-                  <tr>
-                    <th>Code</th>
-                    <th>Produit</th>
-                    <th>Quantité</th>
-                    <th>Prix Unitaire</th>
-                    <th>Total Ligne</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(bon.produits || []).map((prod, index) => (
-                    <tr key={prod.id || index}>
-                      <td>{prod.reference || "N/A"}</td>
-                      <td>{prod.designation || "Produit"}</td>
-                      <td>{prod.BonLivraisonProduit?.quantite || 0}</td>
-                      <td>
-                        {parseFloat(
-                          prod.BonLivraisonProduit?.prix_unitaire || 0,
-                        ).toFixed(2)}{" "}
-                      </td>
-                      <td>
-                        {parseFloat(
-                          prod.BonLivraisonProduit?.total_ligne || 0,
-                        ).toFixed(2)}{" "}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="d-flex justify-content-between align-items-center mb-3">
+              <h6>Produits</h6>
+              {!isEditProductsMode && (
+                <Button
+                  color="primary"
+                  size="sm"
+                  onClick={() => setIsEditProductsMode(true)}
+                >
+                  <FiPlus className="me-1" />
+                  Modifier les produits
+                </Button>
+              )}
             </div>
+
+            {isEditProductsMode ? (
+              <div className="border rounded p-3 bg-light">
+                {/* Product Selector */}
+                <div className="mb-3">
+                  <label className="form-label">Ajouter un produit</label>
+                  <AsyncSelect
+                    cacheOptions
+                    loadOptions={loadProduits}
+                    defaultOptions={allProduits}
+                    onChange={handleAddProduct}
+                    placeholder="Rechercher un produit..."
+                    isLoading={loadingProduits}
+                    isClearable
+                    formatOptionLabel={(option) => (
+                      <div>
+                        <div>{option.label}</div>
+                        {option.data.displayText && (
+                          <small className="text-muted">
+                            {option.data.displayText}
+                          </small>
+                        )}
+                      </div>
+                    )}
+                  />
+                </div>
+
+                {/* Line Items Table */}
+                {lineItems.length > 0 ? (
+                  <div className="table-responsive">
+                    <table className="table table-bordered table-sm">
+                      <thead className="table-light">
+                        <tr>
+                          <th>Code</th>
+                          <th>Désignation</th>
+                          <th style={{ width: "100px" }}>Quantité</th>
+                          <th style={{ width: "120px" }}>Prix Unitaire</th>
+                          <th style={{ width: "120px" }}>Total Ligne</th>
+                          <th style={{ width: "50px" }}></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {lineItems.map((item, index) => (
+                          <tr key={item.id || index}>
+                            <td>{item.reference || "—"}</td>
+                            <td>{item.designation || "Produit"}</td>
+                            <td>
+                              <input
+                                type="number"
+                                className="form-control form-control-sm"
+                                value={item.quantite}
+                                onChange={(e) =>
+                                  handleLineItemChange(
+                                    index,
+                                    "quantite",
+                                    parseFloat(e.target.value) || 0,
+                                  )
+                                }
+                                min="0"
+                                step="0.01"
+                              />
+                            </td>
+                            <td>
+                              <input
+                                type="number"
+                                className="form-control form-control-sm"
+                                value={item.prix_unitaire}
+                                onChange={(e) =>
+                                  handleLineItemChange(
+                                    index,
+                                    "prix_unitaire",
+                                    parseFloat(e.target.value) || 0,
+                                  )
+                                }
+                                min="0"
+                                step="0.01"
+                              />
+                            </td>
+                            <td className="text-end">
+                              {item.total_ligne?.toFixed(2) || "0.00"}
+                            </td>
+                            <td>
+                              <Button
+                                color="danger"
+                                size="sm"
+                                onClick={() => handleRemoveProduct(index)}
+                                className="p-1"
+                              >
+                                <FiTrash2 size={14} />
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="table-light">
+                          <td colSpan="4" className="text-end fw-bold">
+                            Total HT:
+                          </td>
+                          <td className="text-end fw-bold">
+                            {totals.montant_ht} DH
+                          </td>
+                          <td></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="text-center text-muted py-3">
+                    Aucun produit ajouté.
+                  </div>
+                )}
+
+                <div className="d-flex justify-content-end mt-2">
+                  <Button
+                    color="secondary"
+                    size="sm"
+                    onClick={() => {
+                      // Reset to original products
+                      const existingProducts = (bonData.produits || []).map(
+                        (prod) => ({
+                          id: prod.id,
+                          produit_id: prod.id,
+                          reference: prod.reference,
+                          designation: prod.designation,
+                          quantite: parseFloat(
+                            prod.BonLivraisonProduit?.quantite || 0,
+                          ),
+                          prix_unitaire: parseFloat(
+                            prod.BonLivraisonProduit?.prix_unitaire || 0,
+                          ),
+                          total_ligne: parseFloat(
+                            prod.BonLivraisonProduit?.total_ligne || 0,
+                          ),
+                        }),
+                      );
+                      setLineItems(existingProducts);
+                      setIsEditProductsMode(false);
+                    }}
+                  >
+                    Annuler
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="table-responsive">
+                <table className="table table-bordered">
+                  <thead>
+                    <tr>
+                      <th>Code</th>
+                      <th>Produit</th>
+                      <th>Quantité</th>
+                      <th>Prix Unitaire</th>
+                      <th>Total Ligne</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(bonData.produits || []).map((prod, index) => (
+                      <tr key={prod.id || index}>
+                        <td>{prod.reference || "N/A"}</td>
+                        <td>{prod.designation || "Produit"}</td>
+                        <td>{prod.BonLivraisonProduit?.quantite || 0}</td>
+                        <td>
+                          {parseFloat(
+                            prod.BonLivraisonProduit?.prix_unitaire || 0,
+                          ).toFixed(2)}{" "}
+                        </td>
+                        <td>
+                          {parseFloat(
+                            prod.BonLivraisonProduit?.total_ligne || 0,
+                          ).toFixed(2)}{" "}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
 
           {/* Summary Section CORRIGÉE */}
@@ -1106,11 +1559,11 @@ const BonLivrDetailsModal = ({ isOpen, toggle, bon, onUpdate }) => {
                 <div className="col-md-6">
                   <h6>Résumé</h6>
                   <p>
-                    <strong>N° Bon:</strong> {bon.deliveryNumber}
+                    <strong>N° Bon:</strong> {bonData.deliveryNumber}
                   </p>
                   <p>
                     <strong>Client:</strong>{" "}
-                    {bon.customerName || "Client inconnu"}
+                    {bonData.customerName || "Client inconnu"}
                   </p>
                   <p>
                     <strong>Statut:</strong>{" "}

@@ -270,8 +270,8 @@ const BonAvoirDetailsPage = () => {
                   <div class="title">Bon d'Avoir</div>
 
           <div class="company-info">
-            <h2>ALUMINIUM OULAD BRAHIM</h2>
-            <p>Tél: +212 661-431237</p>
+            <h2>ALUMINIUM EL-ALAOUI</h2>
+            <p>Tél: +212 600-537325</p>
           </div>
         </div>
 
@@ -360,7 +360,7 @@ const BonAvoirDetailsPage = () => {
         <div style="text-align:center; border-bottom:2px solid #d32f2f; padding-bottom:10px; margin-bottom:15px;">
           <h1 style="margin:0; color:#d32f2f;">Bon d'Avoir</h1>
           <h3 style="margin:5px 0;">ALUMINIUM OULAD BRAHIM</h3>
-          <p style="font-size:10px;">Tél: +212 661-431237</p>
+          <p style="font-size:10px;">Tél: +212 671953725</p>
         </div>
 
         <div style="background-color:#f8f8f8; padding:15px; border-radius:5px; margin-bottom:15px;">

@@ -56,7 +56,7 @@ const DevisCreate = () => {
       price_unit: 1,
       total: 1,
     };
-    setItems([...items, newItem]);
+    setItems([newItem, ...items]);
   };
 
   const removeItem = (id) => {

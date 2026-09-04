@@ -21,8 +21,11 @@ import {
   FiArrowLeft,
   FiCalendar,
   FiCreditCard,
+  FiPlus,
+  FiTrash2,
 } from "react-icons/fi";
 import Select from "react-select";
+import AsyncSelect from "react-select/async";
 import axios from "axios";
 import { config_url } from "@/utils/config";
 import topTost from "@/utils/topTost";
@@ -204,12 +207,164 @@ const DevisDetailsPage = () => {
   const [isCalculatingTotal, setIsCalculatingTotal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
 
+  // Product management state
+  const [lineItems, setLineItems] = useState([]);
+  const [allProduits, setAllProduits] = useState([]);
+  const [loadingProduits, setLoadingProduits] = useState(true);
+  const [isEditProductsMode, setIsEditProductsMode] = useState(false);
+
   // Fetch devis details
   useEffect(() => {
     if (id) {
       fetchDevisDetails();
     }
   }, [id]);
+
+  // Fetch products when opening product edit mode
+  useEffect(() => {
+    if (isEditProductsMode) {
+      fetchAllProduits();
+    }
+  }, [isEditProductsMode]);
+
+  const fetchAllProduits = async () => {
+    try {
+      setLoadingProduits(true);
+      const token =
+        localStorage.getItem("token") || sessionStorage.getItem("token");
+      const response = await axios.get(`${config_url}/api/produits`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const options = (response.data?.produits || []).map((produit) => ({
+        value: produit.id,
+        label: `${produit.reference} - ${produit.designation}`,
+        data: {
+          ...produit,
+          displayText: `${produit.reference} - ${produit.designation} (Stock: ${produit.qty}, Prix: ${produit.prix_vente} DH)`,
+        },
+      }));
+
+      setAllProduits(options);
+    } catch (error) {
+      console.error("Error loading produits:", error);
+    } finally {
+      setLoadingProduits(false);
+    }
+  };
+
+  const loadProduits = async (inputValue) => {
+    if (!inputValue) {
+      return allProduits;
+    }
+
+    const filtered = allProduits.filter((option) => {
+      const searchTerm = inputValue.toLowerCase();
+      const produit = option.data;
+      return (
+        produit.reference?.toLowerCase().includes(searchTerm) ||
+        produit.designation?.toLowerCase().includes(searchTerm) ||
+        produit.categorie?.toLowerCase().includes(searchTerm)
+      );
+    });
+
+    if (filtered.length === 0 && inputValue.length >= 2) {
+      try {
+        const token =
+          localStorage.getItem("token") || sessionStorage.getItem("token");
+        const response = await axios.get(
+          `${config_url}/api/produits/search?q=${inputValue}`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          },
+        );
+
+        const options = (response.data.produits || []).map((produit) => ({
+          value: produit.id,
+          label: `${produit.reference} - ${produit.designation}`,
+          data: {
+            ...produit,
+            displayText: `${produit.reference} - ${produit.designation} (Stock: ${produit.qty}, Prix: ${produit.prix_vente} DH)`,
+          },
+        }));
+
+        return options;
+      } catch (error) {
+        console.error("Error searching produits:", error);
+        return [];
+      }
+    }
+
+    return filtered;
+  };
+
+  // Calculate line item total
+  const calculateLineTotal = (quantite, prix_unitaire) => {
+    return (parseFloat(quantite) || 0) * (parseFloat(prix_unitaire) || 0);
+  };
+
+  // Add new product line
+  const handleAddProduct = (selectedOption) => {
+    if (!selectedOption) return;
+
+    const produit = selectedOption.data;
+
+    if (lineItems.some((item) => item.produit_id === produit.id)) {
+      topTost("Ce produit existe déjà dans le devis", "warning");
+      return;
+    }
+
+    const newItem = {
+      id: Date.now(),
+      produit_id: produit.id,
+      reference: produit.reference,
+      designation: produit.designation,
+      quantite: 1,
+      prix_unitaire: parseFloat(produit.prix_vente) || 0,
+      total_ligne: parseFloat(produit.prix_vente) || 0,
+      description: "",
+      unite: "unité",
+    };
+
+    setLineItems([...lineItems, newItem]);
+  };
+
+  // Remove product line
+  const handleRemoveProduct = (index) => {
+    const updatedItems = [...lineItems];
+    updatedItems.splice(index, 1);
+    setLineItems(updatedItems);
+  };
+
+  // Update line item field
+  const handleLineItemChange = (index, field, value) => {
+    const updatedItems = [...lineItems];
+    updatedItems[index][field] = value;
+
+    if (field === "quantite" || field === "prix_unitaire") {
+      updatedItems[index].total_ligne = calculateLineTotal(
+        updatedItems[index].quantite,
+        updatedItems[index].prix_unitaire,
+      );
+    }
+
+    setLineItems(updatedItems);
+  };
+
+  // Calculate totals
+  const calculateTotals = () => {
+    const montant_ht = lineItems.reduce(
+      (sum, item) => sum + (item.total_ligne || 0),
+      0,
+    );
+    const montant_ttc = montant_ht;
+    return {
+      montant_ht: montant_ht.toFixed(2),
+      montant_ttc: montant_ttc.toFixed(2),
+    };
+  };
+
+  const totals = calculateTotals();
 
   const fetchDevisDetails = async () => {
     try {
@@ -230,6 +385,20 @@ const DevisDetailsPage = () => {
         objet: devisData.objet || "",
         conditions_generales: devisData.conditions_generales || "",
       });
+
+      // Initialize line items from existing products
+      const existingProducts = (devisData.produits || []).map((prod) => ({
+        id: prod.id,
+        produit_id: prod.id,
+        reference: prod.reference,
+        designation: prod.designation,
+        quantite: parseFloat(prod.DevisProduit?.quantite || 0),
+        prix_unitaire: parseFloat(prod.DevisProduit?.prix_unitaire || 0),
+        total_ligne: parseFloat(prod.DevisProduit?.total_ligne || 0),
+        description: prod.DevisProduit?.description || "",
+        unite: prod.DevisProduit?.unite || "unité",
+      }));
+      setLineItems(existingProducts);
     } catch (error) {
       console.error("Error fetching devis details:", error);
       topTost("Erreur lors du chargement du devis", "error");
@@ -328,33 +497,138 @@ const DevisDetailsPage = () => {
     }));
   };
 
+  const formatAmount = (value) =>
+    Number(value || 0).toLocaleString("fr-FR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+
+  const handleSave = async () => {
+    try {
+      // Validate products if in product edit mode
+      if (isEditProductsMode) {
+        if (lineItems.length === 0) {
+          topTost("Veuillez ajouter au moins un produit", "warning");
+          return;
+        }
+
+        for (const item of lineItems) {
+          if (!item.quantite || item.quantite <= 0) {
+            topTost(
+              `La quantité doit être positive pour ${item.designation}`,
+              "warning",
+            );
+            return;
+          }
+          if (!item.prix_unitaire || item.prix_unitaire < 0) {
+            topTost(
+              `Le prix doit être positif pour ${item.designation}`,
+              "warning",
+            );
+            return;
+          }
+        }
+      }
+
+      const updateData = {
+        status: formData.status,
+        notes: formData.notes,
+        conditions_reglement: formData.conditions_reglement,
+        objet: formData.objet,
+        conditions_generales: formData.conditions_generales,
+      };
+
+      // Add products if in product edit mode
+      if (isEditProductsMode && lineItems.length > 0) {
+        updateData.produits = lineItems.map((item) => ({
+          produit_id: item.produit_id,
+          quantite: item.quantite,
+          prix_unitaire: item.prix_unitaire,
+          description: item.description || null,
+          unite: item.unite || "unité",
+        }));
+      }
+
+      const token =
+        localStorage.getItem("token") || sessionStorage.getItem("token");
+      const response = await axios.put(
+        `${config_url}/api/devis/${id}`,
+        updateData,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+
+      if (response.data.devis) {
+        setDevis(response.data.devis);
+        // Re-initialize line items with updated data
+        const existingProducts = (response.data.devis.produits || []).map(
+          (prod) => ({
+            id: prod.id,
+            produit_id: prod.id,
+            reference: prod.reference,
+            designation: prod.designation,
+            quantite: parseFloat(prod.DevisProduit?.quantite || 0),
+            prix_unitaire: parseFloat(prod.DevisProduit?.prix_unitaire || 0),
+            total_ligne: parseFloat(prod.DevisProduit?.total_ligne || 0),
+            description: prod.DevisProduit?.description || "",
+            unite: prod.DevisProduit?.unite || "unité",
+          }),
+        );
+        setLineItems(existingProducts);
+      }
+
+      setIsEditing(false);
+      setIsEditProductsMode(false);
+      topTost("Devis mis à jour avec succès!", "success");
+    } catch (error) {
+      console.error("Error saving devis:", error);
+      const errorMessage =
+        error.response?.data?.message ||
+        "Erreur lors de la mise à jour du devis";
+      topTost(errorMessage, "error");
+    }
+  };
+
+  const handleCancelEdit = () => {
+    // Reset line items to original products
+    const existingProducts = (devis?.produits || []).map((prod) => ({
+      id: prod.id,
+      produit_id: prod.id,
+      reference: prod.reference,
+      designation: prod.designation,
+      quantite: parseFloat(prod.DevisProduit?.quantite || 0),
+      prix_unitaire: parseFloat(prod.DevisProduit?.prix_unitaire || 0),
+      total_ligne: parseFloat(prod.DevisProduit?.total_ligne || 0),
+      description: prod.DevisProduit?.description || "",
+      unite: prod.DevisProduit?.unite || "unité",
+    }));
+    setLineItems(existingProducts);
+    setIsEditProductsMode(false);
+  };
+
+  const formatDateWithTime = (dateInput) => {
+    if (!dateInput) return "—";
+    const d = new Date(dateInput);
+    if (isNaN(d.getTime())) return "—";
+    return d.toLocaleString("fr-FR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
   const handlePrint = () => {
     if (!devis) return;
 
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
 
-    const formatDateWithTime = (dateStr) => {
-      if (!dateStr) return "—";
-      try {
-        const d = new Date(dateStr);
-        if (isNaN(d.getTime())) return "—";
-        return d.toLocaleString("fr-FR", {
-          day: "2-digit",
-          month: "2-digit",
-          year: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-        });
-      } catch {
-        return "—";
-      }
-    };
-
     const creationDateFormatted = formatDateWithTime(devis.date_creation);
-    const printTotalText = totalToFrenchText(total);
+    const totalText = totalToFrenchText(total);
 
-    const printContent = `
+    const content = `
 <!DOCTYPE html>
 <html>
 <head>
@@ -362,50 +636,29 @@ const DevisDetailsPage = () => {
   <meta charset="UTF-8" />
 
   <style>
-    @page {
-      size: A4;
-      margin-left: 10mm;
-      margin-right: 10mm;
-    }
+    @page { size: A4; margin: 10mm; }
 
-    * {
-      box-sizing: border-box;
-      text-transform: uppercase;
-    }
+    * { box-sizing: border-box; text-transform: uppercase; }
 
     body {
-      width: 100%;
-      margin: 0;
-      padding-left: 5mm;
-      padding-right: 5mm;
       font-family: Arial, sans-serif;
       font-size: 0.6rem;
+      margin: 0;
+      padding: 5mm;
       color: #000;
-      background: #fff;
     }
 
-    .header {
-    display:flex;
-    justify-content:space-between;
-
-      text-align: center;
-    }
-
-    h2 {
-      font-size: 0.9rem;
-      letter-spacing: 1px;
-    }
+    h2 { font-size: 0.9rem; margin: 0; }
 
     table {
       width: 100%;
       border-collapse: collapse;
-      margin: 20px 0;
+      margin-top: 15px;
     }
 
     th, td {
       border: 1.5px solid #000;
       padding: 5px;
-      vertical-align: middle;
     }
 
     th {
@@ -413,77 +666,76 @@ const DevisDetailsPage = () => {
       text-align: center;
     }
 
-    td {
-      text-align: left;
-    }
-
-    .totals {
-      margin-top: 25px;
-      text-align: right;
-    }
+    td { font-size: 0.8rem; }
 
     .net-box {
-      display: inline-block;
+      display: flex;
+      justify-content: flex-end;
+      gap: 20px;
+        font-size: 20px;
+      margin-top: 20px;
+      font-weight: bold;
+    }
+
+    .net-label, .net-amount {
       border: 2px solid #000;
       padding: 10px 16px;
-      margin-right: 20px;
-      margin-top: 8px;
-      font-weight: bold;
-      text-align: right;
+        font-size: 20px;
     }
 
     .italic {
+      margin-top: 10px;
+      text-align: right;
       font-style: italic;
-      font-size: 0.7rem;
-      margin: 20px;
       font-weight: bold;
+      font-size: 0.7rem;
     }
   </style>
 </head>
 
 <body>
-  <div class="header">
+
+  <div style="display:flex;justify-content:space-between;align-items:center;">
     <h2>DEVIS</h2>
-    <p>ALUMINIUM OULAD BRAHIM – TÉL: +212 671953725</p>
+    <divALUMINIUM OULAD BRAHIM – Tél: +212 671953725</div>
   </div>
 
-  <div class="info">
+  <div style="display:flex;justify-content:space-between;margin:20px 0;">
     <div>
-      <strong>NOM CLIENT :</strong><br/>
+      <strong>Nom Client :</strong><br/>
       ${devis.client_name || devis.client?.nom_complete || "—"}
     </div>
-
     <div style="text-align:right;">
-      <strong>N° DEVIS :</strong> ${devis.num_devis}<br/>
-      <strong>DATE CRÉATION :</strong> ${creationDateFormatted}
+      <strong>N° Devis :</strong> ${devis.num_devis}<br/>
+      <strong>Date création :</strong> ${creationDateFormatted}
     </div>
   </div>
 
   <table>
     <thead>
       <tr>
-        <th>CODE</th>
-        <th>DÉSIGNATION</th>
-        <th>QTÉ</th>
-        <th>PRIX U</th>
-        <th>MONTANT</th>
+        <th>Code</th>
+        <th>Désignation</th>
+        <th>Qté</th>
+        <th>Prix U</th>
+        <th>Montant</th>
       </tr>
     </thead>
     <tbody>
       ${(devis.produits || [])
         .map(
-          (prod) => `
+          (p) => `
         <tr>
-          <td>${prod.reference || "—"}</td>
-          <td>${prod.designation || "—"}</td>
+          <td>${p.reference || "—"}</td>
+          <td>${p.designation || "—"}</td>
           <td style="text-align:center;">
-            ${Number(prod.DevisProduit?.quantite || 0).toFixed(2)}
+            ${Number(p.DevisProduit?.quantite || 0).toFixed(2)}
           </td>
           <td style="text-align:right;">
-            ${Number(prod.DevisProduit?.prix_unitaire || 0).toFixed(2)}
+            ${formatAmount(p.DevisProduit?.prix_unitaire)}
           </td>
-          <td style="text-align:right;">
-            ${Number(prod.DevisProduit?.total_ligne || 0).toFixed(2)}
+          <td style="text-align:center;font-weight: bold">
+            ${formatAmount(p.DevisProduit?.total_ligne)}
           </td>
         </tr>
       `,
@@ -492,15 +744,12 @@ const DevisDetailsPage = () => {
     </tbody>
   </table>
 
-  <div class="totals">
-    <div class="net-box">
-      TOTAL À PAYER : ${total.toFixed(2)} DH
-    </div>
-
-    <div class="italic">
-      ${printTotalText}
-    </div>
+  <div class="net-box">
+    <span class="net-label">Total à payer</span>
+    <span class="net-amount">${formatAmount(total)} DH</span>
   </div>
+
+  <div class="italic">${totalText}</div>
 
   <script>
     window.onload = function () {
@@ -513,158 +762,120 @@ const DevisDetailsPage = () => {
 `;
 
     printWindow.document.open();
-    printWindow.document.write(printContent);
+    printWindow.document.write(content);
     printWindow.document.close();
   };
-
   const generateAndDownloadPDF = async () => {
     try {
       const container = document.createElement("div");
 
       container.style.width = "210mm";
-      container.style.minHeight = "150mm";
-      container.style.padding = "15mm";
-      container.style.background = "#fff";
-      container.style.color = "#000";
+      container.style.padding = "10mm";
       container.style.fontFamily = "Arial, sans-serif";
-      container.style.fontSize = "0.8rem";
+      container.style.fontSize = "0.6rem";
       container.style.textTransform = "uppercase";
-      container.style.boxSizing = "border-box";
       container.style.position = "absolute";
       container.style.left = "-9999px";
-      container.style.top = "0";
-
-      const formatDateWithTime = (dateStr) => {
-        if (!dateStr) return "—";
-        try {
-          const d = new Date(dateStr);
-          if (isNaN(d.getTime())) return "—";
-          return d.toLocaleString("fr-FR", {
-            day: "2-digit",
-            month: "2-digit",
-            year: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-          });
-        } catch {
-          return "—";
-        }
-      };
 
       const creationDateFormatted = formatDateWithTime(devis.date_creation);
       const totalText = totalToFrenchText(total);
 
       container.innerHTML = `
-  <div style="text-align:center; border-bottom:3px solid #000; padding-bottom:15px; margin-bottom:20px;">
-    <h1 style="margin:0; letter-spacing:1px;">DEVIS</h1>
-    <p style="margin:8px 0; font-weight:bold;">ALUMINIUM OULAD BRAHIM</p>
-    <p>TÉL : +212 671953725</p>
-  </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;">
+        <h2 style="font-size:0.9rem;margin:0;">DEVIS</h2>
+        <div>ALUMINIUM OULAD BRAHIM – Tél: +212 671953725</div>
+      </div>
 
-  <div style="display:flex; justify-content:space-between; margin-bottom:25px;">
-    <div>
-      <p><strong>NOM CLIENT :</strong><br/>
-        ${devis.client_name || devis.client?.nom_complete || "—"}
-      </p>
-    </div>
-    <div style="text-align:right;">
-      <p><strong>N° DEVIS :</strong> ${devis.num_devis}</p>
-      <p><strong>DATE CRÉATION :</strong> ${creationDateFormatted}</p>
-    </div>
-  </div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:15px;">
+        <div>
+          <strong>Nom Client :</strong><br/>
+          ${devis.client_name || devis.client?.nom_complete || "—"}
+        </div>
+        <div style="text-align:right;">
+          <strong>N° Devis :</strong> ${devis.num_devis}<br/>
+          <strong>Date création :</strong> ${creationDateFormatted}
+        </div>
+      </div>
 
-  <table style="width:100%; border-collapse:collapse; margin-bottom:25px;">
-    <thead>
-      <tr>
-        <th style="border:1.5px solid #000; padding:10px;">CODE</th>
-        <th style="border:1.5px solid #000; padding:10px;">DÉSIGNATION</th>
-        <th style="border:1.5px solid #000; padding:10px;">QTÉ</th>
-        <th style="border:1.5px solid #000; padding:10px;">PRIX U</th>
-        <th style="border:1.5px solid #000; padding:10px;">MONTANT</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${(devis.produits || [])
-        .map(
-          (prod) => `
-        <tr>
-          <td style="border:1.5px solid #000; padding:8px;">${prod.reference || "—"}</td>
-          <td style="border:1.5px solid #000; padding:8px;">${prod.designation || "—"}</td>
-          <td style="border:1.5px solid #000; padding:8px; text-align:center;">
-            ${Number(prod.DevisProduit?.quantite || 0).toFixed(2)}
-          </td>
-          <td style="border:1.5px solid #000; padding:8px; text-align:right;">
-            ${Number(prod.DevisProduit?.prix_unitaire || 0).toFixed(2)}
-          </td>
-          <td style="border:1.5px solid #000; padding:8px; text-align:right;">
-            ${Number(prod.DevisProduit?.total_ligne || 0).toFixed(2)}
-          </td>
-        </tr>
-      `,
-        )
-        .join("")}
-    </tbody>
-  </table>
+      <table style="width:100%;border-collapse:collapse;">
+        <thead>
+          <tr>
+            ${["Code", "Désignation", "Qté", "Prix U", "Montant"]
+              .map(
+                (h) => `
+              <th style="border:1.5px solid #000;padding:5px;background:#f2f2f2;">
+                ${h}
+              </th>
+            `,
+              )
+              .join("")}
+          </tr>
+        </thead>
+        <tbody>
+          ${(devis.produits || [])
+            .map(
+              (p) => `
+            <tr>
+              <td style="border:1.5px solid #000;padding:5px;">${p.reference || "—"}</td>
+              <td style="border:1.5px solid #000;padding:5px;">${p.designation || "—"}</td>
+              <td style="border:1.5px solid #000;padding:5px;text-align:center;">
+                ${Number(p.DevisProduit?.quantite || 0).toFixed(2)}
+              </td>
+              <td style="border:1.5px solid #000;padding:5px;text-align:right;">
+                ${formatAmount(p.DevisProduit?.prix_unitaire)}
+              </td>
+              <td style="border:1.5px solid #000;padding:5px;text-align:right;">
+                ${formatAmount(p.DevisProduit?.total_ligne)}
+              </td>
+            </tr>
+          `,
+            )
+            .join("")}
+        </tbody>
+      </table>
 
-  <div style="text-align:right; margin-top:25px;">
-    <div style="
-      display:inline-block;
-      border:2px solid #000;
-      padding:12px 18px;
-      margin-right:20px;
-      font-weight:bold;
-    ">
-      NET À PAYER : ${total.toFixed(2)} 
-    </div>
+      <div style="margin-top:20px;text-align:right;">
+        <div style="display:inline-flex;gap:15px;font-weight:bold;">
+          <span style="border:2px solid #000;padding:8px 14px;">
+            Total à payer
+          </span>
+          <span style="border:2px solid #000;padding:8px 14px;">
+            ${formatAmount(total)} DH
+          </span>
+        </div>
 
-    <br/>
-
-    <div style="
-      display:inline-block;
-      margin-top:12px;
-      font-style:italic;
-      font-weight:bold;
-      font-size:1.1rem;
-    ">
-      ${totalText}
-    </div>
-  </div>
-`;
+        <div style="margin-top:10px;font-style:italic;font-weight:bold;font-size:0.7rem;">
+          ${totalText}
+        </div>
+      </div>
+    `;
 
       document.body.appendChild(container);
 
       const canvas = await html2canvas(container, {
         scale: 2,
-        useCORS: true,
         backgroundColor: "#fff",
       });
 
       document.body.removeChild(container);
 
-      const imgData = canvas.toDataURL("image/png");
       const pdf = new jsPDF("p", "mm", "a4");
-
       const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
       const imgHeight = (canvas.height * pageWidth) / canvas.width;
 
-      let heightLeft = imgHeight;
-      let position = 0;
-
-      pdf.addImage(imgData, "PNG", 0, position, pageWidth, imgHeight);
-      heightLeft -= pageHeight;
-
-      while (heightLeft > 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, "PNG", 0, position, pageWidth, imgHeight);
-        heightLeft -= pageHeight;
-      }
-
+      pdf.addImage(
+        canvas.toDataURL("image/png"),
+        "PNG",
+        0,
+        0,
+        pageWidth,
+        imgHeight,
+      );
       pdf.save(`Devis-${devis.num_devis}.pdf`);
+
       topTost("PDF généré et téléchargé !", "success");
     } catch (err) {
-      console.error("Erreur PDF:", err);
+      console.error(err);
       topTost("Erreur lors de la génération du PDF", "error");
     }
   };
@@ -772,7 +983,7 @@ const DevisDetailsPage = () => {
       </Row>
 
       {/* Status and Notes - Editable when in edit mode */}
-      {isEditing && (
+      {(isEditing || isEditProductsMode) && (
         <Row className="mb-4">
           <Col md={4}>
             <Card className="p-3">
@@ -786,7 +997,6 @@ const DevisDetailsPage = () => {
                 )}
                 onChange={(opt) => handleInputChange("status", opt.value)}
                 options={statusOptions}
-                isDisabled={!isEditing}
                 styles={{
                   control: (base) => ({
                     ...base,
@@ -809,7 +1019,6 @@ const DevisDetailsPage = () => {
                 value={formData.notes}
                 onChange={(e) => handleInputChange("notes", e.target.value)}
                 placeholder="Notes supplémentaires..."
-                disabled={!isEditing}
               />
             </Card>
           </Col>
@@ -818,44 +1027,177 @@ const DevisDetailsPage = () => {
 
       {/* Products Section */}
       <Card className="p-3 mb-4">
-        <h5>
-          <FiShoppingCart className="me-2" />
-          Produits
-        </h5>
-        <div className="table-responsive">
-          <table className="table table-bordered">
-            <thead>
-              <tr>
-                <th>Code</th>
-                <th>Désignation</th>
-                <th>Quantité</th>
-                <th>Prix Unitaire</th>
-                <th>Total Ligne</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(devis.produits || []).map((prod, index) => (
-                <tr key={prod.id || index}>
-                  <td>{prod.reference || "N/A"}</td>
-                  <td>{prod.designation || "Produit"}</td>
-                  <td>
-                    {parseFloat(prod.DevisProduit?.quantite || 0).toFixed(2)}
-                  </td>
-                  <td>
-                    {parseFloat(prod.DevisProduit?.prix_unitaire || 0).toFixed(
-                      2,
-                    )}{" "}
-                  </td>
-                  <td>
-                    {parseFloat(prod.DevisProduit?.total_ligne || 0).toFixed(
-                      2,
-                    )}{" "}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="d-flex justify-content-between align-items-center mb-3">
+          <h5>
+            <FiShoppingCart className="me-2" />
+            Produits
+          </h5>
+          {!isEditProductsMode && (
+            <Button
+              color="primary"
+              size="sm"
+              onClick={() => setIsEditProductsMode(true)}
+            >
+              <FiPlus className="me-1" />
+              Modifier les produits
+            </Button>
+          )}
         </div>
+
+        {isEditProductsMode ? (
+          <div className="border rounded p-3 bg-light">
+            {/* Product Selector */}
+            <div className="mb-3">
+              <label className="form-label">Ajouter un produit</label>
+              <AsyncSelect
+                cacheOptions
+                loadOptions={loadProduits}
+                defaultOptions={allProduits}
+                onChange={handleAddProduct}
+                placeholder="Rechercher un produit..."
+                isLoading={loadingProduits}
+                isClearable
+                formatOptionLabel={(option) => (
+                  <div>
+                    <div>{option.label}</div>
+                    {option.data.displayText && (
+                      <small className="text-muted">
+                        {option.data.displayText}
+                      </small>
+                    )}
+                  </div>
+                )}
+              />
+            </div>
+
+            {/* Line Items Table */}
+            {lineItems.length > 0 ? (
+              <div className="table-responsive">
+                <table className="table table-bordered table-sm">
+                  <thead className="table-light">
+                    <tr>
+                      <th>Code</th>
+                      <th>Désignation</th>
+                      <th style={{ width: "100px" }}>Quantité</th>
+                      <th style={{ width: "120px" }}>Prix Unitaire</th>
+                      <th style={{ width: "120px" }}>Total Ligne</th>
+                      <th style={{ width: "50px" }}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lineItems.map((item, index) => (
+                      <tr key={item.id || index}>
+                        <td>{item.reference || "—"}</td>
+                        <td>{item.designation || "Produit"}</td>
+                        <td>
+                          <input
+                            type="number"
+                            className="form-control form-control-sm"
+                            value={item.quantite}
+                            onChange={(e) =>
+                              handleLineItemChange(
+                                index,
+                                "quantite",
+                                parseFloat(e.target.value) || 0,
+                              )
+                            }
+                            min="0"
+                            step="0.01"
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            className="form-control form-control-sm"
+                            value={item.prix_unitaire}
+                            onChange={(e) =>
+                              handleLineItemChange(
+                                index,
+                                "prix_unitaire",
+                                parseFloat(e.target.value) || 0,
+                              )
+                            }
+                            min="0"
+                            step="0.01"
+                          />
+                        </td>
+                        <td className="text-end">
+                          {item.total_ligne?.toFixed(2) || "0.00"}
+                        </td>
+                        <td>
+                          <Button
+                            color="danger"
+                            size="sm"
+                            onClick={() => handleRemoveProduct(index)}
+                            className="p-1"
+                          >
+                            <FiTrash2 size={14} />
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="table-light">
+                      <td colSpan="4" className="text-end fw-bold">
+                        Total HT:
+                      </td>
+                      <td className="text-end fw-bold">
+                        {totals.montant_ht} DH
+                      </td>
+                      <td></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            ) : (
+              <div className="text-center text-muted py-3">
+                Aucun produit ajouté.
+              </div>
+            )}
+
+            <div className="d-flex justify-content-end mt-2 gap-2">
+              <Button color="secondary" size="sm" onClick={handleCancelEdit}>
+                Annuler
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="table-responsive">
+            <table className="table table-bordered">
+              <thead>
+                <tr>
+                  <th>Code</th>
+                  <th>Désignation</th>
+                  <th>Quantité</th>
+                  <th>Prix Unitaire</th>
+                  <th>Total Ligne</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(devis.produits || []).map((prod, index) => (
+                  <tr key={prod.id || index}>
+                    <td>{prod.reference || "N/A"}</td>
+                    <td>{prod.designation || "Produit"}</td>
+                    <td>
+                      {parseFloat(prod.DevisProduit?.quantite || 0).toFixed(2)}
+                    </td>
+                    <td>
+                      {parseFloat(
+                        prod.DevisProduit?.prix_unitaire || 0,
+                      ).toFixed(2)}{" "}
+                    </td>
+                    <td>
+                      {parseFloat(prod.DevisProduit?.total_ligne || 0).toFixed(
+                        2,
+                      )}{" "}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Card>
 
       {/* Summary Section */}
@@ -939,6 +1281,34 @@ const DevisDetailsPage = () => {
         </div>
 
         <div>
+          {isEditing || isEditProductsMode ? (
+            <>
+              <Button color="success" className="me-2" onClick={handleSave}>
+                <FiSave className="me-2" />
+                Enregistrer
+              </Button>
+              <Button
+                color="secondary"
+                className="me-2"
+                onClick={() => {
+                  setIsEditing(false);
+                  setIsEditProductsMode(false);
+                  handleCancelEdit();
+                }}
+              >
+                Annuler
+              </Button>
+            </>
+          ) : (
+            <Button
+              color="primary"
+              className="me-2"
+              onClick={() => setIsEditing(true)}
+            >
+              <FiSave className="me-2" />
+              Modifier
+            </Button>
+          )}
           <Button
             color="secondary"
             className="me-2"

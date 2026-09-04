@@ -4,7 +4,7 @@ import BonLivrDetailsModal from "./BonLivrDetailsModal";
 import Table from "@/components/shared/table/Table";
 import "react-date-range/dist/styles.css";
 import "react-date-range/dist/theme/default.css";
-import { format, subDays, parse } from "date-fns";
+import { format, parse, subMonths } from "date-fns";
 import {
   FiEye,
   FiFilter,
@@ -82,12 +82,20 @@ const BonLivraisonTable = () => {
   const [bonStatus, setBonStatus] = useState("brouillon");
 
   // États pour les dates (stockées comme objets Date)
-  const [startDate, setStartDate] = useState(subDays(new Date(), 30));
-  const [endDate, setEndDate] = useState(new Date());
+  const [startDate, setStartDate] = useState(() => {
+    const d = subMonths(new Date(), 1);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  });
+  const [endDate, setEndDate] = useState(() => {
+    const d = new Date();
+    d.setHours(23, 59, 59, 999);
+    return d;
+  });
 
   // États pour l'affichage des dates au format français
   const [displayStartDate, setDisplayStartDate] = useState(
-    formatToFrenchDate(subDays(new Date(), 30)),
+    formatToFrenchDate(subMonths(new Date(), 1)),
   );
   const [displayEndDate, setDisplayEndDate] = useState(
     formatToFrenchDate(new Date()),
@@ -112,8 +120,24 @@ const BonLivraisonTable = () => {
       try {
         const token =
           localStorage.getItem("token") || sessionStorage.getItem("token");
+
+        // Format dates for API - ensure they're in YYYY-MM-DD format
+        // Ensure start is start-of-day and end is end-of-day
+        const startOfDay = new Date(startDate);
+        startOfDay.setHours(0, 0, 0, 0);
+        const endOfDay = new Date(endDate);
+        endOfDay.setHours(23, 59, 59, 999);
+
+        const formattedStartDate = format(startOfDay, "yyyy-MM-dd'T'HH:mm:ss");
+        const formattedEndDate = format(endOfDay, "yyyy-MM-dd'T'HH:mm:ss");
+
         const response = await axios.get(`${config_url}/api/bon-livraisons`, {
           headers: { Authorization: `Bearer ${token}` },
+          params: {
+            startDate: formattedStartDate,
+            endDate: formattedEndDate,
+            status: selectedStatus !== "all" ? selectedStatus : undefined,
+          },
         });
 
         console.log("API Response:", response.data);
@@ -155,17 +179,6 @@ const BonLivraisonTable = () => {
               createdAtString: formatToFrenchDate(
                 new Date(bon.date_creation || bon.createdAt),
               ),
-              date_livraison: bon.date_livraison,
-              date_creation: bon.date_creation,
-              mode_reglement: bon.mode_reglement || "espèces",
-              remise: parseFloat(bon.remise) || 0,
-              montant_ht: parseFloat(bon.montant_ht) || 0,
-              montant_ttc: total,
-              tva: parseFloat(bon.tva) || 0,
-              notes: bon.notes || "",
-              produits: bon.produits || [],
-              advancements: bon.advancements || [],
-              is_facture: bon.is_facture || false,
             };
           });
 
@@ -188,8 +201,8 @@ const BonLivraisonTable = () => {
       }
     };
     fetchBons();
-  }, []);
-
+  }, [startDate, endDate, selectedStatus]); // Re-fetch when these change
+  //
   // Calculate statistics from bookings data
   const calculateStatistics = (data) => {
     if (!data || !Array.isArray(data) || data.length === 0) {
@@ -293,7 +306,7 @@ const BonLivraisonTable = () => {
   };
 
   const resetDateFilter = () => {
-    const newStartDate = subDays(new Date(), 30);
+    const newStartDate = subMonths(new Date(), 1);
     const newEndDate = new Date();
     setStartDate(newStartDate);
     setEndDate(newEndDate);

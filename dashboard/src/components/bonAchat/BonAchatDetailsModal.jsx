@@ -560,6 +560,7 @@ const BonAchatDetailsModal = ({
         <h1 style="margin:0; color:#2c5aa0;">Bon d'Achat</h1>
         <h3 style="margin:5px 0;">ALUMINIUM OULAD BRAHIM</h3>
         <p style="font-size:10px;">Tél: +212 671953725</p>
+        
       </div>
 
       <div style="display:flex; justify-content:space-between; margin-bottom:20px;">

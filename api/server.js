@@ -87,6 +87,8 @@ app.use("/api/clients", clientRoutes);
 app.use("/api/fornisseurs", fornisseurRoutes);
 app.use("/api/produits", produitRoutes);
 app.use("/api/bon-livraisons", bonLivraisonRoutes);
+// Backwards-compatible mount (some frontend code expects no dash)
+app.use("/api/bonlivraisons", bonLivraisonRoutes);
 app.use("/api/factures", factureRoutes);
 app.use("/api/devis", devisRoutes);
 app.use("/api/bon-avoirs", bonAvoirRoutes);

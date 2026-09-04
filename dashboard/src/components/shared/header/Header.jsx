@@ -187,7 +187,7 @@ const Header = () => {
             </a>
           </div>
 
-          <a
+          {/* <a
             href="#"
             className="nxl-head-back"
             onClick={(e) => {
@@ -197,7 +197,7 @@ const Header = () => {
             title="Back"
           >
             <FiArrowLeft size={22} />
-          </a>
+          </a> */}
 
           {/* <!--! [End] nxl-lavel-mega-menu-toggle !-->
                     <!--! [Start] nxl-lavel-mega-menu !--> */}

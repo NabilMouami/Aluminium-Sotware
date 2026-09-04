@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import Table from "@/components/shared/table/Table";
 import axios from "axios";
 import { config_url } from "@/utils/config";
+
 import PageHeader from "@/components/shared/pageHeader/PageHeader";
 import {
   FiEdit,
@@ -17,12 +18,13 @@ import {
   FiSave,
   FiX,
   FiDownload,
+  FiEye,
 } from "react-icons/fi";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
 import api from "@/utils/axiosConfig";
 import jsPDF from "jspdf";
-
+import { useNavigate } from "react-router-dom";
 const MySwal = withReactContent(Swal);
 
 const ProduitsList = () => {
@@ -51,6 +53,8 @@ const ProduitsList = () => {
     loading: false,
   });
 
+  const navigate = useNavigate();
+
   useEffect(() => {
     fetchProduits();
     fetchFornisseurs();
@@ -76,10 +80,6 @@ const ProduitsList = () => {
       console.error("Error fetching produits:", error);
       if (error.response?.status === 403) {
         setError("Access denied. Please check your permissions.");
-      } else if (error.response?.status === 401) {
-        setError("Please log in again.");
-        localStorage.removeItem("token");
-        window.location.href = "/login";
       } else {
         setError("Failed to fetch produits.");
       }
@@ -911,6 +911,13 @@ const ProduitsList = () => {
         return (
           <div className="hstack d-flex gap-2 justify-content-center">
             <button
+              className="btn btn-sm btn-outline-info"
+              onClick={() => navigate(`/produits/${id}`)}
+              title="Historique"
+            >
+              <FiEye />
+            </button>
+            <button
               className="btn btn-sm btn-outline-primary"
               onClick={() => handleEditClick(produit)}
               title="Modifier"
@@ -977,7 +984,7 @@ const ProduitsList = () => {
 
             <button
               onClick={() => {
-                window.location.href = "/produits/create";
+                navigate("/produits/create");
               }}
               className="btn btn-primary"
             >
@@ -1129,7 +1136,7 @@ const ProduitsList = () => {
                     {!searchTerm && selectedFornisseur === "all" && (
                       <button
                         onClick={() => {
-                          window.location.href = "/produits/create";
+                          navigate("/produits/create");
                         }}
                         className="btn btn-primary"
                       >

@@ -11,6 +11,7 @@ const {
   updateStatus,
   deleteBon,
   getBonsByClient,
+  getBonLivraisonsByDate,
 } = require("../controllers/blController");
 
 // const authMiddleware = require("../middleware/authMiddleware");
@@ -21,8 +22,10 @@ const {
 // Routes pour les bons de livraison
 router.get("/", getAllBons);
 router.get("/stats", getStats);
-router.get("/:id", getBonById);
+// Specific routes must come before dynamic `/:id` to avoid collision
+router.get("/by-date", getBonLivraisonsByDate);
 router.get("/client/:clientId", getBonsByClient);
+router.get("/:id", getBonById);
 router.post("/", createBon);
 router.put("/:id", updateBon);
 

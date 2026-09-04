@@ -9,7 +9,6 @@ import topTost from "@/utils/topTost";
 // Icons
 import {
   FiUser,
-  FiFileText,
   FiShoppingBag,
   FiDollarSign,
   FiCalendar,
@@ -21,16 +20,10 @@ import {
   FiClock,
   FiXCircle,
   FiPercent,
-  FiCreditCard,
   FiPackage,
-  FiFilter,
   FiX,
   FiBox,
   FiTrendingUp,
-  FiTruck,
-  FiEdit,
-  FiTrash2,
-  FiPlus,
   FiRefreshCw,
 } from "react-icons/fi";
 
@@ -42,7 +35,6 @@ function FornisseurDetails() {
   const [fornisseur, setFornisseur] = useState(null);
   const [summary, setSummary] = useState(null);
   const [history, setHistory] = useState([]);
-  const [filterType, setFilterType] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
 
   // State for product search by reference
@@ -940,11 +932,259 @@ function FornisseurDetails() {
         </div>
       )}
 
-      {/* Product Search Panel - keeping your existing code */}
+      {/* Product Search Panel - Fixed */}
       {showProductSearch && (
-        // ... your existing product search panel code ...
         <div className="row mb-4">
-          {/* Keep all your existing product search code here */}
+          <div className="col-12">
+            <div className="card">
+              <div className="card-header d-flex justify-content-between align-items-center">
+                <h5 className="card-title mb-0">
+                  <FiSearch className="me-2" />
+                  Recherche de Produit par Référence
+                </h5>
+                <button
+                  className="btn btn-sm btn-outline-secondary"
+                  onClick={clearProductSearch}
+                >
+                  <FiX size={16} />
+                </button>
+              </div>
+              <div className="card-body">
+                {/* Search Form */}
+                <div className="row g-3 mb-4">
+                  <div className="col-md-4">
+                    <label className="form-label">Référence Produit *</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={searchParams.reference}
+                      onChange={(e) =>
+                        setSearchParams({
+                          ...searchParams,
+                          reference: e.target.value,
+                        })
+                      }
+                      placeholder="Saisir la référence"
+                    />
+                  </div>
+
+                  <div className="col-md-3">
+                    <label className="form-label">Date début</label>
+                    <input
+                      type="date"
+                      className="form-control"
+                      value={searchParams.startDate}
+                      onChange={(e) =>
+                        setSearchParams({
+                          ...searchParams,
+                          startDate: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+
+                  <div className="col-md-3">
+                    <label className="form-label">Date fin</label>
+                    <input
+                      type="date"
+                      className="form-control"
+                      value={searchParams.endDate}
+                      onChange={(e) =>
+                        setSearchParams({
+                          ...searchParams,
+                          endDate: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+
+                  <div className="col-md-2">
+                    <label className="form-label">&nbsp;</label>
+                    <button
+                      className="btn btn-primary w-100"
+                      onClick={handleProductSearch}
+                      disabled={productSearchLoading}
+                    >
+                      {productSearchLoading ? (
+                        <>
+                          <span className="spinner-border spinner-border-sm me-2"></span>
+                          Recherche...
+                        </>
+                      ) : (
+                        <>
+                          <FiSearch className="me-2" />
+                          Rechercher
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Search History */}
+                {searchHistory.length > 0 && (
+                  <div className="mb-4">
+                    <h6 className="mb-2">Recherches récentes:</h6>
+                    <div className="d-flex flex-wrap gap-2">
+                      {searchHistory.map((search, index) => (
+                        <button
+                          key={index}
+                          className="btn btn-sm btn-outline-secondary"
+                          onClick={() => loadPreviousSearch(search)}
+                        >
+                          {search.reference}
+                          {search.exactMatch && " (exact)"}
+                          {search.resultCount > 0 && ` (${search.resultCount})`}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Search Results */}
+                {productSearchData && (
+                  <div className="mt-4">
+                    {/* Summary Cards */}
+                    <div className="row mb-4">
+                      <div className="col-md-3 mb-3">
+                        <div className="card bg-primary text-white">
+                          <div className="card-body">
+                            <h6 className="mb-1">Total Entrées</h6>
+                            <h3 className="mb-0">
+                              {productSearchData.summary?.totalEntries || 0}
+                            </h3>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="col-md-3 mb-3">
+                        <div className="card bg-success text-white">
+                          <div className="card-body">
+                            <h6 className="mb-1">Quantité Totale</h6>
+                            <h3 className="mb-0">
+                              {productSearchData.summary?.totalQuantity || 0}
+                            </h3>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="col-md-3 mb-3">
+                        <div className="card bg-info text-white">
+                          <div className="card-body">
+                            <h6 className="mb-1">Montant Total</h6>
+                            <h3 className="mb-0">
+                              {formatCurrency(
+                                productSearchData.summary?.totalAmount || 0,
+                              )}
+                            </h3>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="col-md-3 mb-3">
+                        <div className="card bg-warning text-white">
+                          <div className="card-body">
+                            <h6 className="mb-1">Prix Moyen</h6>
+                            <h3 className="mb-0">
+                              {formatCurrency(
+                                productSearchData.summary?.averageUnitPrice ||
+                                  0,
+                              )}
+                            </h3>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Results Table */}
+                    {productSearchData.history &&
+                      productSearchData.history.length > 0 && (
+                        <div className="table-responsive">
+                          <table className="table table-hover">
+                            <thead>
+                              <tr>
+                                <th>Date</th>
+                                <th>Document</th>
+                                <th>Produit</th>
+                                <th>Quantité</th>
+                                <th>Prix Unitaire</th>
+                                <th>Total Ligne</th>
+                                <th>Statut</th>
+                                <th>Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {productSearchData.history.map((item, index) => (
+                                <tr key={index}>
+                                  <td>
+                                    <span className="d-flex align-items-center">
+                                      <FiCalendar className="me-1 text-muted" />
+                                      {formatDate(item.date_creation)}
+                                    </span>
+                                  </td>
+                                  <td>
+                                    <strong>
+                                      {item.document?.num || "N/A"}
+                                    </strong>
+                                  </td>
+                                  <td>
+                                    <div>
+                                      <strong>
+                                        {item.produit?.designation}
+                                      </strong>
+                                      <div className="small text-muted">
+                                        Ref: {item.produit?.reference}
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td>
+                                    <span className="badge bg-primary">
+                                      {parseQuantity(item.quantite)}
+                                    </span>
+                                  </td>
+                                  <td>{formatCurrency(item.prix_unitaire)}</td>
+                                  <td>
+                                    <strong className="text-success">
+                                      {formatCurrency(item.total_ligne)}
+                                    </strong>
+                                  </td>
+                                  <td>
+                                    <span
+                                      className={`badge ${getStatusColor(item.document?.status)}`}
+                                    >
+                                      {getStatusIcon(item.document?.status)}
+                                      {getStatusText(item.document?.status)}
+                                    </span>
+                                  </td>
+                                  <td>
+                                    <button
+                                      className="btn btn-sm btn-outline-primary"
+                                      onClick={() =>
+                                        handleViewBonAchat(item.document?.id)
+                                      }
+                                      title="Voir le bon d'achat"
+                                    >
+                                      <FiEye size={14} />
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+
+                    {productSearchData.history &&
+                      productSearchData.history.length === 0 && (
+                        <div className="text-center py-4">
+                          <FiPackage size={48} className="text-muted mb-3" />
+                          <h5>Aucun résultat trouvé</h5>
+                          <p className="text-muted">
+                            Aucun produit ne correspond à votre recherche
+                          </p>
+                        </div>
+                      )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

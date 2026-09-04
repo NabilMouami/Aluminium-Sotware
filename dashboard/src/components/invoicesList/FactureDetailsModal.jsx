@@ -27,8 +27,11 @@ import {
   FiTag,
   FiCheckCircle,
   FiXCircle,
+  FiShoppingCart,
 } from "react-icons/fi";
 import DatePicker from "react-datepicker";
+import Select from "react-select";
+import AsyncSelect from "react-select/async";
 import axios from "axios";
 import { config_url } from "@/utils/config";
 import topTost from "@/utils/topTost";
@@ -225,6 +228,159 @@ const FactureDetailsModal = ({
   const [totalText, setTotalText] = useState("");
   const [isCalculatingTotal, setIsCalculatingTotal] = useState(false);
 
+  // Product management state
+  const [lineItems, setLineItems] = useState([]);
+  const [allProduits, setAllProduits] = useState([]);
+  const [loadingProduits, setLoadingProduits] = useState(true);
+  const [isEditProductsMode, setIsEditProductsMode] = useState(false);
+
+  // Fetch products when opening product edit mode
+  useEffect(() => {
+    if (isEditProductsMode && isOpen) {
+      fetchAllProduits();
+    }
+  }, [isEditProductsMode, isOpen]);
+
+  const fetchAllProduits = async () => {
+    try {
+      setLoadingProduits(true);
+      const token =
+        localStorage.getItem("token") || sessionStorage.getItem("token");
+      const response = await axios.get(`${config_url}/api/produits`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const options = (response.data?.produits || []).map((produit) => ({
+        value: produit.id,
+        label: `${produit.reference} - ${produit.designation}`,
+        data: {
+          ...produit,
+          displayText: `${produit.reference} - ${produit.designation} (Stock: ${produit.qty}, Prix: ${produit.prix_vente} DH)`,
+        },
+      }));
+
+      setAllProduits(options);
+    } catch (error) {
+      console.error("Error loading produits:", error);
+    } finally {
+      setLoadingProduits(false);
+    }
+  };
+
+  const loadProduits = async (inputValue) => {
+    if (!inputValue) {
+      return allProduits;
+    }
+
+    const filtered = allProduits.filter((option) => {
+      const searchTerm = inputValue.toLowerCase();
+      const produit = option.data;
+      return (
+        produit.reference?.toLowerCase().includes(searchTerm) ||
+        produit.designation?.toLowerCase().includes(searchTerm) ||
+        produit.categorie?.toLowerCase().includes(searchTerm)
+      );
+    });
+
+    if (filtered.length === 0 && inputValue.length >= 2) {
+      try {
+        const token =
+          localStorage.getItem("token") || sessionStorage.getItem("token");
+        const response = await axios.get(
+          `${config_url}/api/produits/search?q=${inputValue}`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          },
+        );
+
+        const options = (response.data.produits || []).map((produit) => ({
+          value: produit.id,
+          label: `${produit.reference} - ${produit.designation}`,
+          data: {
+            ...produit,
+            displayText: `${produit.reference} - ${produit.designation} (Stock: ${produit.qty}, Prix: ${produit.prix_vente} DH)`,
+          },
+        }));
+
+        return options;
+      } catch (error) {
+        console.error("Error searching produits:", error);
+        return [];
+      }
+    }
+
+    return filtered;
+  };
+
+  // Calculate line item total
+  const calculateLineTotal = (quantite, prix_unitaire) => {
+    return (parseFloat(quantite) || 0) * (parseFloat(prix_unitaire) || 0);
+  };
+
+  // Add new product line
+  const handleAddProduct = (selectedOption) => {
+    if (!selectedOption) return;
+
+    const produit = selectedOption.data;
+
+    if (lineItems.some((item) => item.produit_id === produit.id)) {
+      topTost("Ce produit existe déjà dans la facture", "warning");
+      return;
+    }
+
+    const newItem = {
+      id: Date.now(),
+      produit_id: produit.id,
+      reference: produit.reference,
+      designation: produit.designation,
+      quantite: 1,
+      prix_unitaire: parseFloat(produit.prix_vente) || 0,
+      total_ligne: parseFloat(produit.prix_vente) || 0,
+    };
+
+    setLineItems([...lineItems, newItem]);
+  };
+
+  // Remove product line
+  const handleRemoveProduct = (index) => {
+    const updatedItems = [...lineItems];
+    updatedItems.splice(index, 1);
+    setLineItems(updatedItems);
+  };
+
+  // Update line item field
+  const handleLineItemChange = (index, field, value) => {
+    const updatedItems = [...lineItems];
+    updatedItems[index][field] = value;
+
+    if (field === "quantite" || field === "prix_unitaire") {
+      updatedItems[index].total_ligne = calculateLineTotal(
+        updatedItems[index].quantite,
+        updatedItems[index].prix_unitaire,
+      );
+    }
+
+    setLineItems(updatedItems);
+  };
+
+  // Calculate totals
+  const calculateTotals = () => {
+    const montant_ht = lineItems.reduce(
+      (sum, item) => sum + (item.total_ligne || 0),
+      0,
+    );
+    const tvaRate = parseFloat(facture?.tva) || 20;
+    const montant_tva = (montant_ht * tvaRate) / 100;
+    const montant_ttc = montant_ht + montant_tva;
+    return {
+      montant_ht: montant_ht.toFixed(2),
+      montant_tva: montant_tva.toFixed(2),
+      montant_ttc: montant_ttc.toFixed(2),
+    };
+  };
+
+  const totals = calculateTotals();
+
   // Initialize form data when facture changes
   useEffect(() => {
     if (facture) {
@@ -255,6 +411,18 @@ const FactureDetailsModal = ({
           : [],
         isOverdue: isOverdue,
       });
+
+      // Initialize line items from existing products
+      const existingProducts = (facture.products || []).map((prod) => ({
+        id: prod.id,
+        produit_id: prod.id,
+        reference: prod.reference,
+        designation: prod.designation,
+        quantite: parseFloat(prod.FactureProduit?.quantite || 0),
+        prix_unitaire: parseFloat(prod.FactureProduit?.prix_unitaire || 0),
+        total_ligne: parseFloat(prod.FactureProduit?.total_ligne || 0),
+      }));
+      setLineItems(existingProducts);
     }
   }, [facture]);
 
@@ -323,6 +491,7 @@ const FactureDetailsModal = ({
   const montantTVA = parseFloat(facture.montantTVA || 0);
   const totalTTC = parseFloat(facture.totalTTC || facture.montant_ttc || 0);
   const remainingAmount = Math.max(0, totalTTC - totalPayments);
+  const tvaRate = facture.tva || 20; // Get TVA rate from facture or default to 20
 
   const handleInputChange = (field, value) => {
     setFormData((prev) => ({
@@ -413,6 +582,31 @@ const FactureDetailsModal = ({
       }
     }
 
+    // Validate products if in product edit mode
+    if (isEditProductsMode) {
+      if (lineItems.length === 0) {
+        topTost("Veuillez ajouter au moins un produit", "warning");
+        return;
+      }
+
+      for (const item of lineItems) {
+        if (!item.quantite || item.quantite <= 0) {
+          topTost(
+            `La quantité doit être positive pour ${item.designation}`,
+            "warning",
+          );
+          return;
+        }
+        if (!item.prix_unitaire || item.prix_unitaire < 0) {
+          topTost(
+            `Le prix doit être positif pour ${item.designation}`,
+            "warning",
+          );
+          return;
+        }
+      }
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -431,6 +625,15 @@ const FactureDetailsModal = ({
           notes: payment.notes,
         })),
       };
+
+      // Add products if in product edit mode
+      if (isEditProductsMode && lineItems.length > 0) {
+        updateData.produits = lineItems.map((item) => ({
+          produitId: item.produit_id,
+          quantite: item.quantite,
+          prix_unitaire: item.prix_unitaire,
+        }));
+      }
 
       console.log("Sending update data to backend:", updateData);
 
@@ -452,6 +655,7 @@ const FactureDetailsModal = ({
         onUpdate(response.data.facture || response.data);
       }
 
+      setIsEditProductsMode(false);
       toggle();
     } catch (error) {
       console.error("Error updating facture:", error);
@@ -509,6 +713,12 @@ const FactureDetailsModal = ({
     }
   };
 
+  const formatAmount = (value) =>
+    Number(value || 0).toLocaleString("fr-FR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+
   const handlePrint = () => {
     if (!facture) return;
 
@@ -562,9 +772,8 @@ const FactureDetailsModal = ({
     }
 
     .header {
-    display:flex;
-    justify-content:space-between;
-
+      display: flex;
+      justify-content: space-between;
       text-align: center;
     }
 
@@ -576,7 +785,7 @@ const FactureDetailsModal = ({
     table {
       width: 100%;
       border-collapse: collapse;
-      margin: 20px 0;
+      margin: 5px 0;
     }
 
     th, td {
@@ -592,27 +801,68 @@ const FactureDetailsModal = ({
 
     td {
       text-align: left;
+      font-size: 0.8rem;
     }
 
     .totals {
-      margin-top: 25px;
       text-align: right;
+      margin-top: 20px;
+    }
+
+    .totals-table {
+      width: auto;
+      margin-left: auto;
+      border-collapse: collapse;
+    }
+
+    .totals-table td {
+      border: none;
+      padding: 5px 10px;
+      text-align: right;
+      font-size: 0.75rem;
+    }
+
+    .totals-table td.label {
+      font-weight: bold;
+    }
+
+    .totals-table td.amount {
+      min-width: 100px;
+    }
+
+    .totals-table tr.total-ttc td {
+      font-weight: bold;
+      font-size: 0.85rem;
+      border-top: 2px solid #000;
+      padding-top: 10px;
     }
 
     .net-box {
-      display: inline-block;
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 20px;
+      font-weight: bold;
+      min-width: 260px;
+      margin-top: 15px;
+    }
+
+    .net-label {
+      font-size: 0.75rem;
       border: 2px solid #000;
       padding: 10px 16px;
-      margin-right: 20px;
-      margin-top: 8px;
-      font-weight: bold;
-      text-align: right;
+    }
+
+    .net-amount {
+      font-size: 0.85rem;
+      padding: 10px 16px;
+      border: 2px solid #000;
     }
 
     .italic {
       font-style: italic;
       font-size: 0.7rem;
-      margin: 20px;
+      margin-top: 20px;
       font-weight: bold;
     }
   </style>
@@ -652,9 +902,9 @@ const FactureDetailsModal = ({
         <tr>
           <td>${p.reference || "—"}</td>
           <td>${p.designation || "—"}</td>
-          <td>${Number(p.FactureProduit?.quantite || 0).toFixed(2)}</td>
-          <td>${Number(p.FactureProduit?.prix_unitaire || 0).toFixed(2)}</td>
-          <td>${Number(p.FactureProduit?.total_ligne || 0).toFixed(2)}</td>
+          <td style="text-align:center">${Number(p.FactureProduit?.quantite || 0).toFixed(2)}</td>
+          <td style="text-align:right">${Number(p.FactureProduit?.prix_unitaire || 0).toFixed(2)}</td>
+          <td style="text-align:right">${Number(p.FactureProduit?.total_ligne || 0).toFixed(2)}</td>
         </tr>
       `,
         )
@@ -663,7 +913,26 @@ const FactureDetailsModal = ({
   </table>
 
   <div class="totals">
-    <div class="net-box">TOTAL TTC: ${totalTTC.toFixed(2)}</div>
+    <table class="totals-table">
+      <tr>
+        <td class="label">TOTAL HT:</td>
+        <td class="amount">${formatAmount(totalHTBeforeDiscount)} DH</td>
+      </tr>
+      <tr>
+        <td class="label">TVA (${tvaRate}%):</td>
+        <td class="amount">${formatAmount(montantTVA)} DH</td>
+      </tr>
+      <tr class="total-ttc">
+        <td class="label">TOTAL TTC:</td>
+        <td class="amount">${formatAmount(totalTTC)} DH</td>
+      </tr>
+    </table>
+
+    <div class="net-box">
+      <span class="net-label">NET À PAYER</span>
+      <span class="net-amount">${formatAmount(totalTTC)} DH</span>
+    </div>
+
     <div class="italic">${pdfTotalText}</div>
   </div>
 
@@ -681,19 +950,20 @@ const FactureDetailsModal = ({
       if (!facture) return;
 
       const container = document.createElement("div");
-      Object.assign(container.style, {
-        width: "210mm",
-        padding: "15mm",
-        background: "#fff",
-        color: "#000",
-        fontFamily: "Arial, sans-serif",
-        fontSize: "0.8rem",
-        textTransform: "uppercase",
-        boxSizing: "border-box",
-        position: "absolute",
-        left: "-9999px",
-        top: "0",
-      });
+
+      /* ===== A4 PAGE SETUP ===== */
+      container.style.width = "210mm";
+      container.style.minHeight = "150mm";
+      container.style.padding = "10mm";
+      container.style.background = "#fff";
+      container.style.fontFamily = "Arial, sans-serif";
+      container.style.fontSize = "0.6rem";
+      container.style.color = "#000";
+      container.style.boxSizing = "border-box";
+      container.style.textTransform = "uppercase";
+      container.style.position = "absolute";
+      container.style.left = "-9999px";
+      container.style.top = "0";
 
       const formatDateWithTime = (dateString) => {
         if (!dateString) return "—";
@@ -712,39 +982,64 @@ const FactureDetailsModal = ({
       const pdfTotalText = totalText || totalToFrenchText(totalTTC);
 
       container.innerHTML = `
-      <div style="text-align:center; border-bottom:2px solid #000; padding-bottom:10px; margin-bottom:15px;">
-        <h2 style="margin:0;">FACTURE</h2>
-        <p>ALUMINIUM OULAD BRAHIM – Tél: +212 671953725</p>
+      <!-- HEADER -->
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;">
+        <h2 style="font-size:0.9rem;margin:0;">FACTURE</h2>
+        <div style="font-size:0.7rem;">
+ALUMINIUM OULAD BRAHIM – Tél: +212 671953725        </div>
       </div>
 
-      <div style="display:flex; justify-content:space-between; margin-bottom:20px;">
-        <div><strong>Client:</strong> ${facture.clientName || facture.client?.nom_complete || "—"}</div>
+      <!-- CLIENT / META -->
+      <div style="display:flex;justify-content:space-between;margin-bottom:15px;">
+        <div>
+          <strong>Client :</strong><br/>
+          ${facture.clientName || facture.client?.nom_complete || "—"}
+        </div>
         <div style="text-align:right;">
-          <strong>N° Facture:</strong> ${facture.invoiceNumber || facture.num_facture}<br/>
-          <strong>Date création:</strong> ${creationDateFormatted}
+          <strong>N° Facture :</strong> ${facture.invoiceNumber || facture.num_facture}<br/>
+          <strong>Date création :</strong> ${creationDateFormatted}
         </div>
       </div>
 
-      <table style="width:100%; border-collapse:collapse; margin-bottom:20px;">
+      <!-- TABLE -->
+      <table style="width:100%;border-collapse:collapse;">
         <thead>
           <tr>
-            <th style="border:1.5px solid #000; padding:8px;">Code</th>
-            <th style="border:1.5px solid #000; padding:8px;">Désignation</th>
-            <th style="border:1.5px solid #000; padding:8px;">Qté</th>
-            <th style="border:1.5px solid #000; padding:8px;">Prix U</th>
-            <th style="border:1.5px solid #000; padding:8px;">Montant/th>
+            ${["Code", "Désignation", "Qté", "Prix U", "Montant"]
+              .map(
+                (h) => `
+              <th style="
+                border:1.5px solid #000;
+                padding:5px;
+                background:#f2f2f2;
+                text-align:center;
+              ">
+                ${h}
+              </th>`,
+              )
+              .join("")}
           </tr>
         </thead>
         <tbody>
           ${(facture.products || [])
             .map(
               (p) => `
-            <tr>
-              <td style="border:1.5px solid #000; padding:6px;">${p.reference || "—"}</td>
-              <td style="border:1.5px solid #000; padding:6px;">${p.designation || "—"}</td>
-              <td style="border:1.5px solid #000; padding:6px;">${Number(p.FactureProduit?.quantite || 0).toFixed(2)}</td>
-              <td style="border:1.5px solid #000; padding:6px;">${Number(p.FactureProduit?.prix_unitaire || 0).toFixed(2)}</td>
-              <td style="border:1.5px solid #000; padding:6px;">${Number(p.FactureProduit?.total_ligne || 0).toFixed(2)}</td>
+            <tr style="font-size: 0.8rem;">
+              <td style="border:1.5px solid #000;padding:5px;">
+                ${p.reference || "—"}
+              </td>
+              <td style="border:1.5px solid #000;padding:5px;">
+                ${p.designation || "—"}
+              </td>
+              <td style="border:1.5px solid #000;padding:5px;text-align:center;">
+                ${Number(p.FactureProduit?.quantite || 0).toFixed(2)}
+              </td>
+              <td style="border:1.5px solid #000;padding:5px;text-align:center;">
+                ${Number(p.FactureProduit?.prix_unitaire || 0).toFixed(2)}
+              </td>
+              <td style="border:1.5px solid #000;padding:5px;text-align:center;">
+                ${Number(p.FactureProduit?.total_ligne || 0).toFixed(2)}
+              </td>
             </tr>
           `,
             )
@@ -752,11 +1047,46 @@ const FactureDetailsModal = ({
         </tbody>
       </table>
 
-      <div style="text-align:right; margin-top:20px;">
-        <div class="net-box" style="display:inline-block; border:2px solid #000; padding:10px 16px; font-weight:bold;">
-          TOTAL TTC: ${totalTTC.toFixed(2)} 
+      <!-- TOTALS WITH TVA -->
+      <div style="margin-top:20px;text-align:right;">
+        <table style="width:auto;margin-left:auto;border-collapse:collapse;">
+          <tr>
+            <td style="border:none;padding:5px 10px;text-align:right;font-weight:bold;font-size:0.75rem;">TOTAL HT:</td>
+            <td style="border:none;padding:5px 10px;text-align:right;min-width:100px;font-size:0.75rem;">${formatAmount(totalHTBeforeDiscount)} DH</td>
+          </tr>
+          <tr>
+            <td style="border:none;padding:5px 10px;text-align:right;font-weight:bold;font-size:0.75rem;">TVA (${tvaRate}%):</td>
+            <td style="border:none;padding:5px 10px;text-align:right;font-size:0.75rem;">${formatAmount(montantTVA)} DH</td>
+          </tr>
+          <tr>
+            <td style="border:none;padding:5px 10px;text-align:right;font-weight:bold;font-size:0.85rem;border-top:2px solid #000;padding-top:10px;">TOTAL TTC:</td>
+            <td style="border:none;padding:5px 10px;text-align:right;font-size:0.85rem;border-top:2px solid #000;padding-top:10px;">${formatAmount(totalTTC)} DH</td>
+          </tr>
+        </table>
+
+        <!-- NET BOX -->
+        <div style="
+          display:inline-flex;
+          gap:15px;
+          align-items:center;
+          font-weight:bold;
+          margin-top:15px;
+        ">
+          <span style="border:2px solid #000;padding:8px 14px;font-size:0.75rem;">
+            NET À PAYER
+          </span>
+          <span style="border:2px solid #000;padding:8px 14px;font-size:0.85rem;">
+            ${formatAmount(totalTTC)} DH
+          </span>
         </div>
-        <div class="italic" style="font-style:italic; font-weight:bold; margin-top:10px;">
+
+        <!-- TEXT AMOUNT -->
+        <div style="
+          margin-top:10px;
+          font-style:italic;
+          font-weight:bold;
+          font-size:0.7rem;
+        ">
           ${pdfTotalText}
         </div>
       </div>
@@ -764,59 +1094,41 @@ const FactureDetailsModal = ({
 
       document.body.appendChild(container);
 
+      /* ===== RENDER CANVAS ===== */
       const canvas = await html2canvas(container, {
         scale: 2,
+        useCORS: true,
         backgroundColor: "#fff",
       });
+
       document.body.removeChild(container);
 
+      /* ===== PDF ===== */
+      const imgData = canvas.toDataURL("image/png");
       const pdf = new jsPDF("p", "mm", "a4");
+
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
       const imgHeight = (canvas.height * pageWidth) / canvas.width;
 
-      if (imgHeight <= pageHeight) {
-        pdf.addImage(
-          canvas.toDataURL("image/png"),
-          "PNG",
-          0,
-          0,
-          pageWidth,
-          imgHeight,
-        );
-      } else {
-        let heightLeft = imgHeight;
-        let position = 0;
-        pdf.addImage(
-          canvas.toDataURL("image/png"),
-          "PNG",
-          0,
-          position,
-          pageWidth,
-          imgHeight,
-        );
-        heightLeft -= pageHeight;
+      let heightLeft = imgHeight;
+      let position = 0;
 
-        while (heightLeft > 0) {
-          position -= pageHeight;
-          pdf.addPage();
-          pdf.addImage(
-            canvas.toDataURL("image/png"),
-            "PNG",
-            0,
-            position,
-            pageWidth,
-            imgHeight,
-          );
-          heightLeft -= pageHeight;
-        }
+      pdf.addImage(imgData, "PNG", 0, position, pageWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft > 0) {
+        position -= pageHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, "PNG", 0, position, pageWidth, imgHeight);
+        heightLeft -= pageHeight;
       }
 
       pdf.save(`Facture-${facture.invoiceNumber || facture.num_facture}.pdf`);
-      topTost("PDF téléchargé avec succès!", "success");
+      topTost("PDF généré et téléchargé !", "success");
     } catch (err) {
       console.error("Erreur PDF:", err);
-      topTost("Erreur lors de la génération du PDF", "error");
+      topTost("Erreur lors de la création du PDF", "error");
     }
   };
 
@@ -1106,44 +1418,202 @@ const FactureDetailsModal = ({
             )}
           </div>
 
-          {/* Products Section (Read-only) */}
+          {/* Products Section */}
           <div className="col-12 mt-4">
-            <h6>
-              <FiEye className="me-2" />
-              Produits
-            </h6>
-            <div className="table-responsive">
-              <table className="table table-bordered">
-                <thead>
-                  <tr>
-                    <th>Code</th>
-                    <th>Produit</th>
-                    <th>Quantité</th>
-                    <th>Prix Unitaire</th>
-                    <th>Total Ligne HT</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(facture.products || []).map((prod, index) => (
-                    <tr key={prod.id || index}>
-                      <td>{prod.reference || "N/A"}</td>
-                      <td>{prod.designation || "Produit"}</td>
-                      <td>{prod.FactureProduit?.quantite || 0}</td>
-                      <td>
-                        {parseFloat(
-                          prod.FactureProduit?.prix_unitaire || 0,
-                        ).toFixed(2)}{" "}
-                      </td>
-                      <td>
-                        {parseFloat(
-                          prod.FactureProduit?.total_ligne || 0,
-                        ).toFixed(2)}{" "}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="d-flex justify-content-between align-items-center mb-3">
+              <h6>
+                <FiShoppingCart className="me-2" />
+                Produits
+              </h6>
+              {!isEditProductsMode && (
+                <Button
+                  color="primary"
+                  size="sm"
+                  onClick={() => setIsEditProductsMode(true)}
+                >
+                  <FiPlus className="me-1" />
+                  Modifier les produits
+                </Button>
+              )}
             </div>
+
+            {isEditProductsMode ? (
+              <div className="border rounded p-3 bg-light">
+                {/* Product Selector */}
+                <div className="mb-3">
+                  <label className="form-label">Ajouter un produit</label>
+                  <AsyncSelect
+                    cacheOptions
+                    loadOptions={loadProduits}
+                    defaultOptions={allProduits}
+                    onChange={handleAddProduct}
+                    placeholder="Rechercher un produit..."
+                    isLoading={loadingProduits}
+                    isClearable
+                    formatOptionLabel={(option) => (
+                      <div>
+                        <div>{option.label}</div>
+                        {option.data.displayText && (
+                          <small className="text-muted">
+                            {option.data.displayText}
+                          </small>
+                        )}
+                      </div>
+                    )}
+                  />
+                </div>
+
+                {/* Line Items Table */}
+                {lineItems.length > 0 ? (
+                  <div className="table-responsive">
+                    <table className="table table-bordered table-sm">
+                      <thead className="table-light">
+                        <tr>
+                          <th>Code</th>
+                          <th>Désignation</th>
+                          <th style={{ width: "100px" }}>Quantité</th>
+                          <th style={{ width: "120px" }}>Prix Unitaire</th>
+                          <th style={{ width: "120px" }}>Total Ligne</th>
+                          <th style={{ width: "50px" }}></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {lineItems.map((item, index) => (
+                          <tr key={item.id || index}>
+                            <td>{item.reference || "—"}</td>
+                            <td>{item.designation || "Produit"}</td>
+                            <td>
+                              <input
+                                type="number"
+                                className="form-control form-control-sm"
+                                value={item.quantite}
+                                onChange={(e) =>
+                                  handleLineItemChange(
+                                    index,
+                                    "quantite",
+                                    parseFloat(e.target.value) || 0,
+                                  )
+                                }
+                                min="0"
+                                step="0.01"
+                              />
+                            </td>
+                            <td>
+                              <input
+                                type="number"
+                                className="form-control form-control-sm"
+                                value={item.prix_unitaire}
+                                onChange={(e) =>
+                                  handleLineItemChange(
+                                    index,
+                                    "prix_unitaire",
+                                    parseFloat(e.target.value) || 0,
+                                  )
+                                }
+                                min="0"
+                                step="0.01"
+                              />
+                            </td>
+                            <td className="text-end">
+                              {item.total_ligne?.toFixed(2) || "0.00"}
+                            </td>
+                            <td>
+                              <Button
+                                color="danger"
+                                size="sm"
+                                onClick={() => handleRemoveProduct(index)}
+                                className="p-1"
+                              >
+                                <FiTrash2 size={14} />
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="table-light">
+                          <td colSpan="4" className="text-end fw-bold">
+                            Total HT:
+                          </td>
+                          <td className="text-end fw-bold">
+                            {totals.montant_ht} DH
+                          </td>
+                          <td></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="text-center text-muted py-3">
+                    Aucun produit ajouté.
+                  </div>
+                )}
+
+                <div className="d-flex justify-content-end mt-2">
+                  <Button
+                    color="secondary"
+                    size="sm"
+                    onClick={() => {
+                      // Reset to original products
+                      const existingProducts = (facture.products || []).map(
+                        (prod) => ({
+                          id: prod.id,
+                          produit_id: prod.id,
+                          reference: prod.reference,
+                          designation: prod.designation,
+                          quantite: parseFloat(
+                            prod.FactureProduit?.quantite || 0,
+                          ),
+                          prix_unitaire: parseFloat(
+                            prod.FactureProduit?.prix_unitaire || 0,
+                          ),
+                          total_ligne: parseFloat(
+                            prod.FactureProduit?.total_ligne || 0,
+                          ),
+                        }),
+                      );
+                      setLineItems(existingProducts);
+                      setIsEditProductsMode(false);
+                    }}
+                  >
+                    Annuler
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="table-responsive">
+                <table className="table table-bordered">
+                  <thead>
+                    <tr>
+                      <th>Code</th>
+                      <th>Produit</th>
+                      <th>Quantité</th>
+                      <th>Prix Unitaire</th>
+                      <th>Total Ligne HT</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(facture.products || []).map((prod, index) => (
+                      <tr key={prod.id || index}>
+                        <td>{prod.reference || "N/A"}</td>
+                        <td>{prod.designation || "Produit"}</td>
+                        <td>{prod.FactureProduit?.quantite || 0}</td>
+                        <td>
+                          {parseFloat(
+                            prod.FactureProduit?.prix_unitaire || 0,
+                          ).toFixed(2)}{" "}
+                        </td>
+                        <td>
+                          {parseFloat(
+                            prod.FactureProduit?.total_ligne || 0,
+                          ).toFixed(2)}{" "}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
 
           {/* Summary Section */}
@@ -1181,7 +1651,7 @@ const FactureDetailsModal = ({
                     <span>{totalHTBeforeDiscount.toFixed(2)} </span>
                   </div>
                   <div className="d-flex justify-content-between text-success">
-                    <span>TVA ({facture.tva || 0}%):</span>
+                    <span>TVA ({tvaRate}%):</span>
                     <span>{montantTVA.toFixed(2)} </span>
                   </div>
                   <div className="d-flex justify-content-between fw-bold border-top pt-1">

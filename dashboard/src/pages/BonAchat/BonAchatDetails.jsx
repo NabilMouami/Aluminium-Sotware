@@ -358,8 +358,8 @@ const BonAchatDetailsPage = () => {
       container.innerHTML = `
         <div style="text-align:center; border-bottom:2px solid #333; padding-bottom:10px; margin-bottom:15px;">
           <h1 style="margin:0; color:#2c5aa0;">Bon d'Achat</h1>
-          <h3 style="margin:5px 0;">ALUMINIUM OULAD BRAHIM</h3>
-          <p style="font-size:10px;">Tél: +212 671953725</p>
+          <h3 style="margin:5px 0;">ALUMINIUM EL-ALAOUI</h3>
+          <p style="font-size:10px;">Tél: +212 600-537325</p>
         </div>
 
         <div style="display:flex; justify-content:space-between; margin-bottom:20px;">
